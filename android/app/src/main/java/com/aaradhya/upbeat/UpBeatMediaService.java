@@ -91,6 +91,47 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         {"Akuma no Ko", "Ai Higuchi", "https://i.ytimg.com/vi/tdzsOODJiX8/hqdefault.jpg"}
     };
 
+    // Pre-curated tracks for each Android Auto playlist preset for instant offline browsing
+    private static final String[][][] PRESET_TRACKS = {
+        // 0: preset_late_night
+        {
+            {"Veridis Quo", "Daft Punk", "https://i.ytimg.com/vi/TCd6PfxOy0Y/hqdefault.jpg"},
+            {"A New Error", "Moderat", "https://i.ytimg.com/vi/QpxFcMYRV08/hqdefault.jpg"},
+            {"Duvet", "Bôa", "https://i.ytimg.com/vi/MM8RufZr5lw/hqdefault.jpg"},
+            {"Midnight City", "M83", "https://i.ytimg.com/vi/dX3k_QDnzHE/hqdefault.jpg"},
+            {"Resonance", "HOME", "https://i.ytimg.com/vi/8GW6sLrK40k/hqdefault.jpg"}
+        },
+        // 1: preset_focus
+        {
+            {"Weightless", "Marconi Union", "https://i.ytimg.com/vi/8GW6sLrK40k/hqdefault.jpg"},
+            {"Intro", "The xx", "https://i.ytimg.com/vi/TCd6PfxOy0Y/hqdefault.jpg"},
+            {"Sunset Lover", "Petit Biscuit", "https://i.ytimg.com/vi/QpxFcMYRV08/hqdefault.jpg"},
+            {"Daylight", "David Kushnir", "https://i.ytimg.com/vi/MM8RufZr5lw/hqdefault.jpg"}
+        },
+        // 2: preset_energy
+        {
+            {"Can't Hold Us", "Macklemore", "https://i.ytimg.com/vi/dX3k_QDnzHE/hqdefault.jpg"},
+            {"Till I Collapse", "Eminem", "https://i.ytimg.com/vi/TCd6PfxOy0Y/hqdefault.jpg"},
+            {"Believer", "Imagine Dragons", "https://i.ytimg.com/vi/0VpGoDp3FCE/hqdefault.jpg"},
+            {"Stronger", "Kanye West", "https://i.ytimg.com/vi/F8xpmTmdf6o/hqdefault.jpg"}
+        },
+        // 3: preset_anime
+        {
+            {"Renai Circulation", "Kana Hanazawa", "https://i.ytimg.com/vi/F8xpmTmdf6o/hqdefault.jpg"},
+            {"mathemagics", "Marina Inoue", "https://i.ytimg.com/vi/F_Cr9vZ08Ws/hqdefault.jpg"},
+            {"Kimi no Shiranai Monogatari", "supercell", "https://i.ytimg.com/vi/0VpGoDp3FCE/hqdefault.jpg"},
+            {"Staple Stable", "Chiwa Saito", "https://i.ytimg.com/vi/CXDUXjsU5ao/hqdefault.jpg"},
+            {"Akuma no Ko", "Ai Higuchi", "https://i.ytimg.com/vi/tdzsOODJiX8/hqdefault.jpg"}
+        },
+        // 4: preset_hindi
+        {
+            {"Tum Hi Ho", "Arijit Singh", "https://i.ytimg.com/vi/MM8RufZr5lw/hqdefault.jpg"},
+            {"Kesariya", "Arijit Singh", "https://i.ytimg.com/vi/tdzsOODJiX8/hqdefault.jpg"},
+            {"Apna Bana Le", "Arijit Singh", "https://i.ytimg.com/vi/dX3k_QDnzHE/hqdefault.jpg"},
+            {"Chaleya", "Anirudh Ravichander", "https://i.ytimg.com/vi/F8xpmTmdf6o/hqdefault.jpg"}
+        }
+    };
+
     public static volatile UpBeatMediaService sInstance = null;
 
     private MediaSessionCompat mMediaSession;
@@ -192,14 +233,36 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
 
         @Override
+        public void onPrepare() {
+            onPlay();
+        }
+
+        @Override
+        public void onPrepareFromMediaId(String mediaId, Bundle extras) {
+            onPlayFromMediaId(mediaId, extras);
+        }
+
+        @Override
+        public void onPrepareFromSearch(String query, Bundle extras) {
+            onPlayFromSearch(query, extras);
+        }
+
+        @Override
         public void onPlayFromMediaId(String mediaId, Bundle extras) {
             if (mediaId == null) return;
 
-            // Immediately switch to BUFFERING state to prevent Android Auto watchdog timeout ("Loading error")
-            updatePlaybackState(PlaybackStateCompat.STATE_BUFFERING, 0, true);
             optimisticUpdateMetadata(mediaId);
+            updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, 0, true);
 
-            if (mediaId.startsWith("track_")) {
+            if (MEDIA_ID_QUEUE.equals(mediaId) || MEDIA_ID_ROOT.equals(mediaId)) {
+                dispatchToApp("play_index", "0");
+            } else if (MEDIA_ID_FAVORITES.equals(mediaId)) {
+                dispatchToApp("play_favorite", "0");
+            } else if (MEDIA_ID_PRESETS.equals(mediaId)) {
+                dispatchToApp("play_preset", "preset_late_night");
+            } else if (mediaId.startsWith("track_preset_")) {
+                handlePlayPresetTrack(mediaId);
+            } else if (mediaId.startsWith("track_")) {
                 dispatchToApp("play_index", mediaId.substring(6));
             } else if (mediaId.startsWith("fav_")) {
                 dispatchToApp("play_favorite", mediaId.substring(4));
@@ -211,15 +274,118 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         @Override
         public void onPlayFromSearch(String query, Bundle extras) {
             if (query != null && !query.trim().isEmpty()) {
-                updatePlaybackState(PlaybackStateCompat.STATE_BUFFERING, 0, true);
+                currentTitle = query.trim();
+                currentArtist = "Search";
+                applyMediaMetadata();
+                notifyNotification();
+                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, 0, true);
                 dispatchToApp("search_play", query.trim());
             }
         }
     }
 
+    private void handlePlayPresetTrack(String mediaId) {
+        try {
+            int lastUnderscore = mediaId.lastIndexOf('_');
+            if (lastUnderscore > 0) {
+                int trackIdx = Integer.parseInt(mediaId.substring(lastUnderscore + 1));
+                String presetId = mediaId.substring(6, lastUnderscore); // e.g. preset_late_night
+                int pIdx = -1;
+                if ("preset_late_night".equals(presetId)) pIdx = 0;
+                else if ("preset_focus".equals(presetId)) pIdx = 1;
+                else if ("preset_energy".equals(presetId)) pIdx = 2;
+                else if ("preset_anime".equals(presetId)) pIdx = 3;
+                else if ("preset_hindi".equals(presetId)) pIdx = 4;
+
+                if (pIdx >= 0 && trackIdx >= 0 && trackIdx < PRESET_TRACKS[pIdx].length) {
+                    String title = PRESET_TRACKS[pIdx][trackIdx][0];
+                    String artist = PRESET_TRACKS[pIdx][trackIdx][1];
+                    currentTitle = title;
+                    currentArtist = artist;
+                    currentArtUrl = PRESET_TRACKS[pIdx][trackIdx][2];
+                    applyMediaMetadata();
+                    notifyNotification();
+                    dispatchToApp("play_title_artist", title + "___" + artist);
+                    return;
+                }
+            }
+        } catch (Exception ignored) {}
+        dispatchToApp("play_preset", "preset_late_night");
+    }
+
+    private void populatePresetTracks(List<MediaBrowserCompat.MediaItem> items, int presetIdx, String presetPrefix) {
+        if (presetIdx < 0 || presetIdx >= PRESET_TRACKS.length) return;
+        String[][] tracks = PRESET_TRACKS[presetIdx];
+        for (int i = 0; i < tracks.length; i++) {
+            items.add(createPlayable("track_" + presetPrefix + "_" + i, tracks[i][0], tracks[i][1], tracks[i][2]));
+        }
+    }
+
     private void optimisticUpdateMetadata(String mediaId) {
         try {
-            if (mediaId.startsWith("preset_")) {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            if (mediaId.startsWith("track_preset_")) {
+                int lastUnderscore = mediaId.lastIndexOf('_');
+                if (lastUnderscore > 0) {
+                    int trackIdx = Integer.parseInt(mediaId.substring(lastUnderscore + 1));
+                    String presetId = mediaId.substring(6, lastUnderscore);
+                    int pIdx = -1;
+                    if ("preset_late_night".equals(presetId)) pIdx = 0;
+                    else if ("preset_focus".equals(presetId)) pIdx = 1;
+                    else if ("preset_energy".equals(presetId)) pIdx = 2;
+                    else if ("preset_anime".equals(presetId)) pIdx = 3;
+                    else if ("preset_hindi".equals(presetId)) pIdx = 4;
+
+                    if (pIdx >= 0 && trackIdx >= 0 && trackIdx < PRESET_TRACKS[pIdx].length) {
+                        currentTitle = PRESET_TRACKS[pIdx][trackIdx][0];
+                        currentArtist = PRESET_TRACKS[pIdx][trackIdx][1];
+                        currentArtUrl = PRESET_TRACKS[pIdx][trackIdx][2];
+                        applyMediaMetadata();
+                        notifyNotification();
+                        return;
+                    }
+                }
+            } else if (mediaId.startsWith("track_")) {
+                int idx = Integer.parseInt(mediaId.substring(6));
+                String queueJson = prefs.getString(KEY_QUEUE, "[]");
+                JSONArray arr = new JSONArray(queueJson);
+                if (idx >= 0 && idx < arr.length()) {
+                    JSONObject obj = arr.getJSONObject(idx);
+                    currentTitle = obj.optString("title", "Track " + (idx + 1));
+                    currentArtist = obj.optString("artist", "UpBeat");
+                    currentArtUrl = obj.optString("thumbnail", "");
+                    applyMediaMetadata();
+                    notifyNotification();
+                    return;
+                } else if (idx >= 0 && idx < DEFAULT_CAR_TRACKS.length) {
+                    currentTitle = DEFAULT_CAR_TRACKS[idx][0];
+                    currentArtist = DEFAULT_CAR_TRACKS[idx][1];
+                    currentArtUrl = DEFAULT_CAR_TRACKS[idx][2];
+                    applyMediaMetadata();
+                    notifyNotification();
+                    return;
+                }
+            } else if (mediaId.startsWith("fav_")) {
+                int idx = Integer.parseInt(mediaId.substring(4));
+                String favsJson = prefs.getString(KEY_FAVS, "[]");
+                JSONArray arr = new JSONArray(favsJson);
+                if (idx >= 0 && idx < arr.length()) {
+                    JSONObject obj = arr.getJSONObject(idx);
+                    currentTitle = obj.optString("title", "Track " + (idx + 1));
+                    currentArtist = obj.optString("artist", "UpBeat");
+                    currentArtUrl = obj.optString("thumbnail", "");
+                    applyMediaMetadata();
+                    notifyNotification();
+                    return;
+                } else if (idx >= 0 && idx < DEFAULT_CAR_TRACKS.length) {
+                    currentTitle = DEFAULT_CAR_TRACKS[idx][0];
+                    currentArtist = DEFAULT_CAR_TRACKS[idx][1];
+                    currentArtUrl = DEFAULT_CAR_TRACKS[idx][2];
+                    applyMediaMetadata();
+                    notifyNotification();
+                    return;
+                }
+            } else if (mediaId.startsWith("preset_")) {
                 String name = "Curated Mix";
                 if (mediaId.equals("preset_late_night")) name = "Late Night Drive";
                 else if (mediaId.equals("preset_focus")) name = "Deep Focus Ambient";
@@ -230,14 +396,16 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 currentArtist = "UpBeat Radio";
                 applyMediaMetadata();
                 notifyNotification();
-            } else if (mediaId.startsWith("track_") || mediaId.startsWith("fav_")) {
-                int idx = Integer.parseInt(mediaId.substring(mediaId.indexOf('_') + 1));
-                if (idx >= 0 && idx < DEFAULT_CAR_TRACKS.length) {
-                    currentTitle = DEFAULT_CAR_TRACKS[idx][0];
-                    currentArtist = DEFAULT_CAR_TRACKS[idx][1];
-                    applyMediaMetadata();
-                    notifyNotification();
-                }
+            } else if (MEDIA_ID_QUEUE.equals(mediaId)) {
+                currentTitle = "Current Queue";
+                currentArtist = "UpBeat";
+                applyMediaMetadata();
+                notifyNotification();
+            } else if (MEDIA_ID_FAVORITES.equals(mediaId)) {
+                currentTitle = "Liked Songs";
+                currentArtist = "UpBeat";
+                applyMediaMetadata();
+                notifyNotification();
             }
         } catch (Exception ignored) {}
     }
@@ -304,15 +472,45 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
 
         if (MEDIA_ID_PRESETS.equals(parentMediaId)) {
-            items.add(createPlayable("preset_late_night", "Late Night Drive", "Atmospheric Hip-Hop & Lofi", "https://i.ytimg.com/vi/MV_3Dpw-BRY/hqdefault.jpg"));
-            items.add(createPlayable("preset_focus", "Deep Focus Ambient", "Instrumental Electronic Beats", "https://i.ytimg.com/vi/8GW6sLrK40k/hqdefault.jpg"));
-            items.add(createPlayable("preset_energy", "High Energy Workout", "Gym Motivation & Fast BPM", "https://i.ytimg.com/vi/dX3k_QDnzHE/hqdefault.jpg"));
-            items.add(createPlayable("preset_anime", "Anime Openings", "Hiroyuki Sawano & J-Rock", "https://i.ytimg.com/vi/tdzsOODJiX8/hqdefault.jpg"));
-            items.add(createPlayable("preset_hindi", "New Hindi Songs", "Latest Releases & Top Hits", "https://i.ytimg.com/vi/MM8RufZr5lw/hqdefault.jpg"));
+            items.add(createFolder("preset_late_night", "Late Night Drive", "Atmospheric Hip-Hop & Lofi"));
+            items.add(createFolder("preset_focus", "Deep Focus Ambient", "Instrumental Electronic Beats"));
+            items.add(createFolder("preset_energy", "High Energy Workout", "Gym Motivation & Fast BPM"));
+            items.add(createFolder("preset_anime", "Anime Openings", "Hiroyuki Sawano & J-Rock"));
+            items.add(createFolder("preset_hindi", "New Hindi Songs", "Latest Releases & Top Hits"));
             result.sendResult(items);
             return;
         }
 
+        if ("preset_late_night".equals(parentMediaId)) {
+            populatePresetTracks(items, 0, "preset_late_night");
+            result.sendResult(items);
+            return;
+        }
+        if ("preset_focus".equals(parentMediaId)) {
+            populatePresetTracks(items, 1, "preset_focus");
+            result.sendResult(items);
+            return;
+        }
+        if ("preset_energy".equals(parentMediaId)) {
+            populatePresetTracks(items, 2, "preset_energy");
+            result.sendResult(items);
+            return;
+        }
+        if ("preset_anime".equals(parentMediaId)) {
+            populatePresetTracks(items, 3, "preset_anime");
+            result.sendResult(items);
+            return;
+        }
+        if ("preset_hindi".equals(parentMediaId)) {
+            populatePresetTracks(items, 4, "preset_hindi");
+            result.sendResult(items);
+            return;
+        }
+
+        // Safe fallback: populate seeds so Android Auto never encounters an empty browsable folder error
+        for (int i = 0; i < DEFAULT_CAR_TRACKS.length; i++) {
+            items.add(createPlayable("track_" + i, DEFAULT_CAR_TRACKS[i][0], DEFAULT_CAR_TRACKS[i][1], DEFAULT_CAR_TRACKS[i][2]));
+        }
         result.sendResult(items);
     }
 
@@ -541,7 +739,12 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             | PlaybackStateCompat.ACTION_SEEK_TO
             | PlaybackStateCompat.ACTION_STOP
             | PlaybackStateCompat.ACTION_FAST_FORWARD
-            | PlaybackStateCompat.ACTION_REWIND;
+            | PlaybackStateCompat.ACTION_REWIND
+            | PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID
+            | PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH
+            | PlaybackStateCompat.ACTION_PREPARE
+            | PlaybackStateCompat.ACTION_PREPARE_FROM_MEDIA_ID
+            | PlaybackStateCompat.ACTION_PREPARE_FROM_SEARCH;
 
         // Passing SystemClock.elapsedRealtime() enables Android OS to smoothly animate
         // the notification scrubber and live playback timer in real time (Spotify style)

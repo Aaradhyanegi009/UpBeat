@@ -11,7 +11,7 @@ import QueueDrawer from './components/QueueDrawer'
 import GoogleAuthModal from './components/GoogleAuthModal'
 import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges } from './offlineStorage'
 import { initOtaUpdater } from './otaUpdater'
-import { getDayNightThemeInfo } from './utils/themeCycle'
+import { getDayNightThemeInfo, getThemeInfo, getNextThemePreference } from './utils/themeCycle'
 import {
   getApiBase,
   curateStandalone,
@@ -45,16 +45,48 @@ function loadStorage(key, fallback) {
 }
 
 export default function App() {
-  const [themeInfo, setThemeInfo] = useState(() => getDayNightThemeInfo())
+  const [themePreference, setThemePreference] = useState(() => {
+    try {
+      return localStorage.getItem('upbeat_theme_preference') || 'auto'
+    } catch {
+      return 'auto'
+    }
+  })
+  const [themeInfo, setThemeInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem('upbeat_theme_preference') || 'auto'
+      return getThemeInfo(saved)
+    } catch {
+      return getThemeInfo('auto')
+    }
+  })
 
   useEffect(() => {
     const checkTheme = () => {
-      const info = getDayNightThemeInfo()
-      setThemeInfo((prev) => (prev.id !== info.id ? info : prev))
+      if (themePreference === 'auto') {
+        const info = getThemeInfo('auto')
+        setThemeInfo((prev) => (prev.id !== info.id ? info : prev))
+      }
     }
     const interval = setInterval(checkTheme, 60000)
     return () => clearInterval(interval)
-  }, [])
+  }, [themePreference])
+
+  const handleSelectThemePreference = (pref) => {
+    setThemePreference(pref)
+    try {
+      localStorage.setItem('upbeat_theme_preference', pref)
+    } catch {}
+    const info = getThemeInfo(pref)
+    setThemeInfo(info)
+    const label = pref === 'auto' ? `Auto Time Cycle (${info.label})` : info.label
+    showNotify(`Atmosphere: ${label}`, 'info')
+  }
+
+  const handleCycleTheme = () => {
+    const nextPref = getNextThemePreference(themePreference)
+    handleSelectThemePreference(nextPref)
+  }
 
   const [models] = useState([
     { id: 'gemini-4-argon', name: 'Gemini 4 Argon (⚡ 1s Fastest)' },
@@ -544,11 +576,21 @@ export default function App() {
         case 'seek':
           window.dispatchEvent(new CustomEvent('upbeat-car-seek', { detail: Number(payload) || 0 }))
           break
+        case 'play_title_artist': {
+          const parts = (payload || '').split('___')
+          const tTitle = parts[0]?.trim()
+          const tArtist = parts[1]?.trim()
+          if (tTitle) {
+            const query = `${tTitle} ${tArtist || ''}`.trim()
+            handleDirectSearch(query, 'auto', true)
+          }
+          break
+        }
         case 'play_index': {
           const idx = parseInt(payload, 10)
           const activeList = playlist?.tracks?.length ? playlist.tracks : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : DEFAULT_SEEDS))
           if (!isNaN(idx) && activeList?.[idx]) {
-            handlePlayTrack(activeList[idx], idx)
+            handlePlayTrack(activeList[idx], idx, activeList)
           }
           break
         }
@@ -556,7 +598,7 @@ export default function App() {
           const idx = parseInt(payload, 10)
           const activeFavs = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : DEFAULT_SEEDS)
           if (!isNaN(idx) && activeFavs?.[idx]) {
-            handlePlayTrack(activeFavs[idx], idx)
+            handlePlayTrack(activeFavs[idx], idx, activeFavs)
           }
           break
         }
@@ -1470,6 +1512,8 @@ export default function App() {
       {/* Top Bar */}
       <Navbar
         themeInfo={themeInfo}
+        themePreference={themePreference}
+        onCycleTheme={handleCycleTheme}
         models={models}
         selectedModel={selectedModel}
         onSelectModel={handleSelectModel}
@@ -1534,6 +1578,10 @@ export default function App() {
           models={models}
           selectedModel={selectedModel}
           onSelectModel={handleSelectModel}
+          themeInfo={themeInfo}
+          themePreference={themePreference}
+          onSelectThemePreference={handleSelectThemePreference}
+          onCycleTheme={handleCycleTheme}
         />
 
         <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent">

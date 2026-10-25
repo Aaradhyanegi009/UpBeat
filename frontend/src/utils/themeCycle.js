@@ -1,6 +1,6 @@
 // UpBeat Dynamic Day/Night Cycle Theme Engine
 // - Morning (4:00 AM - 11:59 AM): Crimson Sunrise (The signature red grid aesthetic)
-// - Afternoon / Sunset (12:00 PM - 7:59 PM): Radiant Azure Sky & Solar Gold
+// - Afternoon / Sunset (12:00 PM - 7:59 PM): Dark AMOLED Black (Zero gradients, 100% black)
 // - Night (8:00 PM - 3:59 AM): Cosmic Midnight Violet & Neon Indigo
 
 // Ensure root is always dark and any legacy light mode storage is purged
@@ -12,6 +12,19 @@ if (typeof window !== 'undefined') {
       document.documentElement.classList.add('dark')
     }
   } catch {}
+}
+
+export const THEME_OPTIONS = [
+  { id: 'auto', label: 'Auto (Cycle)', icon: '🔄', desc: 'Time-based' },
+  { id: 'amoled', label: 'Dark AMOLED', icon: '⬛', desc: '100% Pure Black' },
+  { id: 'morning', label: 'Morning Red', icon: '🔴', desc: 'Crimson Glow' },
+  { id: 'night', label: 'Night Purple', icon: '🟣', desc: 'Cosmic Violet' }
+]
+
+export function getNextThemePreference(current = 'auto') {
+  const order = ['auto', 'amoled', 'morning', 'night']
+  const idx = order.indexOf(current)
+  return order[(idx + 1) % order.length]
 }
 
 export function getDayNightThemeInfo() {
@@ -44,5 +57,45 @@ export function getDayNightThemeInfo() {
       color: '#8b5cf6',
       accentColor: '#6366f1'
     }
+  }
+}
+
+export function getThemeInfo(preference = 'auto') {
+  if (preference === 'amoled') {
+    return {
+      id: 'theme-afternoon',
+      label: 'Dark AMOLED Black',
+      timeSlot: 'Always Dark AMOLED',
+      type: 'afternoon',
+      color: '#71717a',
+      accentColor: '#ffffff',
+      preference: 'amoled'
+    }
+  }
+  if (preference === 'morning') {
+    return {
+      id: 'theme-morning',
+      label: 'Sunrise Crimson',
+      timeSlot: 'Always Morning Red',
+      type: 'morning',
+      color: '#ef4444',
+      accentColor: '#f43f5e',
+      preference: 'morning'
+    }
+  }
+  if (preference === 'night') {
+    return {
+      id: 'theme-night',
+      label: 'Cosmic Midnight Violet',
+      timeSlot: 'Always Night Purple',
+      type: 'night',
+      color: '#8b5cf6',
+      accentColor: '#6366f1',
+      preference: 'night'
+    }
+  }
+  return {
+    ...getDayNightThemeInfo(),
+    preference: 'auto'
   }
 }

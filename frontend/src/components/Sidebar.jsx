@@ -1,7 +1,7 @@
 import React from 'react'
 import {
   RefreshCw, ExternalLink, X, Heart, RotateCcw, Sliders, DownloadCloud,
-  Home, Compass, Sparkles, Disc, Dna, ChevronDown
+  Home, Compass, Sparkles, Disc, Dna, ChevronDown, Palette
 } from 'lucide-react'
 
 export const PRESET_MODES = [
@@ -127,7 +127,11 @@ export default function Sidebar({
   onToggleSidebar,
   models = [],
   selectedModel,
-  onSelectModel
+  onSelectModel,
+  themeInfo,
+  themePreference = 'auto',
+  onSelectThemePreference,
+  onCycleTheme
 }) {
   const activePreset = PRESET_MODES.find((p) => p.id === activePresetId)
   const isPresetCustomized = activePreset && energyLevel !== activePreset.energy
@@ -258,6 +262,58 @@ export default function Sidebar({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Atmosphere & Theme Selector */}
+        <div className="p-4 rounded-3xl bg-[#0c0c12]/80 backdrop-blur-xl border border-white/10 shadow-sm relative overflow-hidden flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-300 font-bold flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5 text-rose-400" />
+              <span>Atmosphere Theme</span>
+            </span>
+            <span
+              className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full border transition-all"
+              style={{
+                backgroundColor: `${themeInfo?.color || '#ef4444'}15`,
+                borderColor: `${themeInfo?.color || '#ef4444'}35`,
+                color: themeInfo?.color || '#ef4444'
+              }}
+            >
+              {themePreference === 'auto' ? 'Auto Cycle' : themeInfo?.label?.split(' ')[0] || 'Custom'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { id: 'auto', label: 'Auto (Cycle)', icon: '🔄', desc: 'Time-based' },
+              { id: 'amoled', label: 'Dark AMOLED', icon: '⬛', desc: '100% Pure Black' },
+              { id: 'morning', label: 'Morning Red', icon: '🔴', desc: 'Crimson Glow' },
+              { id: 'night', label: 'Night Purple', icon: '🟣', desc: 'Cosmic Violet' }
+            ].map((th) => {
+              const isSelected = themePreference === th.id
+              return (
+                <button
+                  key={th.id}
+                  type="button"
+                  onClick={() => onSelectThemePreference && onSelectThemePreference(th.id)}
+                  className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-1 active:scale-95 ${
+                    isSelected
+                      ? 'bg-white/15 border-white/40 shadow-sm ring-1 ring-white/20'
+                      : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
+                      <span>{th.icon}</span>
+                      <span>{th.label}</span>
+                    </span>
+                    {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
+                  </div>
+                  <span className="text-[10px] text-zinc-400 font-normal">{th.desc}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* AI Curation Model Section (Argon priority) */}
@@ -420,7 +476,7 @@ export default function Sidebar({
         {/* App Info */}
         <div className="pt-2 text-[10px] font-mono text-zinc-500 border-t border-white/10 flex items-center justify-between">
           <span className="text-zinc-400 font-medium">UpBeat Music</span>
-          <span className="text-emerald-400/80 font-mono">v4.4.5</span>
+          <span className="text-emerald-400/80 font-mono">v4.4.6</span>
         </div>
       </div>
 

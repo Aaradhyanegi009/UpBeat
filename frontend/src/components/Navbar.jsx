@@ -8,6 +8,8 @@ import { checkOtaUpdate, getCurrentOtaVersion, applyOtaBundle } from '../otaUpda
 
 export default function Navbar({
   themeInfo,
+  themePreference = 'auto',
+  onCycleTheme,
   models = [],
   selectedModel,
   onSelectModel,
@@ -40,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v4.4.5')
+  const [otaVer, setOtaVer] = useState('v4.4.6')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -223,18 +225,24 @@ export default function Navbar({
 
               {/* Day / Night Atmosphere Status Indicator */}
               {themeInfo && (
-                <div
-                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-mono tracking-tight transition-all select-none"
+                <button
+                  type="button"
+                  onClick={onCycleTheme}
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold tracking-tight transition-all select-none cursor-pointer hover:scale-105 active:scale-95"
                   style={{
                     backgroundColor: `${themeInfo.color}15`,
                     borderColor: `${themeInfo.color}35`,
                     color: themeInfo.color
                   }}
-                  title={`Atmosphere: ${themeInfo.label} (${themeInfo.timeSlot})`}
+                  title={`Atmosphere: ${themeInfo.label} (${themeInfo.timeSlot}) • Tap to switch theme`}
                 >
-                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: themeInfo.color }} />
-                  <span className="font-medium">{themeInfo.type === 'morning' ? 'Sunrise' : themeInfo.type === 'afternoon' ? 'Dark AMOLED' : 'Cosmic Night'}</span>
-                </div>
+                  <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: themeInfo.color }} />
+                  <span>
+                    {themePreference === 'auto'
+                      ? (themeInfo.type === 'morning' ? 'Sunrise' : themeInfo.type === 'afternoon' ? 'Dark AMOLED' : 'Cosmic Night')
+                      : themeInfo.label}
+                  </span>
+                </button>
               )}
             </div>
 
