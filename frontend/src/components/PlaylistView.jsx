@@ -187,7 +187,7 @@ export default function PlaylistView({
         <p className="text-base font-semibold text-white tracking-tight">
           {isSearching ? 'Searching tracks & videos...' : 'Curating Sonic Profile & Stream Resolution...'}
         </p>
-        <p className="text-xs font-mono text-zinc-400 mt-1.5">
+        <p className="text-xs font-medium text-zinc-400 mt-1.5">
           {isSearching ? 'Resolving highest audio quality' : `Model: ${selectedModel}`}
         </p>
       </div>
@@ -490,7 +490,7 @@ export default function PlaylistView({
                         {track.duration_text && (
                           <>
                             <span className="text-zinc-600">•</span>
-                            <span className="font-mono text-[11px] shrink-0">{track.duration_text}</span>
+                            <span className="text-xs font-semibold text-zinc-400 shrink-0">{track.duration_text}</span>
                           </>
                         )}
                       </div>
@@ -591,7 +591,7 @@ export default function PlaylistView({
         <div className="px-3.5 sm:px-6 py-2 overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-white/[0.08] text-zinc-400 font-mono">
+              <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400">
                 <th className="py-2.5 px-3 w-10">#</th>
                 <th className="py-2.5 px-3">Title & Artist</th>
                 <th className="py-2.5 px-3 hidden md:table-cell">Musical Connection</th>
@@ -617,7 +617,7 @@ export default function PlaylistView({
                       isSelected ? 'bg-white/[0.1] text-rose-300' : 'hover:bg-white/[0.06] text-zinc-300'
                     }`}
                   >
-                    <td className="py-3 px-3 font-mono text-zinc-500">
+                    <td className="py-3 px-3 text-xs font-semibold text-zinc-500">
                       {isThisPlaying ? (
                         <Volume2 className="w-4 h-4 text-rose-400 animate-pulse" />
                       ) : (
@@ -626,17 +626,17 @@ export default function PlaylistView({
                     </td>
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-3">
-                        <img src={thumbUrl} alt="" className="w-9 h-9 rounded-md object-cover bg-zinc-900" />
+                        <img src={thumbUrl} alt="" className="w-10 h-10 rounded-2xl object-cover bg-zinc-900 border border-white/10" />
                         <div>
-                          <p className="font-semibold text-white">{track.title}</p>
-                          <p className="text-zinc-400 text-[11px]">{track.artist}</p>
+                          <p className="font-bold text-white tracking-tight">{track.title}</p>
+                          <p className="text-zinc-400 text-[11px] font-normal">{track.artist}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-3 hidden md:table-cell text-zinc-400 text-xs">
+                    <td className="py-3 px-3 hidden md:table-cell text-zinc-400 text-xs font-normal">
                       {cleanMusicalRationale(track.reason)}
                     </td>
-                    <td className="py-3 px-3 font-mono text-right text-zinc-400">
+                    <td className="py-3 px-3 text-xs font-semibold text-right text-zinc-400">
                       {track.duration_text || '--:--'}
                     </td>
                     <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
