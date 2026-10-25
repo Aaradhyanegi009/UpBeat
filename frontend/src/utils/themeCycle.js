@@ -15,10 +15,10 @@ if (typeof window !== 'undefined') {
 }
 
 export const THEME_OPTIONS = [
-  { id: 'auto', label: 'Auto (Cycle)', icon: '🔄', desc: 'Time-based' },
-  { id: 'amoled', label: 'Dark AMOLED', icon: '⬛', desc: '100% Pure Black' },
-  { id: 'morning', label: 'Morning Red', icon: '🔴', desc: 'Crimson Glow' },
-  { id: 'night', label: 'Night Purple', icon: '🟣', desc: 'Cosmic Violet' }
+  { id: 'auto', label: 'Auto' },
+  { id: 'amoled', label: 'Dark' },
+  { id: 'morning', label: 'Crimson Glow' },
+  { id: 'night', label: 'Violet' }
 ]
 
 export function getNextThemePreference(current = 'auto') {
@@ -33,7 +33,7 @@ export function getDayNightThemeInfo() {
   if (hour >= 4 && hour < 12) {
     return {
       id: 'theme-morning',
-      label: 'Sunrise Crimson',
+      label: 'Crimson Glow',
       timeSlot: 'Morning (4 AM – 12 PM)',
       type: 'morning',
       color: '#ef4444',
@@ -42,16 +42,16 @@ export function getDayNightThemeInfo() {
   } else if (hour >= 12 && hour < 20) {
     return {
       id: 'theme-afternoon',
-      label: 'Dark AMOLED Black',
+      label: 'Dark',
       timeSlot: 'Afternoon (12 PM – 8 PM)',
       type: 'afternoon',
-      color: '#27272a',
+      color: '#71717a',
       accentColor: '#ffffff'
     }
   } else {
     return {
       id: 'theme-night',
-      label: 'Cosmic Midnight Violet',
+      label: 'Violet',
       timeSlot: 'Night (8 PM – 4 AM)',
       type: 'night',
       color: '#8b5cf6',
@@ -64,8 +64,8 @@ export function getThemeInfo(preference = 'auto') {
   if (preference === 'amoled') {
     return {
       id: 'theme-afternoon',
-      label: 'Dark AMOLED Black',
-      timeSlot: 'Always Dark AMOLED',
+      label: 'Dark',
+      timeSlot: 'Dark',
       type: 'afternoon',
       color: '#71717a',
       accentColor: '#ffffff',
@@ -75,8 +75,8 @@ export function getThemeInfo(preference = 'auto') {
   if (preference === 'morning') {
     return {
       id: 'theme-morning',
-      label: 'Sunrise Crimson',
-      timeSlot: 'Always Morning Red',
+      label: 'Crimson Glow',
+      timeSlot: 'Crimson Glow',
       type: 'morning',
       color: '#ef4444',
       accentColor: '#f43f5e',
@@ -86,8 +86,8 @@ export function getThemeInfo(preference = 'auto') {
   if (preference === 'night') {
     return {
       id: 'theme-night',
-      label: 'Cosmic Midnight Violet',
-      timeSlot: 'Always Night Purple',
+      label: 'Violet',
+      timeSlot: 'Violet',
       type: 'night',
       color: '#8b5cf6',
       accentColor: '#6366f1',

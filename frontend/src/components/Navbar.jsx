@@ -239,8 +239,8 @@ export default function Navbar({
                   <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: themeInfo.color }} />
                   <span>
                     {themePreference === 'auto'
-                      ? (themeInfo.type === 'morning' ? 'Sunrise' : themeInfo.type === 'afternoon' ? 'Dark AMOLED' : 'Cosmic Night')
-                      : themeInfo.label}
+                      ? (themeInfo.type === 'morning' ? 'Crimson Glow' : themeInfo.type === 'afternoon' ? 'Dark' : 'Violet')
+                      : (themePreference === 'amoled' ? 'Dark' : themePreference === 'morning' ? 'Crimson Glow' : themePreference === 'night' ? 'Violet' : themeInfo.label)}
                   </span>
                 </button>
               )}

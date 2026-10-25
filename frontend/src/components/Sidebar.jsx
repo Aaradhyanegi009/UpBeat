@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   RefreshCw, ExternalLink, X, Heart, RotateCcw, Sliders, DownloadCloud,
   Home, Compass, Sparkles, Disc, Dna, ChevronDown, Palette
@@ -135,6 +135,7 @@ export default function Sidebar({
 }) {
   const activePreset = PRESET_MODES.find((p) => p.id === activePresetId)
   const isPresetCustomized = activePreset && energyLevel !== activePreset.energy
+  const [isThemeOpen, setIsThemeOpen] = useState(false)
 
   // 1. YouTube Music Slim Vertical Left Rail (Icon + Text Stack)
   const slimRail = (
@@ -264,56 +265,80 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Atmosphere & Theme Selector */}
-        <div className="p-4 rounded-3xl bg-[#0c0c12]/80 backdrop-blur-xl border border-white/10 shadow-sm relative overflow-hidden flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-300 font-bold flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5 text-rose-400" />
-              <span>Atmosphere Theme</span>
-            </span>
-            <span
-              className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full border transition-all"
-              style={{
-                backgroundColor: `${themeInfo?.color || '#ef4444'}15`,
-                borderColor: `${themeInfo?.color || '#ef4444'}35`,
-                color: themeInfo?.color || '#ef4444'
-              }}
-            >
-              {themePreference === 'auto' ? 'Auto Cycle' : themeInfo?.label?.split(' ')[0] || 'Custom'}
-            </span>
-          </div>
+        {/* Themes Drawer (Small Collapsible Slider) */}
+        <div className="rounded-2xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-sm overflow-hidden transition-all">
+          <button
+            type="button"
+            onClick={() => setIsThemeOpen((prev) => !prev)}
+            className="w-full p-3.5 flex items-center justify-between text-left transition-colors hover:bg-white/[0.04] cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Palette className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span className="text-xs font-bold text-white tracking-tight">Themes</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className="text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-all"
+                style={{
+                  backgroundColor: `${themeInfo?.color || '#ef4444'}15`,
+                  borderColor: `${themeInfo?.color || '#ef4444'}35`,
+                  color: themeInfo?.color || '#ef4444'
+                }}
+              >
+                {themePreference === 'auto'
+                  ? 'Auto'
+                  : themePreference === 'amoled'
+                  ? 'Dark'
+                  : themePreference === 'morning'
+                  ? 'Crimson Glow'
+                  : 'Violet'}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
+                  isThemeOpen ? 'rotate-180 text-white' : ''
+                }`}
+              />
+            </div>
+          </button>
 
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { id: 'auto', label: 'Auto (Cycle)', icon: '🔄', desc: 'Time-based' },
-              { id: 'amoled', label: 'Dark AMOLED', icon: '⬛', desc: '100% Pure Black' },
-              { id: 'morning', label: 'Morning Red', icon: '🔴', desc: 'Crimson Glow' },
-              { id: 'night', label: 'Night Purple', icon: '🟣', desc: 'Cosmic Violet' }
-            ].map((th) => {
-              const isSelected = themePreference === th.id
-              return (
-                <button
-                  key={th.id}
-                  type="button"
-                  onClick={() => onSelectThemePreference && onSelectThemePreference(th.id)}
-                  className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-1 active:scale-95 ${
-                    isSelected
-                      ? 'bg-white/15 border-white/40 shadow-sm ring-1 ring-white/20'
-                      : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                      <span>{th.icon}</span>
-                      <span>{th.label}</span>
-                    </span>
-                    {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
-                  </div>
-                  <span className="text-[10px] text-zinc-400 font-normal">{th.desc}</span>
-                </button>
-              )
-            })}
-          </div>
+          {/* 4 Options Slide Down */}
+          {isThemeOpen && (
+            <div className="px-2 pb-2.5 pt-0.5 flex flex-col gap-1 border-t border-white/[0.06] animate-in fade-in slide-in-from-top-1 duration-150">
+              {[
+                { id: 'auto', label: 'Auto', color: '#10b981' },
+                { id: 'amoled', label: 'Dark', color: '#71717a' },
+                { id: 'morning', label: 'Crimson Glow', color: '#ef4444' },
+                { id: 'night', label: 'Violet', color: '#8b5cf6' }
+              ].map((th) => {
+                const isSelected = themePreference === th.id
+                return (
+                  <button
+                    key={th.id}
+                    type="button"
+                    onClick={() => {
+                      if (onSelectThemePreference) onSelectThemePreference(th.id)
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl text-left transition-all cursor-pointer flex items-center justify-between active:scale-[0.99] ${
+                      isSelected
+                        ? 'bg-white/10 text-white font-bold border border-white/15'
+                        : 'text-zinc-300 hover:text-white hover:bg-white/[0.05] border border-transparent font-medium'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: th.color }}
+                      />
+                      <span className="text-xs tracking-tight">{th.label}</span>
+                    </div>
+                    {isSelected && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0 shadow-xs" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* AI Curation Model Section (Argon priority) */}
