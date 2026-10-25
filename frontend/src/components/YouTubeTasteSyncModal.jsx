@@ -88,9 +88,6 @@ export default function YouTubeTasteSyncModal({
               <h3 className="text-sm font-bold text-white tracking-tight">
                 Sync YouTube Taste & Seeds
               </h3>
-              <p className="text-[11px] text-zinc-400 font-mono">
-                Curate your Taste Profile on Android & Mac
-              </p>
             </div>
           </div>
 
@@ -103,13 +100,13 @@ export default function YouTubeTasteSyncModal({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center border-b border-[#1f1f28] bg-[#0c0c10] px-3 sm:px-4 text-xs font-mono">
+        <div className="flex items-center border-b border-white/[0.08] bg-white/[0.02] px-3 sm:px-4 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('search')}
             className={`py-2.5 px-3 border-b-2 font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'search'
                 ? 'border-rose-500 text-white'
-                : 'border-transparent text-[#71717a] hover:text-[#a1a1aa]'
+                : 'border-transparent text-zinc-400 hover:text-white'
             }`}
           >
             <Search className="w-3.5 h-3.5" />
@@ -121,7 +118,7 @@ export default function YouTubeTasteSyncModal({
             className={`py-2.5 px-3 border-b-2 font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'url'
                 ? 'border-rose-500 text-white'
-                : 'border-transparent text-[#71717a] hover:text-[#a1a1aa]'
+                : 'border-transparent text-zinc-400 hover:text-white'
             }`}
           >
             <Link2 className="w-3.5 h-3.5" />
@@ -133,7 +130,7 @@ export default function YouTubeTasteSyncModal({
             className={`py-2.5 px-3 border-b-2 font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'liked'
                 ? 'border-rose-500 text-white'
-                : 'border-transparent text-[#71717a] hover:text-[#a1a1aa]'
+                : 'border-transparent text-zinc-400 hover:text-white'
             }`}
           >
             <Heart className="w-3.5 h-3.5" />
@@ -146,57 +143,54 @@ export default function YouTubeTasteSyncModal({
           {activeTab === 'search' && (
             <div className="space-y-4">
               <form onSubmit={handleSearchSubmit} className="relative">
-                <Search className="w-4 h-4 text-[#71717a] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Look up favorite artists, songs, anime OSTs..."
-                  className="w-full bg-[#14141a] border border-[#242432] focus:border-rose-500/60 rounded-xl pl-9 pr-20 py-2.5 text-xs text-white placeholder-[#71717a] font-mono focus:outline-none transition-colors"
+                  className="w-full bg-white/[0.04] border border-white/10 focus:border-rose-500 rounded-2xl pl-9 pr-24 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
                 />
                 <button
                   type="submit"
                   disabled={isSearching || !searchQuery.trim()}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-mono font-medium disabled:opacity-40 transition-colors cursor-pointer"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
                 >
                   {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Search'}
                 </button>
               </form>
 
               {searchResults.length === 0 ? (
-                <div className="py-8 text-center text-xs text-[#71717a] font-mono border border-dashed border-[#1f1f28] rounded-xl p-4">
-                  <p>Search YouTube to find tracks you love.</p>
-                  <p className="mt-1 text-[11px] text-[#52525b]">
-                    Tap "+" next to any song to add it as a seed for your Taste Profile.
-                  </p>
+                <div className="py-8 text-center text-xs text-zinc-400 border border-white/10 bg-white/[0.02] rounded-2xl p-4">
+                  <p className="font-semibold text-zinc-300">Search YouTube to find tracks you love</p>
                 </div>
               ) : (
-                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                <div className="space-y-2 max-h-72 overflow-y-auto">
                   {searchResults.map((t) => {
                     const isAdded = addedIds.has(t.video_id)
                     return (
                       <div
                         key={t.video_id}
-                        className="p-2 rounded-lg bg-[#121218] hover:bg-[#181822] border border-[#1f1f2a] flex items-center justify-between gap-3 transition-colors"
+                        className="p-2.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] flex items-center justify-between gap-3 transition-colors"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-9 h-9 rounded-md bg-[#181822] overflow-hidden shrink-0 border border-[#282834]">
+                          <div className="w-10 h-10 rounded-xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10">
                             {t.thumbnail ? (
                               <img src={t.thumbnail} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <Music className="w-3.5 h-3.5 text-[#71717a] m-auto mt-2.5" />
+                              <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-medium text-white truncate">{t.title}</div>
-                            <div className="text-[11px] text-[#8e8e96] truncate">{t.artist}</div>
+                            <div className="text-xs font-bold text-white tracking-tight truncate">{t.title}</div>
+                            <div className="text-[11px] text-zinc-400 truncate mt-0.5">{t.artist}</div>
                           </div>
                         </div>
 
                         <button
                           onClick={() => handleAddTrack(t)}
                           disabled={isAdded}
-                          className={`p-1.5 rounded-lg flex items-center gap-1 text-[11px] font-mono transition-all cursor-pointer ${
+                          className={`px-3 py-1.5 rounded-full flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer ${
                             isAdded
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                               : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30'
@@ -225,7 +219,7 @@ export default function YouTubeTasteSyncModal({
           {activeTab === 'url' && (
             <form onSubmit={handleImportPlaylist} className="space-y-4">
               <div>
-                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#a1a1aa] mb-2">
+                <label className="block text-xs font-semibold text-zinc-300 mb-2">
                   Paste YouTube or YouTube Music Link
                 </label>
                 <input
@@ -233,14 +227,14 @@ export default function YouTubeTasteSyncModal({
                   value={playlistUrl}
                   onChange={(e) => setPlaylistUrl(e.target.value)}
                   placeholder="https://music.youtube.com/playlist?list=... or video URL"
-                  className="w-full bg-[#14141a] border border-[#242432] focus:border-rose-500/60 rounded-xl px-3 py-2.5 text-xs text-white placeholder-[#71717a] font-mono focus:outline-none transition-colors"
+                  className="w-full bg-white/[0.04] border border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none transition-colors"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isImporting || !playlistUrl.trim()}
-                className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-98 text-xs font-mono font-medium text-white flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-40"
+                className="w-full py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-98 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-40"
               >
                 {isImporting ? (
                   <>
@@ -262,12 +256,9 @@ export default function YouTubeTasteSyncModal({
               <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 mx-auto mb-2">
                 <Heart className="w-6 h-6 fill-rose-500/30" />
               </div>
-              <h4 className="text-sm font-semibold text-white">
+              <h4 className="text-sm font-bold text-white tracking-tight">
                 Generate Profile from {favoritesCount} Liked Songs
               </h4>
-              <p className="text-xs text-[#8e8e96] max-w-sm mx-auto leading-relaxed">
-                UpBeat will analyze all your hearted songs on this device and build your tailored Sonic Taste DNA profile with genres, BPM, and archetypes.
-              </p>
 
               <button
                 onClick={async () => {
@@ -275,7 +266,7 @@ export default function YouTubeTasteSyncModal({
                   onClose()
                 }}
                 disabled={favoritesCount === 0 || isSyncing}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white text-xs font-mono font-medium inline-flex items-center gap-2 shadow-lg transition-all cursor-pointer disabled:opacity-40"
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white text-xs font-bold inline-flex items-center gap-2 shadow-lg transition-all cursor-pointer disabled:opacity-40 active:scale-95"
               >
                 {isSyncing ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -290,15 +281,15 @@ export default function YouTubeTasteSyncModal({
 
         {/* Footer: Safari fallback on Mac */}
         {hasBackend && onSyncSafari && (
-          <div className="p-3 bg-[#0a0a0e] border-t border-[#1a1a24] flex items-center justify-between text-[11px] font-mono text-[#71717a]">
-            <span>On macOS? You can also extract open Safari tabs.</span>
+          <div className="p-3 bg-black/40 border-t border-white/[0.08] flex items-center justify-between text-xs text-zinc-400">
+            <span>macOS Safari tabs detected</span>
             <button
               onClick={() => {
                 onSyncSafari()
                 onClose()
               }}
               disabled={isSyncing}
-              className="text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+              className="text-sky-400 hover:text-sky-300 font-semibold cursor-pointer"
             >
               Sync Safari Tabs
             </button>

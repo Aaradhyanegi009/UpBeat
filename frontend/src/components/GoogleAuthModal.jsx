@@ -285,9 +285,6 @@ export default function GoogleAuthModal({
               <h3 className="text-sm font-bold text-white tracking-tight">
                 {googleUser ? 'Google Account & YouTube Taste' : 'Connect Google & YouTube'}
               </h3>
-              <p className="text-[11px] text-zinc-400 font-mono">
-                {googleUser ? 'Authentic listener profile & seeds sync' : 'Sync real YouTube likes & personalize Taste DNA'}
-              </p>
             </div>
           </div>
 
@@ -302,7 +299,7 @@ export default function GoogleAuthModal({
         {/* Content Body */}
         <div className="p-5 space-y-4 overflow-y-auto gpu-scroll">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
+            <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
               <div className="flex-1 leading-relaxed">{errorMsg}</div>
             </div>
@@ -311,7 +308,7 @@ export default function GoogleAuthModal({
           {googleUser ? (
             /* Logged-in State with Verified Profile */
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-[#14141c] border border-emerald-500/30 flex items-center gap-3.5">
+              <div className="p-4 rounded-2xl bg-[#0c0c12]/75 backdrop-blur-xl border border-emerald-500/30 flex items-center gap-3.5">
                 {googleUser.picture ? (
                   <img
                     src={googleUser.picture}
@@ -326,16 +323,16 @@ export default function GoogleAuthModal({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-white truncate">
+                    <span className="text-sm font-bold text-white tracking-tight truncate">
                       {googleUser.name || (googleUser.email ? googleUser.email.split('@')[0] : 'Google User')}
                     </span>
                     <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Connected" />
                   </div>
-                  <div className="text-xs text-[#8e8e96] truncate mt-0.5 font-mono">
+                  <div className="text-xs text-zinc-400 truncate mt-0.5 font-medium">
                     {googleUser.email || 'Connected'}
                   </div>
-                  <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-mono mt-1">
-                    <ShieldCheck className="w-3 h-3" />
+                  <div className="flex items-center gap-1 text-xs text-emerald-400 font-semibold mt-1">
+                    <ShieldCheck className="w-3.5 h-3.5" />
                     <span>
                       {googleUser.provider === 'google_oauth'
                         ? 'Google OAuth 2.0 Connected'
@@ -427,11 +424,11 @@ export default function GoogleAuthModal({
             /* Sign-In State */
             <div className="space-y-4">
               {/* Tab Selector: Instant Connect vs Google Cloud OAuth */}
-              <div className="grid grid-cols-2 p-1 bg-[#121217] border border-[#22222e] rounded-xl text-xs font-medium">
+              <div className="grid grid-cols-2 p-1 bg-white/[0.04] border border-white/10 rounded-2xl text-xs font-medium">
                 <button
                   type="button"
                   onClick={() => setAuthMode('instant')}
-                  className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     authMode === 'instant'
                       ? 'bg-gradient-to-r from-rose-500/20 to-purple-500/20 text-white border border-rose-500/30 shadow-xs font-semibold'
                       : 'text-zinc-400 hover:text-white'
@@ -443,7 +440,7 @@ export default function GoogleAuthModal({
                 <button
                   type="button"
                   onClick={() => setAuthMode('oauth')}
-                  className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     authMode === 'oauth'
                       ? 'bg-white/10 text-white shadow-xs font-semibold'
                       : 'text-zinc-400 hover:text-white'
@@ -457,13 +454,9 @@ export default function GoogleAuthModal({
               {authMode === 'instant' ? (
                 /* TAB 1: 1-Click Instant YouTube & Google Sync (Zero Setup, No 401 errors) */
                 <form onSubmit={handleInstantConnect} className="space-y-3.5">
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-[11px] leading-relaxed">
-                    ✨ <strong>No Google Cloud setup required!</strong> Connect your account name and YouTube playlist link to immediately calibrate your seeds feed and taste archetype.
-                  </div>
-
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-wider text-[#a1a1aa] mb-1">
+                      <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                         Display Name
                       </label>
                       <input
@@ -471,11 +464,11 @@ export default function GoogleAuthModal({
                         value={customName}
                         onChange={(e) => setCustomName(e.target.value)}
                         placeholder="Divyansh Negi"
-                        className="w-full px-3 py-2 rounded-xl bg-[#121217] border border-[#262634] text-xs text-[#f4f4f5] focus:outline-none focus:border-rose-500"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-mono uppercase tracking-wider text-[#a1a1aa] mb-1">
+                      <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                         Google / YT Email
                       </label>
                       <input
@@ -483,13 +476,13 @@ export default function GoogleAuthModal({
                         value={customEmail}
                         onChange={(e) => setCustomEmail(e.target.value)}
                         placeholder="divyanshnegi009@gmail.com"
-                        className="w-full px-3 py-2 rounded-xl bg-[#121217] border border-[#262634] text-xs text-[#f4f4f5] focus:outline-none focus:border-rose-500 font-mono"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 transition-colors"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-mono uppercase tracking-wider text-[#a1a1aa] mb-1">
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                       YouTube Playlist Link or Liked Songs URL (Optional)
                     </label>
                     <input
@@ -497,17 +490,14 @@ export default function GoogleAuthModal({
                       value={playlistUrl}
                       onChange={(e) => setPlaylistUrl(e.target.value)}
                       placeholder="https://music.youtube.com/playlist?list=..."
-                      className="w-full px-3 py-2 rounded-xl bg-[#121217] border border-[#262634] text-xs text-[#f4f4f5] placeholder:text-[#6e6e78] focus:outline-none focus:border-rose-500 font-mono"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
                     />
-                    <p className="text-[10px] text-[#71717a] mt-1 font-mono">
-                      Paste any public/unlisted playlist or your music library URL
-                    </p>
                   </div>
 
                   <button
                     type="submit"
                     disabled={isLoggingIn}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 active:scale-[0.99] disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                    className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 active:scale-[0.99] disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                   >
                     {isLoggingIn ? (
                       <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -520,22 +510,18 @@ export default function GoogleAuthModal({
               ) : (
                 /* TAB 2: Official Google Cloud OAuth 2.0 */
                 <div className="space-y-3.5">
-                  <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-200/90 text-[11px] leading-relaxed">
-                    Uses official Google Identity Services to pull your Liked Videos (`LL`). Requires an active Google Cloud Web Client ID.
-                  </div>
-
                   {/* Client ID Configuration Field */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#a1a1aa]">
+                      <label className="text-xs font-semibold text-zinc-300">
                         Google Cloud Web Client ID
                       </label>
                       <button
                         type="button"
                         onClick={() => setShowOAuthGuide((p) => !p)}
-                        className="text-[10px] text-sky-400 hover:text-sky-300 font-mono flex items-center gap-1 cursor-pointer"
+                        className="text-xs text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1 cursor-pointer"
                       >
-                        <HelpCircle className="w-3 h-3" />
+                        <HelpCircle className="w-3.5 h-3.5" />
                         <span>{showOAuthGuide ? 'Hide Instructions' : 'How to get ID'}</span>
                       </button>
                     </div>
@@ -548,7 +534,7 @@ export default function GoogleAuthModal({
                         try { localStorage.setItem('upbeat_google_client_id', e.target.value.trim()) } catch {}
                       }}
                       placeholder="...apps.googleusercontent.com"
-                      className="w-full px-3 py-2 rounded-xl bg-[#121217] border border-[#262634] text-xs text-[#f4f4f5] placeholder:text-[#6e6e78] focus:outline-none focus:border-sky-500 font-mono"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-sky-500 transition-colors"
                     />
                   </div>
 
@@ -585,7 +571,7 @@ export default function GoogleAuthModal({
                     type="button"
                     onClick={handleGoogleOAuthSignIn}
                     disabled={isLoggingIn}
-                    className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-[#f2f2f2] active:scale-[0.99] disabled:opacity-50 text-[#1f1f1f] text-xs font-semibold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md"
+                    className="w-full py-2.5 px-4 rounded-2xl bg-white hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50 text-black text-xs font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md"
                   >
                     {isLoggingIn ? (
                       <Loader2 className="w-4 h-4 animate-spin text-[#4285F4]" />
@@ -596,8 +582,8 @@ export default function GoogleAuthModal({
                   </button>
 
                   {/* Alternative: Direct Access Token */}
-                  <div className="pt-2 border-t border-[#1e1e28] space-y-2">
-                    <label className="block text-[10px] font-mono uppercase tracking-wider text-[#8e8e96]">
+                  <div className="pt-2 border-t border-white/10 space-y-2">
+                    <label className="block text-xs font-semibold text-zinc-300">
                       Or Paste OAuth Access Token Directly
                     </label>
                     <div className="flex gap-2">
@@ -606,13 +592,13 @@ export default function GoogleAuthModal({
                         value={customAccessToken}
                         onChange={(e) => setCustomAccessToken(e.target.value)}
                         placeholder="ya29...."
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white text-[11px] focus:outline-none focus:border-sky-500 font-mono"
+                        className="flex-1 px-3 py-2 rounded-2xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-sky-500"
                       />
                       <button
                         type="button"
                         onClick={handleDirectAccessTokenLogin}
                         disabled={!customAccessToken.trim() || isLoggingIn}
-                        className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-xs text-white font-medium cursor-pointer"
+                        className="px-4 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-xs text-white font-bold cursor-pointer transition-colors"
                       >
                         Sign In
                       </button>

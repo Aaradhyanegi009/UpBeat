@@ -42,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v4.4.6')
+  const [otaVer, setOtaVer] = useState('v4.4.7')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -426,14 +426,13 @@ export default function Navbar({
       {showKeyModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#101015]/95 border border-white/10 rounded-3xl p-6 shadow-2xl backdrop-blur-2xl">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-400">
                   <Settings className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white tracking-tight">Studio Settings</h3>
-                  <p className="text-[11px] text-zinc-400 font-mono">Configuration & Updates</p>
                 </div>
               </div>
               <button
@@ -444,13 +443,9 @@ export default function Navbar({
               </button>
             </div>
 
-            <p className="text-xs text-[#a1a1aa] leading-relaxed mb-4">
-              Enter your Gemini API key below for custom AI curation.
-            </p>
-
-            <form onSubmit={handleSaveSettings} className="space-y-3.5">
+            <form onSubmit={handleSaveSettings} className="space-y-4">
               <div>
-                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#a1a1aa] mb-1.5">
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                   Gemini API Key
                 </label>
                 <input
@@ -458,12 +453,12 @@ export default function Navbar({
                   value={apiKeyInput}
                   onChange={(e) => setApiKeyInput(e.target.value)}
                   placeholder="AIzaSy..."
-                  className="w-full bg-[#0d0d10] border border-[#262630] focus:border-rose-500 rounded-xl px-3 py-2.5 text-xs font-mono text-[#f4f4f5] focus:outline-none"
+                  className="w-full bg-white/[0.04] border border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#a1a1aa] mb-1.5">
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                   Mac Backend Server URL (Optional)
                 </label>
                 <input
@@ -471,30 +466,27 @@ export default function Navbar({
                   value={serverUrlInput}
                   onChange={(e) => setServerUrlInput(e.target.value)}
                   placeholder="http://192.168.1.4:8000"
-                  className="w-full bg-[#0d0d10] border border-[#262630] focus:border-rose-500 rounded-xl px-3 py-2.5 text-xs font-mono text-[#f4f4f5] focus:outline-none"
+                  className="w-full bg-white/[0.04] border border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition-colors"
                 />
               </div>
 
               {/* Over-The-Air (OTA) Live Updates */}
-              <div className="pt-3 border-t border-[#22222c]">
-                <div className="flex items-center justify-between mb-1.5">
+              <div className="pt-3 border-t border-white/10">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                    <span className="text-xs font-semibold text-white">Live Over-The-Air (OTA) Updates</span>
+                    <span className="text-xs font-bold text-white tracking-tight">Live Over-The-Air Updates</span>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
                     {otaVer}
                   </span>
                 </div>
-                <p className="text-[11px] text-[#8e8e96] leading-relaxed mb-2.5">
-                  UpBeat pulls instant UI improvements and fixes Over-The-Air without downloading or installing a new APK.
-                </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleManualOtaCheck}
                     disabled={isCheckingOta}
-                    className="flex-1 py-2 px-3 rounded-xl bg-purple-600/25 hover:bg-purple-600/35 border border-purple-500/40 text-purple-200 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                    className="flex-1 py-2.5 px-3 rounded-2xl bg-purple-600/25 hover:bg-purple-600/35 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50"
                   >
                     {isCheckingOta ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
@@ -508,14 +500,14 @@ export default function Navbar({
                     href="https://github.com/AaradhyaNegi009/UpBeat/releases"
                     target="_blank"
                     rel="noreferrer"
-                    className="py-2 px-3 rounded-xl bg-[#181820] hover:bg-[#22222a] border border-[#2a2a35] text-zinc-400 hover:text-white text-xs font-mono transition-colors flex items-center justify-center gap-1"
+                    className="py-2.5 px-3.5 rounded-2xl bg-white/[0.05] hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1"
                   >
                     <span>Releases</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
                 {otaStatusMsg && (
-                  <p className="text-[11px] text-purple-300 mt-2 font-mono bg-purple-950/40 border border-purple-500/30 rounded-lg px-2.5 py-1.5">
+                  <p className="text-xs text-purple-300 mt-2 font-medium bg-purple-950/40 border border-purple-500/30 rounded-xl px-3 py-1.5">
                     {otaStatusMsg}
                   </p>
                 )}

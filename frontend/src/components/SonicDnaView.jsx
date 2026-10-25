@@ -173,14 +173,11 @@ export default function SonicDnaView({
         <div className="flex-1 overflow-y-auto">
           {filteredFavs.length === 0 ? (
             <div className="p-14 text-center flex flex-col items-center justify-center">
-              <div className="w-10 h-10 rounded-lg border border-[#2a2a32] bg-[#141418] flex items-center justify-center mb-3">
-                <Heart className="w-4 h-4 text-rose-400" />
+              <div className="w-12 h-12 rounded-2xl border border-white/10 bg-white/[0.04] flex items-center justify-center mb-3">
+                <Heart className="w-5 h-5 text-rose-400" />
               </div>
-              <p className="text-sm font-medium text-[#f5f5f5]">
+              <p className="text-sm font-bold text-white tracking-tight">
                 {favorites.length === 0 ? 'No songs hearted yet' : 'No matching favorites'}
-              </p>
-              <p className="text-xs text-[#a1a1aa] mt-1 max-w-sm">
-                Click the heart icon on any track in the Curator, Safari Library, or bottom player bar to save it to your permanent taste memory.
               </p>
             </div>
           ) : (
@@ -203,33 +200,33 @@ export default function SonicDnaView({
                       onClick={() => onPlayTrack(t, idx)}
                       className="group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row"
                     >
-                      <td className="py-2.5 pl-3.5 sm:pl-6 pr-2 font-mono text-xs text-[#9ca3af]">
+                      <td className="py-2.5 pl-3.5 sm:pl-6 pr-2 text-xs font-semibold text-zinc-500">
                         {(idx + 1).toString().padStart(2, '0')}
                       </td>
                       <td className="py-2.5 px-2 sm:px-3 max-w-[210px] sm:max-w-md">
                         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded bg-[#18181e] border border-[#282830] overflow-hidden flex-shrink-0">
+                          <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden flex-shrink-0">
                             {thumb ? (
                               <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
                             ) : (
-                              <Music className="w-3.5 h-3.5 text-[#73737a] m-auto mt-2.5" />
+                              <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-semibold text-[13px] text-[#f5f5f5] truncate">
+                            <div className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-rose-300 transition-colors tracking-tight">
                               {t.title}
                             </div>
-                            <div className="text-[11px] text-[#a1a1aa] truncate md:hidden">
+                            <div className="text-[11px] text-zinc-400 truncate md:hidden mt-0.5">
                               {t.artist}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-[#b4b4b8] truncate max-w-[200px] hidden md:table-cell">
+                      <td className="py-2.5 px-3 text-zinc-400 truncate max-w-[200px] hidden md:table-cell font-medium">
                         {t.artist}
                       </td>
                       <td className="py-2.5 px-3 hidden sm:table-cell">
-                        <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#16161c] text-[#b4b4b8] border border-[#282832]">
+                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10">
                           {t.vibe || 'Favorite'}
                         </span>
                       </td>
@@ -292,10 +289,10 @@ export default function SonicDnaView({
                             <button
                               onClick={() => onCurateSimilar(t)}
                               title="Curate a playlist around this song"
-                              className="p-1.5 sm:px-2.5 sm:py-1 rounded bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-[11px] font-mono text-indigo-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                              className="px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
                             >
-                              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-                              <span className="hidden sm:inline">Curate Similar</span>
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="hidden sm:inline">Curate</span>
                             </button>
                           )}
                           <button
@@ -410,17 +407,12 @@ export default function SonicDnaView({
 
         <div className="flex-1 overflow-y-auto">
           {filteredTracks.length === 0 ? (
-            <div className="p-12 text-center text-xs text-[#a1a1aa] flex flex-col items-center justify-center">
-              <div className="w-10 h-10 rounded-lg border border-[#2a2a32] bg-[#141418] flex items-center justify-center mb-3">
-                <Music className="w-4 h-4 text-indigo-400" />
+            <div className="p-12 text-center text-xs text-zinc-400 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl border border-white/10 bg-white/[0.04] flex items-center justify-center mb-3">
+                <Music className="w-5 h-5 text-sky-400" />
               </div>
-              <p className="text-sm font-medium text-[#f5f5f5]">
+              <p className="text-sm font-bold text-white tracking-tight">
                 {extractedTracks.length === 0 ? 'Your Library starts fresh' : 'No matching tracks'}
-              </p>
-              <p className="text-xs text-[#9ca3af] mt-1 max-w-sm">
-                {extractedTracks.length === 0
-                  ? 'Use Direct Search (0 tokens) to find any song, artist, or YouTube playlist, and heart tracks to save them to your permanent favorites memory.'
-                  : 'Try a different search filter.'}
               </p>
             </div>
           ) : (
@@ -443,29 +435,29 @@ export default function SonicDnaView({
                       onClick={() => onPlayTrack(t, idx)}
                       className="group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row"
                     >
-                      <td className="py-2.5 pl-3.5 sm:pl-6 pr-2 font-mono text-xs text-[#9ca3af]">
+                      <td className="py-2.5 pl-3.5 sm:pl-6 pr-2 text-xs font-semibold text-zinc-500">
                         {(idx + 1).toString().padStart(2, '0')}
                       </td>
                       <td className="py-2.5 px-2 sm:px-3 max-w-[210px] sm:max-w-md">
                         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded bg-[#18181e] border border-[#282830] overflow-hidden flex-shrink-0">
+                          <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden flex-shrink-0">
                             {thumb ? (
                               <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
                             ) : (
-                              <Music className="w-3.5 h-3.5 text-[#73737a] m-auto mt-2.5" />
+                              <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-semibold text-[13px] text-[#f5f5f5] truncate">
+                            <div className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-sky-300 transition-colors tracking-tight">
                               {t.title}
                             </div>
-                            <div className="text-[11px] text-[#a1a1aa] truncate md:hidden">
+                            <div className="text-[11px] text-zinc-400 truncate md:hidden mt-0.5 font-medium">
                               {t.artist}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-[#b4b4b8] truncate max-w-[200px] hidden md:table-cell">
+                      <td className="py-2.5 px-3 text-zinc-400 truncate max-w-[200px] hidden md:table-cell font-medium">
                         {t.artist}
                       </td>
                       <td
@@ -529,10 +521,10 @@ export default function SonicDnaView({
                             <button
                               onClick={() => onCurateSimilar(t)}
                               title="Curate a playlist around this song"
-                              className="p-1.5 sm:px-2.5 sm:py-1 rounded bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-[11px] font-mono text-indigo-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                              className="px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
                             >
-                              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-                              <span className="hidden sm:inline">Curate Similar</span>
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="hidden sm:inline">Curate</span>
                             </button>
                           )}
                           <button
@@ -618,24 +610,9 @@ export default function SonicDnaView({
       <div className="max-w-4xl mx-auto flex flex-col gap-4 sm:gap-6">
         {/* Main Archetype Hero Card */}
         <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl p-5 sm:p-7 shadow-xl">
-          {/* Top Bar with Badges and Sync Buttons */}
-          <div className="flex items-center justify-between gap-2.5 mb-5 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="whitespace-nowrap">Taste DNA Active</span>
-              </span>
-
-              {/* Animated Equalizer Visualizer */}
-              <div className="hidden xs:flex items-end gap-1 h-4 px-2 py-0.5 rounded-full bg-black/40 border border-white/10 shrink-0">
-                <span className="w-1 bg-emerald-400 rounded-full animate-[bounce_0.9s_infinite_100ms] h-full" />
-                <span className="w-1 bg-emerald-300 rounded-full animate-[bounce_0.9s_infinite_300ms] h-2/3" />
-                <span className="w-1 bg-teal-400 rounded-full animate-[bounce_0.9s_infinite_200ms] h-4/5" />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          {/* Top Bar Action Buttons */}
+          <div className="flex items-center justify-end gap-1.5 mb-5 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap ml-auto">
               {onSyncFavorites && (
                 <button
                   onClick={onSyncFavorites}
@@ -720,11 +697,11 @@ export default function SonicDnaView({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-400 truncate mt-0.5 font-normal">
-                {googleUser
-                  ? `${googleUser.email} • YouTube likes & listening habits synced`
-                  : 'Import your personal YouTube music likes, private mixes, and curated history'}
-              </p>
+              {googleUser?.email && (
+                <p className="text-xs text-zinc-400 truncate mt-0.5 font-normal">
+                  {googleUser.email}
+                </p>
+              )}
             </div>
           </div>
 
