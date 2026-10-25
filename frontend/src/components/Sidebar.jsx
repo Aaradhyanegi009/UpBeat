@@ -241,7 +241,7 @@ export default function Sidebar({
 
   // 2. Full Expanded Drawer with Preset Sliders & Diagnostics
   const sidebarContent = (
-    <aside className="w-80 bg-black border-r border-white/10 flex-shrink-0 flex flex-col justify-between overflow-y-auto select-none h-full relative">
+    <aside className="w-80 bg-black/90 backdrop-blur-2xl border-r border-white/10 flex-shrink-0 flex flex-col justify-between overflow-y-auto select-none h-full relative">
       <div className="p-4 flex flex-col gap-4">
         {/* Mobile / Expanded Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
@@ -420,19 +420,19 @@ export default function Sidebar({
         {/* App Info */}
         <div className="pt-2 text-[10px] font-mono text-zinc-500 border-t border-white/10 flex items-center justify-between">
           <span className="text-zinc-400 font-medium">UpBeat Music</span>
-          <span className="text-emerald-400/80 font-mono">v4.4.4</span>
+          <span className="text-emerald-400/80 font-mono">v4.4.5</span>
         </div>
       </div>
 
       {/* Bottom Profile Snapshot */}
       {tasteDna && (
-        <div className="p-4 border-t border-white/10 bg-black">
+        <div className="p-4 border-t border-white/10 bg-black/40 backdrop-blur-md">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5">
-              <Dna className="w-3 h-3" />
+            <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+              <Dna className="w-3.5 h-3.5" />
               <span>Profile Snapshot</span>
             </span>
-            <span className="text-[10px] font-mono font-medium text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10">
+            <span className="text-[11px] font-semibold text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10">
               {tasteDna.sonic_attributes?.tempo || '120-140 BPM'}
             </span>
           </div>
@@ -443,7 +443,7 @@ export default function Sidebar({
             {(tasteDna.primary_genres || []).slice(0, 3).map((g, i) => (
               <span
                 key={i}
-                className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 font-medium"
+                className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 font-medium"
               >
                 {g}
               </span>

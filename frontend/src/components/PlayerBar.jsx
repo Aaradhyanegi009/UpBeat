@@ -1107,7 +1107,7 @@ export default function PlayerBar({
       </div>
 
       <footer
-        className="bg-black/95 backdrop-blur-xl border-t border-white/[0.08] px-3 sm:px-5 py-2 sm:py-0 sm:h-[70px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 select-none flex-shrink-0 z-30 relative"
+        className="bg-black/60 backdrop-blur-xl border-t border-white/[0.08] px-3 sm:px-5 py-2 sm:py-0 sm:h-[70px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 select-none flex-shrink-0 z-30 relative"
         style={{
           '--slider-thumb-color': albumColor.primary,
           '--slider-thumb-glow': albumColor.glow,

@@ -119,8 +119,8 @@ export default function SonicDnaView({
     })
 
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-black gpu-scroll">
-        <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-black flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="flex-1 flex flex-col min-h-0 bg-transparent gpu-scroll">
+        <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-500 shrink-0">
               <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
@@ -186,7 +186,7 @@ export default function SonicDnaView({
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/[0.08] text-[11px] font-mono uppercase tracking-wider text-[#71717a] bg-[#121217]/80 backdrop-blur-sm sticky top-0 z-10">
+                <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md sticky top-0 z-10">
                   <th className="py-2.5 pl-3.5 sm:pl-6 pr-2 w-8 sm:w-10">#</th>
                   <th className="py-2.5 px-2 sm:px-3">Track</th>
                   <th className="py-2.5 px-3 hidden md:table-cell">Artist</th>
@@ -348,8 +348,8 @@ export default function SonicDnaView({
     })
 
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-black gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
-        <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-black flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="flex-1 flex flex-col min-h-0 bg-transparent gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
+        <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
               <Disc className="w-4 h-4 text-sky-400" />
@@ -426,7 +426,7 @@ export default function SonicDnaView({
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/[0.08] text-[11px] font-mono uppercase tracking-wider text-[#71717a] bg-[#121217]/80 backdrop-blur-sm sticky top-0 z-10">
+                <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md sticky top-0 z-10">
                   <th className="py-2.5 pl-3.5 sm:pl-6 pr-2 w-8 sm:w-10">#</th>
                   <th className="py-2.5 px-2 sm:px-3">Track</th>
                   <th className="py-2.5 px-3 hidden md:table-cell">Channel / Artist</th>
@@ -614,37 +614,37 @@ export default function SonicDnaView({
   }))
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-black gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
-      <div className="max-w-4xl mx-auto flex flex-col gap-6">
+    <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 bg-transparent gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
+      <div className="max-w-4xl mx-auto flex flex-col gap-4 sm:gap-6">
         {/* Main Archetype Hero Card */}
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0a0a0d] p-6 sm:p-7 shadow-xl">
+        <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl p-5 sm:p-7 shadow-xl">
           {/* Top Bar with Badges and Sync Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Sonic Taste DNA • Active</span>
+          <div className="flex items-center justify-between gap-2.5 mb-5 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="whitespace-nowrap">Taste DNA Active</span>
               </span>
 
               {/* Animated Equalizer Visualizer */}
-              <div className="flex items-end gap-1 h-4 px-2.5 py-1 rounded-full bg-black/60 border border-white/10">
+              <div className="hidden xs:flex items-end gap-1 h-4 px-2 py-0.5 rounded-full bg-black/40 border border-white/10 shrink-0">
                 <span className="w-1 bg-emerald-400 rounded-full animate-[bounce_0.9s_infinite_100ms] h-full" />
                 <span className="w-1 bg-emerald-300 rounded-full animate-[bounce_0.9s_infinite_300ms] h-2/3" />
                 <span className="w-1 bg-teal-400 rounded-full animate-[bounce_0.9s_infinite_200ms] h-4/5" />
-                <span className="w-1 bg-emerald-500 rounded-full animate-[bounce_0.9s_infinite_400ms] h-1/2" />
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
               {onSyncFavorites && (
                 <button
                   onClick={onSyncFavorites}
                   disabled={isSyncing}
                   title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-                  className="px-3.5 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-xs text-rose-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs text-rose-200 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0"
                 >
                   <Heart className={`w-3.5 h-3.5 fill-rose-400 text-rose-400 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
-                  <span>{isSyncing ? 'Syncing...' : 'Sync Liked Songs'}</span>
+                  <span>{isSyncing ? 'Syncing...' : 'Sync Liked'}</span>
                 </button>
               )}
 
@@ -652,17 +652,17 @@ export default function SonicDnaView({
                 onClick={() => onAnalyzeTaste && onAnalyzeTaste()}
                 disabled={isSyncing}
                 title="Re-run deep musical taste analysis with Gemini"
-                className="px-3.5 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-xs text-emerald-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                className="px-3 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs text-emerald-200 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0"
               >
-                <Sparkles className={`w-3.5 h-3.5 text-emerald-400 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>Analyze DNA</span>
+                <Sparkles className={`w-3.5 h-3.5 text-emerald-400 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>Analyze</span>
               </button>
 
               {onResetTasteDna && (tasteDna || allTracks.length > 0) && (
                 <button
                   onClick={onResetTasteDna}
                   title="Reset Taste DNA profile"
-                  className="p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer active:scale-95"
+                  className="w-7 h-7 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer active:scale-95 shrink-0"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -671,25 +671,23 @@ export default function SonicDnaView({
           </div>
 
           {/* Archetype Title & Summary */}
-          <div className="max-w-2xl">
-            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
-              <span>
-                {googleUser?.name ? `${googleUser.name} • ${derivedArchetype}` : derivedArchetype}
-              </span>
+          <div>
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-tight">
+              {googleUser?.name ? `${googleUser.name} • ${derivedArchetype}` : derivedArchetype}
             </h2>
-            <p className="text-xs sm:text-sm text-zinc-300 mt-2.5 leading-relaxed font-normal">
+            <p className="text-xs sm:text-sm text-zinc-300/90 mt-2.5 leading-relaxed font-normal max-w-2xl">
               {derivedSummary}
             </p>
           </div>
 
           {/* 1-Tap Curate from DNA Actions */}
-          <div className="flex flex-wrap items-center gap-2.5 mt-6 pt-5 border-t border-white/10">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 mt-6 pt-5 border-t border-white/10">
             {onCurateFromFavorites && (
               <button
                 onClick={onCurateFromFavorites}
-                className="px-4 py-2.5 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-white/10 active:scale-95"
+                className="px-4 py-3 sm:py-2.5 rounded-2xl bg-white text-black hover:bg-zinc-200 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-white/10 active:scale-95"
               >
-                <Sparkles className="w-3.5 h-3.5 fill-black" />
+                <Sparkles className="w-4 h-4 fill-black shrink-0" />
                 <span>Curate My DNA Mix (0 AI Tokens)</span>
               </button>
             )}
@@ -697,27 +695,27 @@ export default function SonicDnaView({
             <button
               onClick={() => onCurateSimilar && favorites[0] && onCurateSimilar(favorites[0])}
               disabled={!favorites.length}
-              className="px-4 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 active:scale-95"
+              className="px-4 py-3 sm:py-2.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs sm:text-sm text-white font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 active:scale-95"
             >
-              <Compass className="w-3.5 h-3.5 text-emerald-400" />
+              <Compass className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>Explore Boundaries</span>
             </button>
           </div>
         </div>
 
         {/* Google & YouTube Sync Status Card */}
-        <div className="p-6 rounded-3xl bg-[#0a0a0d] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg relative overflow-hidden">
+        <div className="p-5 sm:p-6 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg relative overflow-hidden">
           <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0 shadow-xs">
+            <div className="w-11 h-11 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
               <GoogleIcon className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-white tracking-tight">
-                  {googleUser ? `Connected: ${googleUser.name}` : 'Connect Google & YouTube Music'}
+                <span className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
+                  {googleUser ? `Connected: ${googleUser.name}` : 'Connect Google & YouTube'}
                 </span>
                 {googleUser && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
                     ONLINE
                   </span>
                 )}
@@ -735,7 +733,7 @@ export default function SonicDnaView({
               <button
                 onClick={onSyncYouTubeLikes}
                 disabled={isSyncingLikes}
-                className="px-4 py-2.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-xs text-rose-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 active:scale-95"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-semibold text-rose-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 active:scale-95"
               >
                 {isSyncingLikes ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
@@ -747,7 +745,7 @@ export default function SonicDnaView({
             ) : (
               <button
                 onClick={onOpenGoogleModal}
-                className="px-4 py-2.5 rounded-full bg-white hover:bg-zinc-200 text-black text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-white/10 active:scale-95"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-white hover:bg-zinc-200 text-black text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-95"
               >
                 <GoogleIcon className="w-3.5 h-3.5" />
                 <span>Sign in with Google</span>
@@ -757,14 +755,18 @@ export default function SonicDnaView({
         </div>
 
         {/* Genre Affinity Breakdown */}
-        <div className="p-6 rounded-3xl bg-[#0a0a0d] border border-white/10 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex items-center gap-1.5">
-              <Disc className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Genre Affinity & Tonal Distribution</span>
-            </span>
-            <span className="text-[10px] font-mono text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10 font-semibold">
-              {genrePills.length} Identified Styles
+        <div className="p-5 sm:p-6 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-lg relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+                <Disc className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
+                Genre Affinity
+              </h3>
+            </div>
+            <span className="text-xs font-semibold text-zinc-400 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/10 shrink-0">
+              {genrePills.length} Styles
             </span>
           </div>
 
@@ -772,16 +774,16 @@ export default function SonicDnaView({
             {genrePills.map((g, idx) => (
               <div
                 key={idx}
-                className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-emerald-500/40 transition-colors"
+                className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] hover:border-emerald-500/40 transition-colors"
               >
                 <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="font-bold text-white tracking-tight">{g.name}</span>
-                  <span className="font-mono text-[11px] text-emerald-300 font-bold">{g.pct}%</span>
+                  <span className="font-bold text-white tracking-tight truncate mr-2">{g.name}</span>
+                  <span className="text-xs text-emerald-300 font-bold shrink-0">{g.pct}%</span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-black/60 border border-white/10 overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-black/50 border border-white/10 overflow-hidden">
                   <div
                     style={{ width: `${g.pct}%` }}
-                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400"
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
                   />
                 </div>
               </div>
@@ -790,31 +792,46 @@ export default function SonicDnaView({
         </div>
 
         {/* Top Influences & Artists */}
-        <div className="p-6 rounded-3xl bg-[#0a0a0d] border border-white/10 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex items-center gap-1.5">
-              <Music className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Key Anchoring Artists & Sounds</span>
+        <div className="p-5 sm:p-6 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-lg relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+                <Music className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
+                Key Anchoring Artists
+              </h3>
+            </div>
+            <span className="text-xs font-semibold text-zinc-400 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/10 shrink-0">
+              Influences
             </span>
-            <span className="text-[10px] font-mono text-zinc-500">Influences</span>
           </div>
 
-          <div className="flex flex-wrap gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {topArtists.length > 0 ? (
               topArtists.map((a, idx) => (
                 <div
                   key={idx}
                   onClick={() => onCurateSimilar && onCurateSimilar({ title: 'Mix', artist: a })}
-                  className="px-4 py-2 rounded-full bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 hover:border-emerald-500/40 text-xs font-semibold text-zinc-200 hover:text-white flex items-center gap-2 transition-all cursor-pointer group shadow-sm active:scale-95"
+                  className="p-3 px-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-emerald-500/40 flex items-center justify-between gap-3 transition-all cursor-pointer group active:scale-98"
                   title={`Curate mix inspired by ${a}`}
                 >
-                  <Music className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                  <span className="font-medium">{a}</span>
-                  <span className="text-[10px] text-zinc-500 group-hover:text-emerald-300 font-bold font-mono">Curate &rarr;</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-white/[0.06] group-hover:bg-emerald-500/20 border border-white/10 flex items-center justify-center shrink-0 transition-colors">
+                      <Music className="w-3.5 h-3.5 text-emerald-400" />
+                    </div>
+                    <span className="font-semibold text-xs sm:text-sm text-zinc-100 group-hover:text-white truncate">
+                      {a}
+                    </span>
+                  </div>
+                  <span className="text-xs font-semibold text-emerald-400 group-hover:text-emerald-300 shrink-0 whitespace-nowrap flex items-center gap-1">
+                    <span>Curate</span>
+                    <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+                  </span>
                 </div>
               ))
             ) : (
-              <p className="text-xs text-zinc-500 font-mono">
+              <p className="text-xs text-zinc-400 font-normal py-2 col-span-2">
                 No anchoring artists yet. Heart songs or add seeds to populate your key artists.
               </p>
             )}
@@ -823,14 +840,18 @@ export default function SonicDnaView({
 
         {/* Top 4 Anchor Songs (The actual songs shaping this profile) */}
         {allTracks.length > 0 && (
-          <div className="p-6 rounded-3xl bg-[#0a0a0d] border border-white/10 shadow-lg relative overflow-hidden">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex items-center gap-1.5">
-                <Heart className="w-3.5 h-3.5 text-rose-400" />
-                <span>Core Tracks Anchoring Your Profile ({allTracks.length})</span>
-              </span>
-              <span className="text-[10px] font-mono text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10 font-semibold">
-                Highest Weight
+          <div className="p-5 sm:p-6 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-lg relative overflow-hidden">
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center shrink-0">
+                  <Heart className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
+                  Core Profile Tracks
+                </h3>
+              </div>
+              <span className="text-xs font-semibold text-zinc-400 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/10 shrink-0">
+                {allTracks.length} Tracks
               </span>
             </div>
 
@@ -841,7 +862,7 @@ export default function SonicDnaView({
                   <div
                     key={idx}
                     onClick={() => onPlayTrack(t, idx)}
-                    className="p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-emerald-500/30 flex items-center justify-between gap-3.5 transition-all cursor-pointer group shadow-sm active:scale-98"
+                    className="p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-emerald-500/30 flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-xs active:scale-98"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-12 h-12 rounded-2xl bg-black/50 border border-white/10 overflow-hidden shrink-0 relative">
@@ -855,10 +876,10 @@ export default function SonicDnaView({
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs font-bold text-white truncate group-hover:text-emerald-300 transition-colors tracking-tight">
+                        <div className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-emerald-300 transition-colors tracking-tight">
                           {t.title}
                         </div>
-                        <div className="text-[11px] text-zinc-400 truncate mt-0.5">
+                        <div className="text-[11px] sm:text-xs text-zinc-400 truncate mt-0.5 font-normal">
                           {t.artist}
                         </div>
                       </div>

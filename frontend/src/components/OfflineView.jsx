@@ -122,9 +122,9 @@ export default function OfflineView({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-black overflow-y-auto select-none gpu-scroll">
+    <div className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto select-none gpu-scroll">
       {/* Sticky Header */}
-      <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black sticky top-0 z-20">
+      <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2.5">
