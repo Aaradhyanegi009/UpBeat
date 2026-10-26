@@ -8,41 +8,41 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 
 ---
 
-## ✨ Features & Highlights
+##  Features & Highlights
 
-### 🎨 Atmosphere Themes & Day/Night Engine
+###  Atmosphere Themes & Day/Night Engine
 - **Dynamic Time-Based Cycling**: Automatically shifts ambient lighting and gradient reflections based on your local time:
-  - 🌅 **Crimson Glow** (4:00 AM – 11:59 AM)
-  - ⬛ **Dark (AMOLED)** (12:00 PM – 7:59 PM): 100% pure black for afternoon glare reduction and OLED battery savings
-  - 🌌 **Violet** (8:00 PM – 3:59 AM)
+  -  **Crimson Glow** (4:00 AM – 11:59 AM)
+  -  **Dark (AMOLED)** (12:00 PM – 7:59 PM): 100% pure black for afternoon glare reduction and OLED battery savings
+  -  **Violet** (8:00 PM – 3:59 AM)
 - **Quick Slide-Down Theme Drawer**: Tap **Themes** in Taste Controls to expand a clean 4-option slider (**Auto**, **Dark**, **Crimson Glow**, **Violet**) to lock in your preferred aesthetic anytime.
 
-### 🚗 Android Auto (Car Display Mode)
+### Android Auto (Car Display Mode)
 - **In-Car Browse & Playback**: Full native Android Auto dashboard support (`AutomotiveApp` via `MediaBrowserServiceCompat`).
 - **Direct Car Screen Selection**: Browse and trigger your curated playlists, Liked Songs, and AI mixes directly from your car's touchscreen console with zero latency.
 - **Lock Screen & Media Controls**: Complete system notification playback controls with high-res album art and persistent background audio.
 
-### 🧬 Sonic Taste DNA & YouTube Likes Sync
+### Taste DNA & YouTube Likes Sync
 - **Listener Archetype Synthesis**: Gemini analyzes your hearted songs and listening history to classify your acoustic profile (e.g. *High-Impact Sonic Voyager*, *Atmospheric Connoisseur*), tempo range, and genre affinity breakdowns.
 - **Sync Liked Songs**: 1-click sync that analyzes your local favorites to refresh seeds and curate tailored mixes with 0 AI token waste.
 - **Google & YouTube Integration**: Connect with Google OAuth 2.0 or paste any YouTube Music playlist link to import your authentic likes and listening habits.
 
-### ⚡ Ultra-Fast AI Curation (Argon Priority)
+### Ultra-Fast AI Curation (Argon Priority)
 - Direct integration with Google's fastest Gemini models (prioritizing high-speed `argon` / `gemini-2.5-flash`).
 - Grounded in real YouTube Music catalog items before generation to ensure 100% authentic, playable songs every time.
 
-### 📥 100% Offline Downloads (Zero Data)
+###  Downloads 
 - Save any track to client-side **IndexedDB** storage with one tap.
 - Play downloaded tracks completely offline in Airplane Mode with 0 buffering and 0 network usage.
 - Export clean `.m4a` audio files directly to your device.
 
-### 🔄 Live Over-The-Air (OTA) Updates
+### (OTA) Updates
 - Powered by `@capgo/capacitor-updater`.
 - The Android app checks for and pulls live UI updates and bug fixes directly from GitHub Releases without requiring manual APK reinstallation.
 
 ---
 
-## 🏛️ Architecture
+## Architecture
 
 ```
 UpBeat/
@@ -83,7 +83,7 @@ UpBeat/
 
 ---
 
-## 🚀 Installation & Quick Start
+##  Installation & Quick Start
 
 ### 1. Android
 - Download the latest **`UpBeat.apk`** from [GitHub Releases](https://github.com/AaradhyaNegi009/UpBeat/releases).
@@ -124,7 +124,7 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ---
 
-## 🔑 Configuration (Optional)
+##  Configuration (Optional)
 
 UpBeat works out of the box with **Direct Search (0 tokens)**. To unlock Gemini AI curation:
 1. Tap the **Settings (⚙️)** icon in the top navigation bar.
@@ -133,5 +133,5 @@ UpBeat works out of the box with **Direct Search (0 tokens)**. To unlock Gemini 
 
 ---
 
-## 📄 License
+## License
 MIT License. Created by [Aaradhya Negi](https://github.com/AaradhyaNegi009).
