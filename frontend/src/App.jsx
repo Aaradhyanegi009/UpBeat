@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Sparkles, Heart, Sliders, Disc, Dna, DownloadCloud, Loader2, X } from 'lucide-react'
+import { Sparkles, Heart, Sliders, Disc, Dna, DownloadCloud, Loader2, X, Share } from 'lucide-react'
 import Navbar from './components/Navbar'
 import Sidebar, { PRESET_MODES } from './components/Sidebar'
 import CuratorPrompt from './components/CuratorPrompt'
@@ -195,6 +195,19 @@ export default function App() {
   const [isSyncingLikes, setIsSyncingLikes] = useState(false)
   const [otaUpdate, setOtaUpdate] = useState(null)
   const [isApplyingOta, setIsApplyingOta] = useState(false)
+  const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
+
+  // Detect iOS Safari (browser mode) to guide users toward adding to Home Screen
+  useEffect(() => {
+    try {
+      const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
+      const isStandalone = Boolean(window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches)
+      const dismissed = localStorage.getItem('upbeat_pwa_prompt_dismissed') === '1'
+      if (isIos && !isStandalone && !isNativeApp() && !dismissed) {
+        setShowIosInstallPrompt(true)
+      }
+    } catch {}
+  }, [])
 
   // Initialize Over-The-Air (OTA) live updater on startup
   useEffect(() => {
@@ -962,9 +975,9 @@ export default function App() {
           }
           data = await res.json()
         } catch (backendErr) {
-          // On the phone, fall back to the on-device engine when the Mac is unreachable
-          if (isNativeApp() && getStoredApiKey()) {
-            showNotify('Mac server unreachable — curating on this device', 'info')
+          // Fall back to client-side engine if Gemini API key is configured
+          if (getStoredApiKey()) {
+            showNotify('Curating with Gemini AI engine...', 'info')
             data = await curateStandalone(curateArgs)
           } else {
             throw backendErr
@@ -1816,6 +1829,38 @@ export default function App() {
           </button>
         </div>
       </nav>
+
+      {/* Floating iOS Safari PWA Install Banner */}
+      {showIosInstallPrompt && (
+        <div className="fixed top-3 left-3 right-3 sm:left-auto sm:right-6 sm:top-5 z-50 animate-in fade-in slide-in-from-top-4 duration-200 select-none">
+          <div className="bg-[#12121a]/95 backdrop-blur-md border border-sky-500/30 rounded-2xl p-3 sm:px-4 sm:py-3 shadow-2xl flex items-center justify-between gap-3 text-white max-w-md mx-auto">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center shrink-0 text-sky-400">
+                <Share className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold truncate flex items-center gap-1.5">
+                  <span>Install UpBeat on iPhone</span>
+                </div>
+                <div className="text-[11px] text-zinc-400 leading-tight">
+                  Tap <span className="text-sky-300 font-medium">Share</span> then <span className="text-sky-300 font-medium">Add to Home Screen</span> for full-screen audio
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowIosInstallPrompt(false)
+                try { localStorage.setItem('upbeat_pwa_prompt_dismissed', '1') } catch {}
+              }}
+              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Floating Over-The-Air (OTA) Live Update Banner */}
       {otaUpdate && (

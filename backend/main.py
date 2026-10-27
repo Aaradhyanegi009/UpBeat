@@ -224,6 +224,27 @@ def toggle_favorite_endpoint(req: FavoriteTrackRequest):
     return toggle_favorite(req.track)
 
 
+@app.post("/api/innertube")
+async def innertube_proxy_endpoint(request: Request):
+    try:
+        data = await request.json()
+        endpoint = data.get("endpoint", "")
+        body = data.get("body", {})
+        service = data.get("service", "music")
+        host = "https://www.youtube.com" if service == "youtube" else "https://music.youtube.com"
+        target_url = f"{host}/youtubei/v1/{endpoint}?prettyPrint=false"
+
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "Referer": host,
+        }
+        resp = ext_requests.post(target_url, json=body, headers=headers, timeout=15)
+        return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/audio-info/{video_id}")
 def audio_info_endpoint(video_id: str):
     info = get_audio_stream_url(video_id)

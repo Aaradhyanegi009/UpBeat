@@ -90,6 +90,44 @@ export function apiUrl(path) {
   return `${getApiBase()}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+/**
+ * Proxy-aware Innertube API request.
+ * - In Capacitor native app (Android): direct fetch uses CapacitorHttp to bypass CORS.
+ * - In browser / PWA (iPhone, Mac, Windows): routes via `/api/innertube` (Vercel Edge or Mac backend)
+ *   to avoid browser CORS blocks.
+ */
+export async function callInnertube(endpoint, payload, service = 'music') {
+  const host = service === 'youtube' ? 'https://www.youtube.com' : 'https://music.youtube.com'
+
+  if (isNativeApp()) {
+    return fetch(`${host}/youtubei/v1/${endpoint}?prettyPrint=false`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+  }
+
+  try {
+    const proxyRes = await fetch(apiUrl('/innertube'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint,
+        body: payload,
+        service
+      })
+    })
+    if (proxyRes.ok) return proxyRes
+  } catch {}
+
+  // Fallback to direct fetch
+  return fetch(`${host}/youtubei/v1/${endpoint}?prettyPrint=false`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+}
+
 /** True if the app can curate right now (backend available or Gemini key saved). */
 export function isConfigured() {
   return hasBackend() || Boolean(getStoredApiKey())
@@ -243,11 +281,7 @@ export async function browsePlaylistStandalone(browseId, playlistTitle = '', pla
   if (cached && Date.now() - cached.ts < 30 * 60 * 1000) return cached.tracks
 
   try {
-    const resp = await fetch('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context: YTM_CONTEXT, browseId })
-    })
+    const resp = await callInnertube('browse', { context: YTM_CONTEXT, browseId }, 'music')
     if (!resp.ok) return []
     const data = await resp.json()
     const tracks = []
@@ -315,14 +349,10 @@ export async function fetchTrackExtendedMeta(videoId) {
   if (trackMetaCache.has(videoId)) return trackMetaCache.get(videoId)
 
   try {
-    const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        context: { client: { clientName: 'WEB', clientVersion: '2.20260918.01.00' } },
-        videoId
-      })
-    })
+    const res = await callInnertube('player', {
+      context: { client: { clientName: 'WEB', clientVersion: '2.20260918.01.00' } },
+      videoId
+    }, 'youtube')
     if (!res.ok) return null
     const data = await res.json()
     const mf = data?.microformat?.playerMicroformatRenderer
@@ -371,7 +401,6 @@ function relevance(text, tokens) {
 
 /** Same results, same order as typing the query on youtube.com. */
 async function ytWebSearch(query, pages = 2) {
-  const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false'
   const videos = []
   const playlists = []
   const seenV = new Set()
@@ -381,7 +410,7 @@ async function ytWebSearch(query, pages = 2) {
   for (let page = 0; page < pages; page++) {
     let data
     try {
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const r = await callInnertube('search', body, 'youtube')
       if (!r.ok) break
       data = await r.json()
     } catch {
@@ -449,11 +478,7 @@ async function ytmSearchRaw(query, songsOnly) {
   const body = { context: YTM_CONTEXT, query }
   if (songsOnly) body.params = YTM_SONGS_PARAM
   try {
-    const r = await fetch('https://music.youtube.com/youtubei/v1/search?prettyPrint=false', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
+    const r = await callInnertube('search', body, 'music')
     return r.ok ? await r.json() : {}
   } catch {
     return {}
@@ -614,11 +639,7 @@ export async function directSearchStandalone(query, mode = 'auto') {
 }
 
 async function ytmSearchItems(query) {
-  const resp = await fetch('https://music.youtube.com/youtubei/v1/search?prettyPrint=false', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ context: YTM_CONTEXT, query })
-  })
+  const resp = await callInnertube('search', { context: YTM_CONTEXT, query }, 'music')
   if (!resp.ok) return []
   const data = await resp.json()
   const out = []
@@ -704,16 +725,12 @@ export async function resolveStandaloneAudio(videoId) {
 
   for (const client of [ANDROID_PLAYER_CLIENT, IOS_PLAYER_CLIENT]) {
     try {
-      const resp = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          context: { client },
-          videoId,
-          contentCheckOk: true,
-          racyCheckOk: true
-        })
-      })
+      const resp = await callInnertube('player', {
+        context: { client },
+        videoId,
+        contentCheckOk: true,
+        racyCheckOk: true
+      }, 'youtube')
       if (!resp.ok) continue
       const data = await resp.json()
       if (data?.playabilityStatus?.status !== 'OK') continue
@@ -734,7 +751,7 @@ export async function resolveStandaloneAudio(videoId) {
 
       // ANDROID adaptiveFormats require a poToken (403 without one), whereas ANDROID progressive (itag 18)
       // and IOS adaptiveFormats work directly without poToken.
-      const chosen = client.clientName === 'ANDROID' ? progressive[0] : (progressive[0] || adaptive[0])
+      const chosen = client.clientName === 'ANDROID' ? (progressive[0] || adaptive[0]) : (adaptive[0] || progressive[0])
       if (!chosen?.url) continue
 
       const duration =

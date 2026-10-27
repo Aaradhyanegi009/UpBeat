@@ -54,6 +54,11 @@ UpBeat/
 ├── macos/            # Native macOS App
 │   ├── UpBeatApp.swift                 # Native Swift + AppKit + WebKit wrapper
 │   └── Info.plist                      # macOS Bundle & App Permissions
+├── api/              # Vercel Serverless Edge Functions (Web & iOS PWA)
+│   ├── innertube.js                    # High-speed Edge CORS proxy for YouTube Music
+│   ├── audio.js                        # 302 Redirector directly to Google CDN audio stream
+│   ├── audio-info.js                   # JSON metadata & duration resolver
+│   └── status.js                       # Edge health & feature status
 ├── backend/          # Optional Python FastAPI Companion
 │   ├── main.py                         # REST API & WebSocket Server
 │   ├── curator.py                      # Gemini Musicology Prompt Engine
@@ -78,8 +83,10 @@ UpBeat/
 ### How YouTube Streaming & Downloads Work
 1. **Innertube Client Emulation**: UpBeat crafts native mobile/iOS client handshakes directly to YouTube's internal `v1/player` endpoint.
 2. **Direct CDN Resolution**: Retrieves direct, unthrottled, unencrypted `.m4a` audio streams (`googlevideo.com`) without browser ads or tracker scripts.
-3. **CORS Bypass**: On Android, `CapacitorHttp` routes requests through native Android sockets, bypassing web browser cross-origin blocks.
-4. **Local IndexedDB Caching**: Audio stream binaries are saved as `Blob` objects in IndexedDB and served via local memory URIs (`URL.createObjectURL(blob)`).
+3. **CORS Bypass**:
+   - **Android**: `CapacitorHttp` routes requests through native Android sockets, bypassing web browser cross-origin blocks.
+   - **Web & iOS Safari**: Vercel Serverless Edge Functions (`/api/innertube` & `/api/audio`) proxy control packets with global <10ms latency and 302 redirect directly into high-bitrate AAC LC streams.
+4. **Local IndexedDB Caching**: Audio stream binaries are saved as `Blob` objects in IndexedDB and served via local memory URIs (`URL.createObjectURL(blob)`), enabling full offline playback on iPhone, Android, and Desktop browsers.
 
 ---
 
@@ -101,7 +108,17 @@ cp -R UpBeat.app /Applications/UpBeat.app
 open /Applications/UpBeat.app
 ```
 
-### 3. Local Development (Web / Desktop)
+### 3. Web & iPhone / iOS (Safari PWA)
+UpBeat can be deployed to **Vercel** with zero configuration:
+1. Import this repository into [Vercel](https://vercel.com).
+2. The included `vercel.json` and Edge Functions in `api/` automatically configure API routing, Edge proxies, and Vite builds.
+3. On your **iPhone or iPad**:
+   - Open your deployed URL in **Safari**.
+   - Tap the **Share** button (box with upward arrow) at the bottom.
+   - Tap **Add to Home Screen**.
+   - Launch UpBeat from your Home Screen for a 100% full-screen native app experience with background audio, lock screen playback controls, and offline IndexedDB downloads.
+
+### 4. Local Development (Web / Desktop)
 Run the startup script:
 ```bash
 ./run.sh

@@ -9,6 +9,9 @@
 !/backend/
 !/frontend/
 !/macos/
+!/api/
+!/vercel.json
+!/package.json
 
 # Build caches & dependencies
 frontend/node_modules/

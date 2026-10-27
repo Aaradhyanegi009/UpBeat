@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build --prefix frontend",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "source": "/api/audio/:id",
+      "destination": "/api/audio?id=:id"
+    },
+    {
+      "source": "/api/audio-info/:id",
+      "destination": "/api/audio-info?id=:id"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
