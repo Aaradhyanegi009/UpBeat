@@ -3,7 +3,8 @@ import os
 import time
 from typing import Dict, List, Any
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+IS_VERCEL = bool(os.environ.get("VERCEL")) or not os.access(os.path.dirname(__file__), os.W_OK)
+DATA_DIR = "/tmp" if IS_VERCEL else os.path.join(os.path.dirname(__file__), "data")
 FAVS_FILE = os.path.join(DATA_DIR, "favorites.json")
 
 
@@ -30,9 +31,12 @@ def get_favorites() -> List[Dict[str, Any]]:
 
 def save_favorites(favs: List[Dict[str, Any]]) -> None:
     """Persists favorite tracks to disk."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(FAVS_FILE, "w", encoding="utf-8") as f:
-        json.dump(favs, f, indent=2, ensure_ascii=False)
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(FAVS_FILE, "w", encoding="utf-8") as f:
+            json.dump(favs, f, indent=2, ensure_ascii=False)
+    except OSError:
+        pass
 
 
 def toggle_favorite(track: Dict[str, Any]) -> Dict[str, Any]:

@@ -508,7 +508,7 @@ export default function PlayerBar({
           setResolvedVid(nextVid)
           return
         }
-        if (!hasBackend()) {
+        if (!useIframeFallback) {
           setUseIframeFallback(true)
         }
         return
@@ -1088,7 +1088,7 @@ export default function PlayerBar({
             if (fallbackQueueRef.current.length > 0) {
               const nextAlt = fallbackQueueRef.current.shift()
               setResolvedVid(nextAlt)
-            } else if (!hasBackend() && !useIframeFallback) {
+            } else if (!useIframeFallback) {
               setUseIframeFallback(true)
             }
           }}

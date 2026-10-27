@@ -1,4 +1,5 @@
 import concurrent.futures
+import os
 import re
 import time
 import urllib.parse
@@ -54,6 +55,7 @@ def _get_ydl() -> yt_dlp.YoutubeDL:
                 "no_warnings": True,
                 "noplaylist": True,
                 "skip_download": True,
+                "cachedir": False,
                 "socket_timeout": 15,
                 "retries": 3,
                 "extractor_args": {
@@ -116,21 +118,40 @@ def get_video_duration(video_id: str) -> str:
 def _fast_innertube_audio(video_id: str) -> Optional[Dict[str, Any]]:
     """
     Ultra-fast stream resolution (0.35s) using direct Innertube player API
-    (Android and iOS clients). Bypasses slow yt-dlp scraping entirely.
+    (iOS and Android clients). Bypasses slow yt-dlp scraping entirely.
     """
     now = time.time()
-    for client_name, client_ver, os_name in [("ANDROID", "20.10.38", "Android"), ("IOS", "20.10.4", "iOS")]:
+    clients = [
+        (
+            {
+                "clientName": "IOS",
+                "clientVersion": "20.10.4",
+                "deviceMake": "Apple",
+                "deviceModel": "iPhone16,2",
+                "osName": "iPhone",
+                "osVersion": "18.3.2.22D82",
+                "hl": "en",
+                "gl": "US",
+            },
+            "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X; US)",
+        ),
+        (
+            {
+                "clientName": "ANDROID",
+                "clientVersion": "20.10.38",
+                "osName": "Android",
+                "osVersion": "14",
+                "androidSdkVersion": 34,
+                "hl": "en",
+                "gl": "US",
+            },
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36",
+        ),
+    ]
+    for client_ctx, ua in clients:
         try:
             payload = {
-                "context": {
-                    "client": {
-                        "clientName": client_name,
-                        "clientVersion": client_ver,
-                        "osName": os_name,
-                        "hl": "en",
-                        "gl": "US",
-                    }
-                },
+                "context": {"client": client_ctx},
                 "videoId": video_id,
                 "contentCheckOk": True,
                 "racyCheckOk": True,
@@ -138,7 +159,8 @@ def _fast_innertube_audio(video_id: str) -> Optional[Dict[str, Any]]:
             resp = _SESSION.post(
                 "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
                 json=payload,
-                timeout=3.5,
+                headers={"User-Agent": ua, "Content-Type": "application/json"},
+                timeout=4.0,
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -149,19 +171,18 @@ def _fast_innertube_audio(video_id: str) -> Optional[Dict[str, Any]]:
                         if (f.get("mimeType") or "").startswith("audio/") and f.get("url")
                     ]
                     if audio_formats:
-                        # Prioritize m4a if available, otherwise best audio format
+                        # Prioritize AAC LC m4a (itag 140 / mp4a.40.2) and deprioritize HE-AAC (itag 139/599)
                         m4a = [f for f in audio_formats if "audio/mp4" in (f.get("mimeType") or "")]
-                        cand = m4a if m4a else audio_formats
+                        non_he_m4a = [
+                            f for f in m4a
+                            if f.get("itag") not in (139, 599) and "mp4a.40.5" not in (f.get("mimeType") or "")
+                        ]
+                        cand = non_he_m4a or m4a or audio_formats
                         cand.sort(key=lambda x: -int(x.get("bitrate") or 0))
                         best = cand[0]
                         vdetails = data.get("videoDetails", {})
                         sec = int(vdetails.get("lengthSeconds") or 0)
                         clen = int(best.get("contentLength") or 0)
-                        ua = (
-                            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-                            if client_name == "IOS"
-                            else "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
-                        )
                         return {
                             "url": best["url"],
                             "mime": best.get("mimeType", "audio/mp4").split(";")[0],
@@ -199,6 +220,16 @@ def get_audio_stream_url(video_id: str) -> Optional[Dict[str, Any]]:
     cached = _STREAM_CACHE.get(video_id)
     if cached and (now - cached.get("ts", 0)) < 1500:
         return cached
+
+    # On Vercel serverless, prioritize fast Innertube (0.3s) first to avoid Lambda timeouts
+    if os.environ.get("VERCEL"):
+        try:
+            fast_info = _fast_innertube_audio(video_id)
+            if fast_info and fast_info.get("url"):
+                _STREAM_CACHE[video_id] = fast_info
+                return fast_info
+        except Exception as e:
+            print(f"Innertube audio error for {video_id}: {e}")
 
     # Robust resolution via persistent thread-local yt-dlp with full JS signature solving
     try:

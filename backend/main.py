@@ -66,6 +66,14 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def ensure_api_prefix(request: Request, call_next):
+    path = request.scope.get("path", "")
+    if path and not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc"):
+        request.scope["path"] = f"/api{path if path.startswith('/') else '/' + path}"
+    return await call_next(request)
+
+
 class SafariOpenRequest(BaseModel):
     destination: str = Field("yt_liked", description="music, music_liked, yt_liked, yt_history, custom")
     custom_url: Optional[str] = None
@@ -281,9 +289,13 @@ def audio_info_endpoint(video_id: str):
     }
 
 
-DOWNLOADS_DIR = os.path.join(os.path.dirname(__file__), "data", "downloads")
-DOWNLOADS_META_FILE = os.path.join(os.path.dirname(__file__), "data", "downloads.json")
-os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+IS_VERCEL = bool(os.environ.get("VERCEL")) or not os.access(os.path.dirname(__file__), os.W_OK)
+DOWNLOADS_DIR = "/tmp/upbeat_downloads" if IS_VERCEL else os.path.join(os.path.dirname(__file__), "data", "downloads")
+DOWNLOADS_META_FILE = "/tmp/upbeat_downloads.json" if IS_VERCEL else os.path.join(os.path.dirname(__file__), "data", "downloads.json")
+try:
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+except OSError:
+    pass
 
 
 def _load_downloads_meta() -> List[Dict[str, Any]]:
