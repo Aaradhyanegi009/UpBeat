@@ -1,23 +1,27 @@
 {
-  "version": 2,
-  "buildCommand": "npm run build --prefix frontend",
-  "outputDirectory": "frontend/dist",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "backend": {
+      "root": "backend",
+      "framework": "fastapi"
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite"
+    }
+  },
   "rewrites": [
     {
-      "source": "/api/audio/:id",
-      "destination": "/api/audio?id=:id"
-    },
-    {
-      "source": "/api/audio-info/:id",
-      "destination": "/api/audio-info?id=:id"
-    },
-    {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": {
+        "service": "backend"
+      }
     },
     {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": {
+        "service": "frontend"
+      }
     }
   ]
 }

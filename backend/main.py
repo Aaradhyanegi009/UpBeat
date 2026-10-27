@@ -12,24 +12,44 @@ from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.safari_bridge import (
-    list_safari_tabs,
-    open_safari_url,
-    extract_all_safari_yt_tracks,
-    get_safari_now_playing,
-    control_safari,
-    get_safari_youtube_profile,
-)
-from backend.curator import analyze_taste_dna, curate_playlist
-from backend.youtube_search import (
-    resolve_tracks_batch,
-    search_youtube_single,
-    get_audio_stream_url,
-    direct_search_youtube_music,
-    browse_youtube_music_playlist,
-    format_seconds,
-)
-from backend.favorites_store import get_favorites, toggle_favorite
+try:
+    from safari_bridge import (
+        list_safari_tabs,
+        open_safari_url,
+        extract_all_safari_yt_tracks,
+        get_safari_now_playing,
+        control_safari,
+        get_safari_youtube_profile,
+    )
+    from curator import analyze_taste_dna, curate_playlist
+    from youtube_search import (
+        resolve_tracks_batch,
+        search_youtube_single,
+        get_audio_stream_url,
+        direct_search_youtube_music,
+        browse_youtube_music_playlist,
+        format_seconds,
+    )
+    from favorites_store import get_favorites, toggle_favorite
+except ImportError:
+    from backend.safari_bridge import (
+        list_safari_tabs,
+        open_safari_url,
+        extract_all_safari_yt_tracks,
+        get_safari_now_playing,
+        control_safari,
+        get_safari_youtube_profile,
+    )
+    from backend.curator import analyze_taste_dna, curate_playlist
+    from backend.youtube_search import (
+        resolve_tracks_batch,
+        search_youtube_single,
+        get_audio_stream_url,
+        direct_search_youtube_music,
+        browse_youtube_music_playlist,
+        format_seconds,
+    )
+    from backend.favorites_store import get_favorites, toggle_favorite
 
 app = FastAPI(
     title="UpBeat Music API",
