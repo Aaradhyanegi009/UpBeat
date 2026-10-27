@@ -198,10 +198,200 @@ def _fast_innertube_audio(video_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def get_audio_stream_url(video_id: str) -> Optional[Dict[str, Any]]:
+_SC_CLIENT_ID = "xk6BGxLCsQJ5Ss0bH6sRdsZhts3gTNaU"
+
+
+def _get_sc_client_id(force_refresh: bool = False) -> str:
+    global _SC_CLIENT_ID
+    if _SC_CLIENT_ID and not force_refresh:
+        return _SC_CLIENT_ID
+    try:
+        html = _SESSION.get("https://soundcloud.com", timeout=4).text
+        scripts = re.findall(r'src="(https://a-v2\.sndcdn\.com/assets/[^"]+\.js)"', html)
+        for s in reversed(scripts[-4:]):
+            js = _SESSION.get(s, timeout=4).text
+            m = re.search(r'client_id:"([a-zA-Z0-9]{32})"', js)
+            if m:
+                _SC_CLIENT_ID = m.group(1)
+                return _SC_CLIENT_ID
+    except Exception:
+        pass
+    return _SC_CLIENT_ID
+
+
+def _resolve_cloud_fallback_audio(
+    video_id: str, title: str = "", artist: str = ""
+) -> Optional[Dict[str, Any]]:
+    """
+    Cloud-safe audio resolver for Vercel Serverless when YouTube blocks AWS datacenter IPs.
+    1. Resolves track title & artist via YouTube's public oEmbed endpoint (never blocked on cloud IPs).
+    2. Checks JioSaavn 320kbps AAC (.m4a) CDN if title + artist match the original recording.
+    3. Falls back to SoundCloud API v2 full-length AAC (.m4a fMP4) stream.
+    """
+    now = time.time()
+    clean_title = (title or "").strip()
+    clean_artist = (artist or "").strip()
+
+    if not clean_title and video_id:
+        try:
+            oe = _SESSION.get(
+                "https://www.youtube.com/oembed",
+                params={"url": f"https://www.youtube.com/watch?v={video_id}", "format": "json"},
+                timeout=3.5,
+            )
+            if oe.status_code == 200:
+                oed = oe.json()
+                clean_title = (oed.get("title") or "").strip()
+                if not clean_artist:
+                    clean_artist = re.sub(r"\s*-\s*Topic$", "", (oed.get("author_name") or "").strip(), flags=re.I)
+        except Exception:
+            pass
+
+    if not clean_title:
+        return None
+
+    # Strip noisy suffixes like (Official Video), (Lyrics), [HD], etc. for cleaner search
+    search_title = re.sub(
+        r"(\(|\[)\s*(official\s*(music\s*)?video|official\s*audio|lyric(s)?(\s*video)?|audio|hd|4k|hq|visualizer|full\s*video|full\s*song)\s*(\)|\])",
+        "",
+        clean_title,
+        flags=re.I,
+    ).strip()
+    search_artist = re.sub(r"\s*-\s*Topic$|VEVO$", "", clean_artist, flags=re.I).strip()
+    if search_artist.lower() in ("jusa music", "unknown artist", "unknown"):
+        search_artist = ""
+
+    query = f"{search_title} {search_artist}".strip()
+    q_lower = query.lower()
+    avoid_words = ["karaoke", "instrumental", "tribute", "8-bit", "lullaby", "ringtone", "nightcore", "slowed", "reverb", "sped up"]
+    active_avoid = [w for w in avoid_words if w not in q_lower]
+
+    # Tier A: JioSaavn 320kbps direct .m4a stream (only when artist & title both match closely)
+    try:
+        sr = _SESSION.get(
+            "https://saavn.sumit.co/api/search/songs",
+            params={"query": query, "limit": 5},
+            timeout=4.0,
+        )
+        if sr.status_code == 200:
+            results = sr.json().get("data", {}).get("results") or []
+            title_words = [w for w in re.findall(r"[a-z0-9]+", search_title.lower()) if len(w) > 2]
+            artist_words = [w for w in re.findall(r"[a-z0-9]+", search_artist.lower()) if len(w) > 2]
+            for s in results:
+                s_name = (s.get("name") or "").lower()
+                s_label = (s.get("label") or "").lower()
+                s_artists = " ".join(
+                    a.get("name", "") for a in (s.get("artists", {}).get("primary") or [])
+                ).lower()
+                combined = f"{s_name} {s_label} {s_artists}"
+                if any(w in combined for w in active_avoid):
+                    continue
+                if title_words and not all(w in combined for w in title_words[:2]):
+                    continue
+                if artist_words and not any(w in combined for w in artist_words):
+                    continue
+                dl_urls = s.get("downloadUrl") or []
+                best_dl = dl_urls[-1].get("url") if dl_urls else None
+                if best_dl:
+                    return {
+                        "url": best_dl,
+                        "mime": "audio/mp4",
+                        "clen": 0,
+                        "ua": "Mozilla/5.0",
+                        "title": clean_title,
+                        "uploader": clean_artist or s_artists,
+                        "duration": int(s.get("duration") or 0),
+                        "ts": now,
+                    }
+    except Exception:
+        pass
+
+    # Tier B: SoundCloud API v2 full-length AAC (.m4a fMP4) stream
+    for attempt in range(2):
+        cid = _get_sc_client_id(force_refresh=(attempt == 1))
+        try:
+            sc_res = _SESSION.get(
+                "https://api-v2.soundcloud.com/search/tracks",
+                params={"q": query, "client_id": cid, "limit": 10},
+                timeout=4.5,
+            )
+            if sc_res.status_code in (401, 403) and attempt == 0:
+                continue
+            if sc_res.status_code == 200:
+                collection = sc_res.json().get("collection") or []
+                candidates = []
+                for t in collection:
+                    dur_ms = int(t.get("duration") or 0)
+                    full_dur_ms = int(t.get("full_duration") or dur_ms)
+                    if t.get("policy") == "SNIP" or dur_ms <= 45000 or (full_dur_ms > 60000 and dur_ms <= 35000):
+                        continue
+                    t_title = (t.get("title") or "").lower()
+                    t_user = (t.get("user", {}).get("username") or "").lower()
+                    combined = f"{t_title} {t_user}"
+                    penalty = sum(1 for w in active_avoid if w in combined) * 10
+                    if "cover" in combined and "cover" not in q_lower:
+                        penalty += 5
+                    if dur_ms > 480000 and "mix" not in q_lower and "hour" not in q_lower:
+                        penalty += 8
+                    candidates.append((penalty, t))
+
+                candidates.sort(key=lambda x: x[0])
+                for _, best_t in candidates:
+                    trans = best_t.get("media", {}).get("transcodings") or []
+                    chosen_tr = (
+                        next((tr for tr in trans if not tr.get("snipped") and tr.get("preset") == "aac_160k"), None)
+                        or next((tr for tr in trans if not tr.get("snipped") and "aac" in (tr.get("preset") or "")), None)
+                        or next((tr for tr in trans if not tr.get("snipped") and (tr.get("format", {}).get("protocol") == "progressive")), None)
+                    )
+                    if not chosen_tr:
+                        continue
+                    tr_res = _SESSION.get(chosen_tr["url"], params={"client_id": cid}, timeout=4.0)
+                    if tr_res.status_code != 200:
+                        continue
+                    stream_target = tr_res.json().get("url")
+                    if not stream_target:
+                        continue
+
+                    if chosen_tr.get("format", {}).get("protocol") == "progressive":
+                        return {
+                            "url": stream_target,
+                            "mime": "audio/mpeg",
+                            "clen": 0,
+                            "ua": "Mozilla/5.0",
+                            "title": clean_title,
+                            "uploader": clean_artist,
+                            "duration": int((best_t.get("duration") or 0) // 1000),
+                            "ts": now,
+                        }
+
+                    m3u8_text = _SESSION.get(stream_target, timeout=4.0).text
+                    map_m = re.search(r'#EXT-X-MAP:URI="([^"]+)"', m3u8_text)
+                    seg_urls = [line.strip() for line in m3u8_text.splitlines() if line.strip().startswith("http")]
+                    if map_m:
+                        seg_urls.insert(0, map_m.group(1))
+                    if seg_urls:
+                        return {
+                            "url": seg_urls[0],
+                            "segment_urls": seg_urls,
+                            "mime": "audio/mp4",
+                            "clen": 0,
+                            "ua": "Mozilla/5.0",
+                            "title": clean_title,
+                            "uploader": clean_artist,
+                            "duration": int((best_t.get("duration") or 0) // 1000),
+                            "ts": now,
+                        }
+            break
+        except Exception:
+            pass
+
+    return None
+
+
+def get_audio_stream_url(video_id: str, title: str = "", artist: str = "") -> Optional[Dict[str, Any]]:
     """
     Resolves the direct high-quality m4a audio stream URL for any YouTube video_id
-    using ultra-fast Innertube player endpoint (0.35s) with yt-dlp as fallback.
+    using ultra-fast Innertube player endpoint (0.35s) with yt-dlp and cloud-safe fallbacks.
     Caches stream URLs for 25 minutes.
     """
     if not video_id:
@@ -221,15 +411,28 @@ def get_audio_stream_url(video_id: str) -> Optional[Dict[str, Any]]:
     if cached and (now - cached.get("ts", 0)) < 1500:
         return cached
 
-    # On Vercel serverless, prioritize fast Innertube (0.3s) first to avoid Lambda timeouts
+    # On Vercel serverless, prioritize fast Innertube (0.3s) and cloud-safe fallback
     if os.environ.get("VERCEL"):
         try:
             fast_info = _fast_innertube_audio(video_id)
             if fast_info and fast_info.get("url"):
-                _STREAM_CACHE[video_id] = fast_info
-                return fast_info
+                probe = _SESSION.get(
+                    fast_info["url"],
+                    headers={"User-Agent": fast_info.get("ua", "Mozilla/5.0"), "Range": "bytes=0-1"},
+                    stream=True,
+                    timeout=3.0,
+                )
+                probe.close()
+                if probe.status_code in (200, 206):
+                    _STREAM_CACHE[video_id] = fast_info
+                    return fast_info
         except Exception as e:
             print(f"Innertube audio error for {video_id}: {e}")
+
+        cloud_info = _resolve_cloud_fallback_audio(video_id, title=title, artist=artist)
+        if cloud_info and cloud_info.get("url"):
+            _STREAM_CACHE[video_id] = cloud_info
+            return cloud_info
 
     # Robust resolution via persistent thread-local yt-dlp with full JS signature solving
     try:
@@ -283,6 +486,14 @@ def get_audio_stream_url(video_id: str) -> Optional[Dict[str, Any]]:
             return fast_info
     except Exception as e:
         print(f"Innertube fallback audio error for {video_id}: {e}")
+
+    try:
+        cloud_info = _resolve_cloud_fallback_audio(video_id, title=title, artist=artist)
+        if cloud_info and cloud_info.get("url"):
+            _STREAM_CACHE[video_id] = cloud_info
+            return cloud_info
+    except Exception as e:
+        print(f"Cloud fallback audio error for {video_id}: {e}")
 
     return None
 

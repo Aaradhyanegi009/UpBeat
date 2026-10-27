@@ -1,3 +1,4 @@
+import concurrent.futures
 import os
 import re
 import json
@@ -26,6 +27,7 @@ try:
         resolve_tracks_batch,
         search_youtube_single,
         get_audio_stream_url,
+        _resolve_cloud_fallback_audio,
         direct_search_youtube_music,
         browse_youtube_music_playlist,
         format_seconds,
@@ -45,6 +47,7 @@ except ImportError:
         resolve_tracks_batch,
         search_youtube_single,
         get_audio_stream_url,
+        _resolve_cloud_fallback_audio,
         direct_search_youtube_music,
         browse_youtube_music_playlist,
         format_seconds,
@@ -350,6 +353,36 @@ _STREAM_HTTP_SESSION.mount(
 _STREAM_CHUNK_BYTES = 1024 * 1024  # 1 MB bounded ranges for stable streaming
 
 
+def _materialize_segments_to_file(segment_urls: List[str], local_path: str, ua: str = "Mozilla/5.0") -> bool:
+    """Fetches fMP4 (.m4a) segments concurrently and writes a unified .m4a file to local_path."""
+    if not segment_urls:
+        return False
+    temp_path = f"{local_path}.seg_{int(time.time() * 1000)}"
+
+    def _fetch_seg(u: str) -> bytes:
+        r = _STREAM_HTTP_SESSION.get(u, headers={"User-Agent": ua}, timeout=10)
+        return r.content if r.status_code in (200, 206) else b""
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
+            chunks = list(ex.map(_fetch_seg, segment_urls))
+        data = b"".join(chunks)
+        if len(data) > 20000:
+            with open(temp_path, "wb") as f:
+                f.write(data)
+            os.replace(temp_path, local_path)
+            return True
+    except Exception as e:
+        print(f"Error materializing fMP4 segments to {local_path}: {e}")
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+    return False
+
+
 @app.api_route("/api/audio/{video_id}", methods=["GET", "HEAD"])
 def stream_audio_endpoint(video_id: str, request: Request):
     """
@@ -358,6 +391,13 @@ def stream_audio_endpoint(video_id: str, request: Request):
     Otherwise fetches upstream from YouTube in bounded 1 MB Range chunks.
     """
     local_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.m4a")
+    if not os.path.exists(local_path):
+        info_check = get_audio_stream_url(video_id)
+        if info_check and info_check.get("segment_urls"):
+            _materialize_segments_to_file(
+                info_check["segment_urls"], local_path, info_check.get("ua", "Mozilla/5.0")
+            )
+
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
         range_header = request.headers.get("range") or request.headers.get("Range")
@@ -593,16 +633,9 @@ def download_audio_endpoint(
         )
 
     # 2. Otherwise fetch from YouTube stream and cache to disk
-    info = get_audio_stream_url(video_id)
+    info = get_audio_stream_url(video_id, title=title or "", artist=artist or "")
     if not info or not info.get("url"):
         raise HTTPException(status_code=404, detail="Audio stream unavailable for download")
-
-    stream_url = info["url"]
-    ua = info.get(
-        "ua",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-    )
-    total_size = int(info.get("clen") or 0)
 
     if not title:
         raw_title = (info.get("title") or "Track").strip()
@@ -615,6 +648,43 @@ def download_audio_endpoint(
         filename = f"{clean_artist} - {clean_title}.m4a"
     else:
         filename = f"{clean_title}.m4a"
+
+    # If the stream is a segmented fMP4 (.m4a), materialize it concurrently and serve directly
+    if info.get("segment_urls"):
+        if _materialize_segments_to_file(
+            info["segment_urls"], local_path, info.get("ua", "Mozilla/5.0")
+        ):
+            file_size = os.path.getsize(local_path)
+            _save_download_meta({
+                "video_id": video_id,
+                "title": clean_title,
+                "artist": clean_artist,
+                "filename": filename,
+                "size": file_size,
+                "duration": info.get("duration") or 0,
+                "downloaded_at": int(time.time()),
+            })
+            resp_headers = {
+                "Content-Disposition": _make_content_disposition(filename),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=86400",
+                "Content-Length": str(file_size),
+            }
+            if request.method == "HEAD":
+                return Response(status_code=200, media_type="audio/mp4", headers=resp_headers)
+            return StreamingResponse(
+                _stream_local_file(local_path, 0, file_size - 1),
+                status_code=200,
+                media_type="audio/mp4",
+                headers=resp_headers,
+            )
+
+    stream_url = info["url"]
+    ua = info.get(
+        "ua",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    )
+    total_size = int(info.get("clen") or 0)
 
     resp_headers = {
         "Content-Disposition": _make_content_disposition(filename),

@@ -203,8 +203,8 @@ export async function saveTrackOffline(track, onProgress = null) {
   const primaryDl = getTrackDownloadUrl({ ...track, video_id: vid })
   if (primaryDl) candidateUrls.push(primaryDl)
 
-  // Direct backend stream endpoint
-  const streamEndpoint = `${getApiBase()}/stream/${encodeURIComponent(vid)}`
+  // Direct backend audio endpoint
+  const streamEndpoint = `${getApiBase()}/audio/${encodeURIComponent(vid)}`
   candidateUrls.push(streamEndpoint)
 
   // Direct YouTube audio stream resolver
@@ -220,8 +220,9 @@ export async function saveTrackOffline(track, onProgress = null) {
   if (Array.isArray(track.fallback_ids)) {
     for (const fvid of track.fallback_ids) {
       if (fvid && fvid !== vid) {
-        candidateUrls.push(`${getApiBase()}/download/${encodeURIComponent(fvid)}`)
-        candidateUrls.push(`${getApiBase()}/stream/${encodeURIComponent(fvid)}`)
+        const fbDl = getTrackDownloadUrl({ ...track, video_id: fvid })
+        if (fbDl) candidateUrls.push(fbDl)
+        candidateUrls.push(`${getApiBase()}/audio/${encodeURIComponent(fvid)}`)
       }
     }
   }
