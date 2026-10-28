@@ -129,6 +129,12 @@ html, body, #root {
 .fast-row {
   content-visibility: auto;
   contain-intrinsic-size: 0 54px;
+  contain: layout style paint;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 html, body {

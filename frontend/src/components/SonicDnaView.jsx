@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   RefreshCw, ExternalLink, Search, Music, Heart, Play, Pause,
   Sparkles, Download, Check, Loader2, ListPlus, Activity,
@@ -110,16 +110,17 @@ export default function SonicDnaView({
   }
 
   // 1. FAVORITES MEMORY VIEW (Matches Downloads UI/UX)
-  if (mode === 'favorites') {
-    const filteredFavs = favorites.filter((t) => {
-      if (!filter.trim()) return true
-      const q = filter.toLowerCase()
-      return (
-        (t.title || '').toLowerCase().includes(q) ||
-        (t.artist || '').toLowerCase().includes(q)
-      )
-    })
+  const filteredFavs = useMemo(() => {
+    if (!filter.trim()) return favorites
+    const q = filter.toLowerCase().trim()
+    return favorites.filter((t) =>
+      (t.title || '').toLowerCase().includes(q) ||
+      (t.artist || '').toLowerCase().includes(q) ||
+      (t.vibe || '').toLowerCase().includes(q)
+    )
+  }, [favorites, filter])
 
+  if (mode === 'favorites') {
     return (
       <div
         className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto overflow-x-hidden select-none gpu-scroll"
@@ -172,7 +173,7 @@ export default function SonicDnaView({
                   type="text"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  placeholder="Search favourite songs by title, artist..."
+                  placeholder="Search favourite songs by title, artist, style..."
                   className="w-full bg-white/[0.06] border border-white/10 focus:border-rose-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-400 font-medium focus:outline-none transition-colors"
                 />
                 {filter && (
@@ -210,14 +211,14 @@ export default function SonicDnaView({
             <>
               {/* Desktop Table View */}
               <div className="hidden md:block overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl shadow-xl">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse table-auto">
                   <thead>
                     <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
                       <th className="py-2.5 px-4 w-12 text-center">#</th>
-                      <th className="py-2.5 px-4">Track</th>
-                      <th className="py-2.5 px-4">Artist</th>
-                      <th className="py-2.5 px-4 w-32">Style</th>
-                      <th className="py-2.5 px-4 w-44 text-right pr-6">Actions</th>
+                      <th className="py-2.5 px-4 min-w-[200px]">Track</th>
+                      <th className="py-2.5 px-4 min-w-[130px]">Artist</th>
+                      <th className="py-2.5 px-4 min-w-[140px] whitespace-nowrap">Style</th>
+                      <th className="py-2.5 px-4 w-40 text-right pr-6 whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.04] text-xs">
@@ -235,7 +236,7 @@ export default function SonicDnaView({
                             isCur ? 'bg-rose-500/10' : ''
                           }`}
                         >
-                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500">
+                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500 whitespace-nowrap">
                             {isCurPlaying ? (
                               <div className="flex items-end justify-center gap-0.5 h-3.5 w-3.5 mx-auto">
                                 <span className="w-1 bg-rose-400 rounded-full animate-[bounce_0.8s_infinite_100ms] h-full" />
@@ -251,7 +252,7 @@ export default function SonicDnaView({
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 shadow-xs">
                                 {thumb ? (
-                                  <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                  <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                 ) : (
                                   <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
                                 )}
@@ -266,13 +267,13 @@ export default function SonicDnaView({
                           <td className="py-2.5 px-4 text-zinc-400 truncate max-w-[200px] font-medium">
                             {t.artist}
                           </td>
-                          <td className="py-2.5 px-4">
-                            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10">
+                          <td className="py-2.5 px-4 whitespace-nowrap">
+                            <span className="inline-flex items-center text-xs font-semibold px-3 py-1 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10 whitespace-nowrap leading-none select-none">
                               {t.vibe || 'Favorite'}
                             </span>
                           </td>
                           <td
-                            className="py-2.5 px-4 text-right pr-6"
+                            className="py-2.5 px-4 text-right pr-6 whitespace-nowrap"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="flex items-center justify-end gap-1.5">
@@ -511,15 +512,16 @@ export default function SonicDnaView({
   }
 
   // 2. YOUTUBE & SEEDS LIBRARY VIEW (Matches Downloads UI/UX)
+  const filteredTracks = useMemo(() => {
+    if (!filter.trim()) return extractedTracks
+    const q = filter.toLowerCase().trim()
+    return extractedTracks.filter((t) =>
+      (t.title || '').toLowerCase().includes(q) ||
+      (t.artist || '').toLowerCase().includes(q)
+    )
+  }, [extractedTracks, filter])
+
   if (mode === 'library') {
-    const filteredTracks = extractedTracks.filter((t) => {
-      if (!filter.trim()) return true
-      const q = filter.toLowerCase()
-      return (
-        (t.title || '').toLowerCase().includes(q) ||
-        (t.artist || '').toLowerCase().includes(q)
-      )
-    })
 
     return (
       <div
@@ -622,13 +624,13 @@ export default function SonicDnaView({
             <>
               {/* Desktop Table View */}
               <div className="hidden md:block overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl shadow-xl">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse table-auto">
                   <thead>
                     <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
                       <th className="py-2.5 px-4 w-12 text-center">#</th>
-                      <th className="py-2.5 px-4">Track</th>
-                      <th className="py-2.5 px-4">Channel / Artist</th>
-                      <th className="py-2.5 px-4 w-44 text-right pr-6">Actions</th>
+                      <th className="py-2.5 px-4 min-w-[200px]">Track</th>
+                      <th className="py-2.5 px-4 min-w-[150px]">Channel / Artist</th>
+                      <th className="py-2.5 px-4 w-40 text-right pr-6 whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.04] text-xs">
@@ -647,7 +649,7 @@ export default function SonicDnaView({
                             isCur ? 'bg-sky-500/10' : ''
                           }`}
                         >
-                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500">
+                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500 whitespace-nowrap">
                             {isCurPlaying ? (
                               <div className="flex items-end justify-center gap-0.5 h-3.5 w-3.5 mx-auto">
                                 <span className="w-1 bg-sky-400 rounded-full animate-[bounce_0.8s_infinite_100ms] h-full" />
@@ -922,45 +924,57 @@ export default function SonicDnaView({
     )
   }
 
-  // 3. MODERN INTERACTIVE SONIC TASTE STUDIO
-  const allTracks = favorites.length > 0 ? favorites : extractedTracks
-  const artists = Array.from(new Set(allTracks.map((t) => t.artist).filter(Boolean)))
-  const topArtists = (tasteDna?.key_artists && tasteDna.key_artists.length)
-    ? tasteDna.key_artists
-    : (tasteDna?.top_artists && tasteDna.top_artists.length)
-    ? tasteDna.top_artists
-    : (artists.length ? artists.slice(0, 5) : [])
+  // 3. MODERN INTERACTIVE SONIC TASTE STUDIO (Memoized for high performance)
+  const allTracks = useMemo(() => (favorites.length > 0 ? favorites : extractedTracks), [favorites, extractedTracks])
+  const artists = useMemo(() => Array.from(new Set(allTracks.map((t) => t.artist).filter(Boolean))), [allTracks])
 
-  const isHighEnergy = allTracks.some((t) => /rock|epic|metal|hyper|phonk|battle|dance/i.test(`${t.title} ${t.artist}`))
-  const isMelancholic = allTracks.some((t) => /slow|acoustic|indie|lofi|rain|dark|ambient|chill/i.test(`${t.title} ${t.artist}`))
+  const topArtists = useMemo(() => {
+    return (tasteDna?.key_artists && tasteDna.key_artists.length)
+      ? tasteDna.key_artists
+      : (tasteDna?.top_artists && tasteDna.top_artists.length)
+      ? tasteDna.top_artists
+      : (artists.length ? artists.slice(0, 5) : [])
+  }, [tasteDna, artists])
 
-  const derivedArchetype = tasteDna?.archetype || (
-    isHighEnergy ? 'High-Impact Sonic Voyager' :
-    isMelancholic ? 'Atmospheric & Ethereal Connoisseur' :
-    allTracks.length > 0 ? 'Melodic Audio Explorer' :
-    (googleUser?.name ? `${googleUser.name}'s Sonic Canvas` : 'Uncharted Sonic Explorer')
-  )
+  const { isHighEnergy, isMelancholic } = useMemo(() => {
+    const high = allTracks.some((t) => /rock|epic|metal|hyper|phonk|battle|dance/i.test(`${t.title || ''} ${t.artist || ''}`))
+    const low = allTracks.some((t) => /slow|acoustic|indie|lofi|rain|dark|ambient|chill/i.test(`${t.title || ''} ${t.artist || ''}`))
+    return { isHighEnergy: high, isMelancholic: low }
+  }, [allTracks])
 
-  const derivedSummary = tasteDna?.summary || (
-    allTracks.length > 0
-      ? `Your profile is driven by ${allTracks.length} tracks, blending ${topArtists.length ? topArtists.slice(0, 2).join(' and ') : 'diverse melodies'} with rich musical textures, dynamic rhythms, and personal listening habits.`
-      : (googleUser?.name
-          ? `Welcome ${googleUser.name}! Your unique taste profile will evolve dynamically with every song you listen to, search, or heart. Connect your seeds or explore music to build your mix.`
-          : 'Your taste profile evolves dynamically with every song you listen to, heart, or search. Search for your favorite songs or connect Google to unlock personalized mixes.')
-  )
+  const derivedArchetype = useMemo(() => {
+    return tasteDna?.archetype || (
+      isHighEnergy ? 'High-Impact Sonic Voyager' :
+      isMelancholic ? 'Atmospheric & Ethereal Connoisseur' :
+      allTracks.length > 0 ? 'Melodic Audio Explorer' :
+      (googleUser?.name ? `${googleUser.name}'s Sonic Canvas` : 'Uncharted Sonic Explorer')
+    )
+  }, [tasteDna?.archetype, isHighEnergy, isMelancholic, allTracks.length, googleUser?.name])
 
-  const rawGenres = (tasteDna?.primary_genres && tasteDna.primary_genres.length)
-    ? tasteDna.primary_genres
-    : (allTracks.length > 0
-        ? (isHighEnergy
-            ? ['Alternative Rock', 'Soundtrack', 'Electronic Melodic', 'Dynamic Beats']
-            : ['Indie & Alternative', 'Melodic Pop', 'Atmospheric Ambient', 'Acoustic Harmonies'])
-        : ['Global Pop & Hits', 'Indie & Alternative', 'Electronic & Chill', 'Acoustic Harmonies'])
+  const derivedSummary = useMemo(() => {
+    return tasteDna?.summary || (
+      allTracks.length > 0
+        ? `Your profile is driven by ${allTracks.length} tracks, blending ${topArtists.length ? topArtists.slice(0, 2).join(' and ') : 'diverse melodies'} with rich musical textures, dynamic rhythms, and personal listening habits.`
+        : (googleUser?.name
+            ? `Welcome ${googleUser.name}! Your unique taste profile will evolve dynamically with every song you listen to, search, or heart. Connect your seeds or explore music to build your mix.`
+            : 'Your taste profile evolves dynamically with every song you listen to, heart, or search. Search for your favorite songs or connect Google to unlock personalized mixes.')
+    )
+  }, [tasteDna?.summary, allTracks.length, topArtists, googleUser?.name])
 
-  const genrePills = rawGenres.map((g, idx) => ({
-    name: g,
-    pct: [42, 28, 18, 12][idx] || 15
-  }))
+  const genrePills = useMemo(() => {
+    const raw = (tasteDna?.primary_genres && tasteDna.primary_genres.length)
+      ? tasteDna.primary_genres
+      : (allTracks.length > 0
+          ? (isHighEnergy
+              ? ['Alternative Rock', 'Soundtrack', 'Electronic Melodic', 'Dynamic Beats']
+              : ['Indie & Alternative', 'Melodic Pop', 'Atmospheric Ambient', 'Acoustic Harmonies'])
+          : ['Global Pop & Hits', 'Indie & Alternative', 'Electronic & Chill', 'Acoustic Harmonies'])
+
+    return raw.map((g, idx) => ({
+      name: g,
+      pct: [42, 28, 18, 12][idx] || 15
+    }))
+  }, [tasteDna?.primary_genres, allTracks.length, isHighEnergy])
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden bg-transparent select-none gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
