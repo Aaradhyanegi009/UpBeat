@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   ChevronDown, Heart, Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Download, Check, Loader2,
-  ListMusic, ExternalLink, Video, Calendar, Sparkles, Volume2, VolumeX, Music, ShieldCheck, Mic2
+  ListMusic, ExternalLink, Video, Calendar, Sparkles, Volume2, VolumeX, Music, ShieldCheck, Mic2,
+  Share2, Copy, X
 } from 'lucide-react'
 import { fetchTrackExtendedMeta, fetchTrackLyrics, openExternalUrl } from '../standaloneApi'
 
@@ -66,6 +67,12 @@ export default function NowPlayingView({
 
   const [lyricsState, setLyricsState] = useState({ loading: false, data: null, trackKey: '' })
   const [userScrolledRecently, setUserScrolledRecently] = useState(false)
+  const [isSelectingLyrics, setIsSelectingLyrics] = useState(false)
+  const [selectedLineIndices, setSelectedLineIndices] = useState([])
+  const [showShareCardModal, setShowShareCardModal] = useState(false)
+  const [shareThemeIdx, setShareThemeIdx] = useState(0)
+  const [copiedFeedback, setCopiedFeedback] = useState(false)
+  const [isExportingCard, setIsExportingCard] = useState(false)
   const lyricsContainerRef = useRef(null)
   const lineRefs = useRef({})
   const scrollTimeoutRef = useRef(null)
@@ -107,6 +114,9 @@ export default function NowPlayingView({
       trackKey
     }))
     setUserScrolledRecently(false)
+    setIsSelectingLyrics(false)
+    setSelectedLineIndices([])
+    setShowShareCardModal(false)
     lineRefs.current = {}
 
     fetchTrackLyrics(track, effectiveDuration)
@@ -144,7 +154,7 @@ export default function NowPlayingView({
 
   // Smoothly auto-scroll the active lyric line into the vertical center of the lyrics container
   useEffect(() => {
-    if (!isOpen || !showLyrics || userScrolledRecently) return
+    if (!isOpen || !showLyrics || userScrolledRecently || isSelectingLyrics || showShareCardModal) return
     if (activeLineIdx < 0) return
 
     const activeEl = lineRefs.current[activeLineIdx]
@@ -173,10 +183,10 @@ export default function NowPlayingView({
       isProgrammaticScrollRef.current = false
     }, 550)
     return () => clearTimeout(releaseTimer)
-  }, [activeLineIdx, isOpen, showLyrics, userScrolledRecently])
+  }, [activeLineIdx, isOpen, showLyrics, userScrolledRecently, isSelectingLyrics, showShareCardModal])
 
   const handleUserScrollInteraction = () => {
-    if (isProgrammaticScrollRef.current) return
+    if (isProgrammaticScrollRef.current || isSelectingLyrics) return
     if (!lyricsState.data?.synced) return
     setUserScrolledRecently(true)
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
@@ -185,7 +195,333 @@ export default function NowPlayingView({
     }, 3800)
   }
 
-  const handleLyricLineClick = (line) => {
+  const toggleSelectLyricLine = (idx) => {
+    setSelectedLineIndices((prev) => {
+      if (prev.includes(idx)) {
+        return prev.filter((i) => i !== idx)
+      }
+      if (prev.length >= 5) {
+        return [...prev.slice(1), idx].sort((a, b) => a - b)
+      }
+      return [...prev, idx].sort((a, b) => a - b)
+    })
+  }
+
+  const handleStartSelectingFromLine = (idx, e) => {
+    if (e) e.stopPropagation()
+    setIsSelectingLyrics(true)
+    setSelectedLineIndices([idx])
+  }
+
+  const handleToggleSelectionMode = () => {
+    if (isSelectingLyrics) {
+      setIsSelectingLyrics(false)
+      setSelectedLineIndices([])
+    } else {
+      setIsSelectingLyrics(true)
+      // Pre-select current active vocal line if available
+      const lines = lyricsState.data?.lines || []
+      if (activeLineIdx >= 0 && lines[activeLineIdx] && !lines[activeLineIdx].isInstrumental) {
+        setSelectedLineIndices([activeLineIdx])
+      } else {
+        const firstVocal = lines.findIndex((l) => !l.isInstrumental && l.text)
+        setSelectedLineIndices(firstVocal >= 0 ? [firstVocal] : [])
+      }
+    }
+  }
+
+  const selectedLyricLines = useMemo(() => {
+    const lines = lyricsState.data?.lines || []
+    return selectedLineIndices
+      .map((i) => lines[i])
+      .filter((l) => l && !l.isInstrumental && l.text)
+  }, [lyricsState.data, selectedLineIndices])
+
+  const shareCardThemes = useMemo(() => [
+    {
+      name: 'Album Glow',
+      bgStart: albumColor.primary || '#10b981',
+      bgEnd: '#09090f',
+      accent: albumColor.primary || '#10b981',
+      cardBg: `linear-gradient(145deg, ${albumColor.primary || '#10b981'}40 0%, #101018 65%, #08080c 100%)`
+    },
+    {
+      name: 'Emerald Studio',
+      bgStart: '#059669',
+      bgEnd: '#061512',
+      accent: '#34d399',
+      cardBg: 'linear-gradient(145deg, #05966955 0%, #091d18 65%, #060d0b 100%)'
+    },
+    {
+      name: 'Crimson Velvet',
+      bgStart: '#e11d48',
+      bgEnd: '#16070c',
+      accent: '#fb7185',
+      cardBg: 'linear-gradient(145deg, #e11d4850 0%, #1f0a11 65%, #0c0508 100%)'
+    },
+    {
+      name: 'Royal Indigo',
+      bgStart: '#4f46e5',
+      bgEnd: '#090919',
+      accent: '#818cf8',
+      cardBg: 'linear-gradient(145deg, #4f46e550 0%, #111128 65%, #080812 100%)'
+    },
+    {
+      name: 'Midnight Obsidian',
+      bgStart: '#27272a',
+      bgEnd: '#09090b',
+      accent: '#e4e4e7',
+      cardBg: 'linear-gradient(145deg, #27272a60 0%, #121216 65%, #09090b 100%)'
+    }
+  ], [albumColor.primary])
+
+  const activeShareTheme = shareCardThemes[shareThemeIdx] || shareCardThemes[0]
+
+  const getFormattedShareText = () => {
+    const quote = selectedLyricLines.map((l) => `"${l.text}"`).join('\n')
+    const artist = track?.artist || extendedMeta?.author || 'UpBeat'
+    return `${quote}\n\n— ${track?.title || 'Track'} • ${artist}`
+  }
+
+  const handleCopySelectedLyrics = async () => {
+    if (!selectedLyricLines.length) return
+    const text = getFormattedShareText()
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedFeedback(true)
+      setTimeout(() => setCopiedFeedback(false), 2000)
+    } catch {}
+  }
+
+  // Renders a crisp 1080w PNG Lyric Card on an offscreen HTML5 Canvas
+  const generateLyricCardBlob = async () => {
+    const canvas = document.createElement('canvas')
+    const width = 1080
+    const ctx = canvas.getContext('2d')
+
+    const fontStack = '"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    ctx.font = `800 54px ${fontStack}`
+
+    // Wrap each selected lyric line to max width 880px
+    const maxTextWidth = 880
+    const wrappedBlocks = []
+    for (const lineObj of selectedLyricLines) {
+      const words = String(lineObj.text || '').split(/\s+/)
+      let currentLine = ''
+      const subLines = []
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word
+        if (ctx.measureText(testLine).width > maxTextWidth && currentLine) {
+          subLines.push(currentLine)
+          currentLine = word
+        } else {
+          currentLine = testLine
+        }
+      }
+      if (currentLine) subLines.push(currentLine)
+      wrappedBlocks.push(subLines)
+    }
+
+    const totalSubLines = wrappedBlocks.reduce((acc, b) => acc + b.length, 0)
+    const blockGaps = Math.max(0, wrappedBlocks.length - 1) * 34
+    const lyricsHeight = totalSubLines * 72 + blockGaps
+    const height = Math.max(1120, lyricsHeight + 520)
+
+    canvas.width = width
+    canvas.height = height
+
+    // 1. Background gradient
+    const grad = ctx.createLinearGradient(0, 0, width, height)
+    grad.addColorStop(0, activeShareTheme.bgStart)
+    grad.addColorStop(0.55, '#12121a')
+    grad.addColorStop(1, activeShareTheme.bgEnd)
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, width, height)
+
+    // Subtle dark glass inner card
+    const pad = 64
+    const cardW = width - pad * 2
+    const cardH = height - pad * 2
+    ctx.save()
+    ctx.beginPath()
+    ctx.roundRect(pad, pad, cardW, cardH, 56)
+    ctx.fillStyle = 'rgba(10, 10, 16, 0.58)'
+    ctx.fill()
+    ctx.lineWidth = 2.5
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)'
+    ctx.stroke()
+    ctx.restore()
+
+    // 2. Load album thumbnail if available
+    const innerX = pad + 64
+    const headerY = pad + 68
+    const artSize = 116
+    let artLoaded = false
+
+    if (thumbUrl) {
+      try {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        await new Promise((resolve) => {
+          const timer = setTimeout(resolve, 1800)
+          img.onload = () => {
+            clearTimeout(timer)
+            artLoaded = true
+            resolve()
+          }
+          img.onerror = () => {
+            clearTimeout(timer)
+            resolve()
+          }
+          img.src = thumbUrl
+        })
+        if (artLoaded) {
+          ctx.save()
+          ctx.beginPath()
+          ctx.roundRect(innerX, headerY, artSize, artSize, 28)
+          ctx.clip()
+          ctx.drawImage(img, innerX, headerY, artSize, artSize)
+          ctx.restore()
+        }
+      } catch {}
+    }
+
+    if (!artLoaded) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.roundRect(innerX, headerY, artSize, artSize, 28)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
+      ctx.fill()
+      ctx.fillStyle = activeShareTheme.accent
+      ctx.font = `700 48px ${fontStack}`
+      ctx.fillText('♫', innerX + 38, headerY + 76)
+      ctx.restore()
+    }
+
+    // 3. Track Title & Artist
+    const textX = innerX + artSize + 32
+    const maxHeaderTextW = width - textX - pad - 64
+    ctx.fillStyle = '#ffffff'
+    ctx.font = `800 38px ${fontStack}`
+    let titleStr = track?.title || 'UpBeat'
+    while (ctx.measureText(titleStr).width > maxHeaderTextW && titleStr.length > 6) {
+      titleStr = titleStr.slice(0, -2) + '…'
+    }
+    ctx.fillText(titleStr, textX, headerY + 52)
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.68)'
+    ctx.font = `600 28px ${fontStack}`
+    let artistStr = track?.artist || extendedMeta?.author || 'UpBeat Music'
+    while (ctx.measureText(artistStr).width > maxHeaderTextW && artistStr.length > 6) {
+      artistStr = artistStr.slice(0, -2) + '…'
+    }
+    ctx.fillText(artistStr, textX, headerY + 94)
+
+    // 4. Lyric Lines
+    let curY = headerY + artSize + 105
+    ctx.fillStyle = '#ffffff'
+    ctx.font = `800 52px ${fontStack}`
+    for (const subLines of wrappedBlocks) {
+      for (const sLine of subLines) {
+        ctx.fillText(sLine, innerX, curY)
+        curY += 72
+      }
+      curY += 34
+    }
+
+    // 5. Footer Branding
+    const footerY = height - pad - 64
+    ctx.fillStyle = activeShareTheme.accent
+    ctx.font = `800 28px ${fontStack}`
+    ctx.fillText('♫ UpBeat', innerX, footerY)
+
+    if (selectedLyricLines[0] && lyricsState.data?.synced) {
+      const timeLabel = formatTime(selectedLyricLines[0].time)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+      ctx.font = `600 26px ${fontStack}`
+      const tw = ctx.measureText(timeLabel).width
+      ctx.fillText(timeLabel, width - pad - 64 - tw, footerY)
+    }
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/png', 0.95)
+    })
+  }
+
+  const handleDownloadCardImage = async () => {
+    if (!selectedLyricLines.length || isExportingCard) return
+    setIsExportingCard(true)
+    try {
+      const blob = await generateLyricCardBlob()
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const cleanTitle = (track?.title || 'Lyrics').replace(/[\\/*?:"<>|]/g, '').trim()
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${cleanTitle} - Lyrics.png`
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        } catch {}
+      }, 1500)
+    } finally {
+      setIsExportingCard(false)
+    }
+  }
+
+  const handleShareCardNative = async () => {
+    if (!selectedLyricLines.length || isExportingCard) return
+    setIsExportingCard(true)
+    try {
+      const blob = await generateLyricCardBlob()
+      const shareText = getFormattedShareText()
+      const cleanTitle = (track?.title || 'Lyrics').replace(/[\\/*?:"<>|]/g, '').trim()
+
+      if (blob && typeof navigator !== 'undefined' && navigator.share) {
+        const file = new File([blob], `${cleanTitle} - Lyrics.png`, { type: 'image/png' })
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: `${track?.title || 'Lyrics'} — UpBeat`,
+            text: shareText
+          })
+          return
+        }
+        await navigator.share({
+          title: `${track?.title || 'Lyrics'} — UpBeat`,
+          text: shareText
+        })
+        return
+      }
+
+      // Desktop / fallback: copy image (or text) to clipboard and download PNG
+      if (blob && navigator.clipboard && window.ClipboardItem) {
+        try {
+          await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })])
+          setCopiedFeedback(true)
+          setTimeout(() => setCopiedFeedback(false), 2200)
+        } catch {
+          await handleCopySelectedLyrics()
+        }
+      } else {
+        await handleCopySelectedLyrics()
+      }
+      await handleDownloadCardImage()
+    } catch {} finally {
+      setIsExportingCard(false)
+    }
+  }
+
+  const handleLyricLineClick = (line, idx) => {
+    if (isSelectingLyrics) {
+      if (line && !line.isInstrumental) {
+        toggleSelectLyricLine(idx)
+      }
+      return
+    }
     if (!lyricsState.data?.synced || !line || typeof line.time !== 'number') return
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
     setUserScrolledRecently(false)
@@ -369,14 +705,36 @@ export default function NowPlayingView({
       {/* Center Section: Live Synced Lyrics OR Artwork / Video */}
       {showLyrics ? (
         <div className="flex-1 min-h-0 flex flex-col w-full max-w-2xl mx-auto px-5 sm:px-10 py-1 sm:py-2 z-10 relative">
-          {userScrolledRecently && lyricsState.data?.synced && (
-            <div className="flex justify-end pb-2 shrink-0">
-              <button
-                onClick={() => setUserScrolledRecently(false)}
-                className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white/[0.08] hover:bg-white/[0.15] text-zinc-100 border border-white/10 backdrop-blur-md transition-all cursor-pointer active:scale-95"
-              >
-                Resume Sync
-              </button>
+          {/* Top Action Row: Share Lyrics & Resume Sync */}
+          {lyricsState.data && lyricsState.data.lines?.length > 0 && (
+            <div className="flex items-center justify-between gap-2 pb-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleToggleSelectionMode}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border backdrop-blur-md transition-all cursor-pointer active:scale-95 ${
+                    isSelectingLyrics
+                      ? 'bg-white text-black border-white shadow-md'
+                      : 'bg-white/[0.08] hover:bg-white/[0.15] text-zinc-100 border-white/10'
+                  }`}
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>{isSelectingLyrics ? 'Done Selecting' : 'Share Lyrics'}</span>
+                </button>
+                {isSelectingLyrics && (
+                  <span className="text-xs font-medium text-zinc-400">
+                    Tap up to 5 lines
+                  </span>
+                )}
+              </div>
+
+              {userScrolledRecently && lyricsState.data?.synced && !isSelectingLyrics && (
+                <button
+                  onClick={() => setUserScrolledRecently(false)}
+                  className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white/[0.08] hover:bg-white/[0.15] text-zinc-100 border border-white/10 backdrop-blur-md transition-all cursor-pointer active:scale-95"
+                >
+                  Resume Sync
+                </button>
+              )}
             </div>
           )}
 
@@ -399,18 +757,19 @@ export default function NowPlayingView({
                 </p>
               </div>
             ) : lyricsState.data && lyricsState.data.lines?.length > 0 ? (
-              <div className="py-16 sm:py-24 flex flex-col gap-5 sm:gap-6">
+              <div className="py-16 sm:py-24 flex flex-col gap-4 sm:gap-5">
                 {lyricsState.data.lines.map((line, idx) => {
                   const isSynced = lyricsState.data.synced
                   const isActive = isSynced && idx === activeLineIdx
                   const isPast = isSynced && activeLineIdx >= 0 && idx < activeLineIdx
+                  const isSelected = isSelectingLyrics && selectedLineIndices.includes(idx)
 
                   if (line.isInstrumental) {
                     return (
                       <div
                         key={`${idx}-${line.time}`}
                         ref={(el) => { lineRefs.current[idx] = el }}
-                        onClick={() => handleLyricLineClick(line)}
+                        onClick={() => handleLyricLineClick(line, idx)}
                         className={`flex items-center gap-3 py-1 transition-all duration-300 ${
                           isSynced ? 'cursor-pointer' : ''
                         } ${isActive ? 'opacity-100 scale-105 origin-left' : isPast ? 'opacity-25' : 'opacity-40'}`}
@@ -436,31 +795,64 @@ export default function NowPlayingView({
                     <div
                       key={`${idx}-${line.time}`}
                       ref={(el) => { lineRefs.current[idx] = el }}
-                      onClick={() => handleLyricLineClick(line)}
-                      className={`group relative rounded-xl py-1 px-2 -mx-2 transition-all duration-300 ${
-                        isSynced ? 'cursor-pointer hover:bg-white/[0.04]' : ''
-                      } ${
-                        !isSynced
-                          ? 'text-white/85 text-lg sm:text-xl font-semibold leading-relaxed'
+                      onClick={() => handleLyricLineClick(line, idx)}
+                      className={`group relative rounded-2xl py-2 px-3 -mx-3 transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer ${
+                        isSelectingLyrics
+                          ? isSelected
+                            ? 'text-white shadow-lg'
+                            : 'text-white/55 hover:text-white hover:bg-white/[0.04]'
+                          : !isSynced
+                          ? 'text-white/85 text-lg sm:text-xl font-semibold leading-relaxed hover:bg-white/[0.04]'
                           : isActive
-                          ? 'text-white text-xl sm:text-2xl md:text-[26px] font-extrabold leading-snug tracking-tight scale-[1.02] origin-left'
+                          ? 'text-white text-xl sm:text-2xl md:text-[26px] font-extrabold leading-snug tracking-tight scale-[1.02] origin-left hover:bg-white/[0.04]'
                           : isPast
-                          ? 'text-white/28 hover:text-white/70 text-lg sm:text-xl font-bold leading-snug'
-                          : 'text-white/50 hover:text-white/80 text-lg sm:text-xl font-bold leading-snug'
+                          ? 'text-white/28 hover:text-white/70 text-lg sm:text-xl font-bold leading-snug hover:bg-white/[0.04]'
+                          : 'text-white/50 hover:text-white/80 text-lg sm:text-xl font-bold leading-snug hover:bg-white/[0.04]'
                       }`}
                       style={
-                        isActive
+                        isSelected
+                          ? {
+                              backgroundColor: `${albumColor.primary}22`,
+                              border: `1px solid ${albumColor.primary}60`
+                            }
+                          : isActive && !isSelectingLyrics
                           ? {
                               textShadow: `0 0 28px ${albumColor.glow || 'rgba(196,181,253,0.45)'}`
                             }
-                          : undefined
+                          : { border: '1px solid transparent' }
                       }
                     >
-                      <span>{line.text}</span>
-                      {isSynced && (
-                        <span className="ml-2.5 text-xs font-medium text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity align-middle">
-                          {formatTime(line.time)}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {isSelectingLyrics && (
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                              isSelected
+                                ? 'border-transparent text-black'
+                                : 'border-white/25 bg-white/[0.04]'
+                            }`}
+                            style={isSelected ? { backgroundColor: albumColor.primary } : undefined}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        )}
+                        <span className={isSelectingLyrics ? 'text-base sm:text-lg font-bold leading-snug' : ''}>
+                          {line.text}
                         </span>
+                        {isSynced && !isSelectingLyrics && (
+                          <span className="ml-2 text-xs font-medium text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity align-middle shrink-0">
+                            {formatTime(line.time)}
+                          </span>
+                        )}
+                      </div>
+
+                      {!isSelectingLyrics && (
+                        <button
+                          onClick={(e) => handleStartSelectingFromLine(idx, e)}
+                          title="Select & share this lyric line"
+                          className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all shrink-0 cursor-pointer"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   )
@@ -483,6 +875,57 @@ export default function NowPlayingView({
               </div>
             )}
           </div>
+
+          {/* Floating Selection Action Bar */}
+          {isSelectingLyrics && (
+            <div className="mt-2 p-2.5 rounded-2xl bg-[#12121a]/95 border border-white/15 backdrop-blur-2xl shadow-2xl flex items-center justify-between gap-2 animate-in fade-in slide-in-from-bottom-3 duration-150">
+              <div className="flex items-center gap-2 pl-2">
+                <span
+                  className="text-xs font-bold px-2.5 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: `${albumColor.primary}25`,
+                    color: albumColor.primary
+                  }}
+                >
+                  {selectedLyricLines.length} / 5
+                </span>
+                <span className="text-xs font-medium text-zinc-300 hidden xs:inline">
+                  {selectedLyricLines.length === 1 ? 'line selected' : 'lines selected'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopySelectedLyrics}
+                  disabled={selectedLyricLines.length === 0}
+                  className="px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] disabled:opacity-40 text-xs font-semibold text-white border border-white/10 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  {copiedFeedback ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedFeedback ? 'Copied' : 'Copy'}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowShareCardModal(true)}
+                  disabled={selectedLyricLines.length === 0}
+                  className="px-4 py-1.5 rounded-full bg-white hover:bg-zinc-200 disabled:opacity-40 text-xs font-bold text-black flex items-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-95"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share Card</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSelectingLyrics(false)
+                    setSelectedLineIndices([])
+                  }}
+                  className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Cancel selection"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex items-center justify-center px-4 sm:px-12 py-2 sm:py-4">
@@ -776,6 +1219,142 @@ export default function NowPlayingView({
           />
         </div>
       </div>
+
+      {/* Spotify / Apple Music Style Lyric Share Card Modal */}
+      {showShareCardModal && selectedLyricLines.length > 0 && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150"
+          onClick={() => setShowShareCardModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-[#101017] border border-white/15 p-5 sm:p-6 shadow-2xl flex flex-col gap-5 max-h-[90vh] overflow-y-auto no-scrollbar"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Share Lyrics
+                </h3>
+                <p className="text-xs text-zinc-400 font-normal mt-0.5">
+                  Customize card style or share directly
+                </p>
+              </div>
+              <button
+                onClick={() => setShowShareCardModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Live Visual Lyric Card Preview */}
+            <div
+              className="rounded-3xl p-5 sm:p-6 border border-white/15 shadow-2xl flex flex-col justify-between gap-6 transition-all duration-300"
+              style={{
+                background: activeShareTheme.cardBg
+              }}
+            >
+              {/* Card Track Header */}
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/15 shadow-md">
+                  {thumbUrl ? (
+                    <img src={thumbUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-400">
+                      <Music className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-white truncate tracking-tight">
+                    {track.title}
+                  </div>
+                  <div className="text-xs text-white/70 truncate font-medium mt-0.5">
+                    {artistName}
+                  </div>
+                </div>
+              </div>
+
+              {/* Selected Lyric Lines */}
+              <div className="flex flex-col gap-3 py-1">
+                {selectedLyricLines.map((line, i) => (
+                  <p
+                    key={`${i}-${line.time}`}
+                    className="text-lg sm:text-xl font-extrabold text-white leading-snug tracking-tight"
+                  >
+                    {line.text}
+                  </p>
+                ))}
+              </div>
+
+              {/* Card Footer Branding */}
+              <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                <span
+                  className="text-xs font-bold tracking-tight flex items-center gap-1.5"
+                  style={{ color: activeShareTheme.accent }}
+                >
+                  <span>♫ UpBeat</span>
+                </span>
+                {lyricsState.data?.synced && selectedLyricLines[0] && (
+                  <span className="text-xs font-semibold text-white/50">
+                    {formatTime(selectedLyricLines[0].time)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Theme Color Swatches */}
+            <div className="flex items-center justify-between gap-2 px-1">
+              <span className="text-xs font-semibold text-zinc-400">
+                Card Theme
+              </span>
+              <div className="flex items-center gap-2">
+                {shareCardThemes.map((th, idx) => (
+                  <button
+                    key={th.name}
+                    onClick={() => setShareThemeIdx(idx)}
+                    title={th.name}
+                    className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${
+                      shareThemeIdx === idx ? 'scale-115 ring-2 ring-white border-white' : 'border-white/20 opacity-75 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: th.bgStart }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Share / Save / Copy Action Buttons */}
+            <div className="grid grid-cols-3 gap-2.5 pt-1">
+              <button
+                onClick={handleCopySelectedLyrics}
+                className="py-2.5 px-3 rounded-2xl bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              >
+                {copiedFeedback ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedFeedback ? 'Copied!' : 'Copy Text'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadCardImage}
+                disabled={isExportingCard}
+                className="py-2.5 px-3 rounded-2xl bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-40"
+              >
+                {isExportingCard ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <span>Save Card</span>
+              </button>
+
+              <button
+                onClick={handleShareCardNative}
+                disabled={isExportingCard}
+                className="py-2.5 px-3 rounded-2xl bg-white hover:bg-zinc-200 text-xs font-bold text-black flex items-center justify-center gap-1.5 shadow-lg transition-all cursor-pointer active:scale-95 disabled:opacity-40"
+              >
+                {isExportingCard ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                <span>Share</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
