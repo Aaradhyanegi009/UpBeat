@@ -11,6 +11,8 @@
 !/macos/
 !/vercel.json
 !/package.json
+!/dist.zip
+!/dist.zip.sha256
 
 # Build caches & dependencies
 frontend/node_modules/
@@ -19,8 +21,6 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
-dist.zip
-dist.zip.sha256
 UpBeat-macOS.zip
 downloads/
 backend/data/downloads/*.m4a

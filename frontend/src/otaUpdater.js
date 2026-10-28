@@ -33,13 +33,17 @@ export async function initOtaUpdater(onUpdateReady) {
  */
 export async function getCurrentOtaVersion() {
   const stored = localStorage.getItem('upbeat_ota_version')
-  if (stored) return stored
+  if (stored && isVersionNewer(stored, CURRENT_BUILTIN_VERSION)) {
+    return stored
+  }
 
   if (Capacitor.isNativePlatform()) {
     try {
       const cur = await CapacitorUpdater.current()
       if (cur?.bundle?.version && cur.bundle.version !== 'builtin') {
-        return cur.bundle.version
+        if (isVersionNewer(cur.bundle.version, CURRENT_BUILTIN_VERSION)) {
+          return cur.bundle.version
+        }
       }
     } catch {}
   }
@@ -47,7 +51,131 @@ export async function getCurrentOtaVersion() {
 }
 
 /**
- * Check GitHub Releases for newer dist.zip bundle
+ * Resolve latest version, download URL, and SHA-256 checksum without hitting
+ * GitHub's 60 req/hr unauthenticated REST API rate limit (HTTP 403).
+ *
+ * Strategy:
+ * 1. Primary: raw.githubusercontent.com (Unlimited CDN, 0-second push latency, CORS *)
+ * 2. Secondary: cdn.jsdelivr.net (Global multi-CDN mirror, CORS *)
+ * 3. Tertiary fallback: api.github.com/repos/.../releases/latest
+ */
+async function resolveLatestReleaseInfo() {
+  const cacheBust = Date.now()
+
+  // 1. Try GitHub Raw CDN (Zero API rate limit, instant availability on push)
+  try {
+    const pkgRes = await fetch(
+      `https://raw.githubusercontent.com/${GITHUB_REPO}/main/frontend/package.json?t=${cacheBust}`,
+      { cache: 'no-store' }
+    )
+    if (pkgRes.ok) {
+      const pkg = await pkgRes.json()
+      if (pkg?.version) {
+        const latestTag = pkg.version.startsWith('v') ? pkg.version : `v${pkg.version}`
+        let checksum = ''
+        try {
+          const shaRes = await fetch(
+            `https://raw.githubusercontent.com/${GITHUB_REPO}/main/dist.zip.sha256?t=${cacheBust}`,
+            { cache: 'no-store' }
+          )
+          if (shaRes.ok) {
+            checksum = (await shaRes.text()).trim().split(/\s+/)[0]
+          }
+        } catch {}
+
+        const downloadUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/dist.zip?v=${encodeURIComponent(latestTag)}`
+        return {
+          latestTag,
+          downloadUrl,
+          fallbackDownloadUrl: `https://github.com/${GITHUB_REPO}/releases/download/${latestTag}/dist.zip`,
+          checksum,
+          notes: `UpBeat ${latestTag} OTA Update`
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[OTA] Raw GitHub check fallback:', e)
+  }
+
+  // 2. Try jsDelivr CDN (Zero API rate limit)
+  try {
+    const jsdRes = await fetch(
+      `https://cdn.jsdelivr.net/gh/${GITHUB_REPO}@main/frontend/package.json?t=${cacheBust}`,
+      { cache: 'no-store' }
+    )
+    if (jsdRes.ok) {
+      const pkg = await jsdRes.json()
+      if (pkg?.version) {
+        const latestTag = pkg.version.startsWith('v') ? pkg.version : `v${pkg.version}`
+        let checksum = ''
+        try {
+          const shaRes = await fetch(
+            `https://cdn.jsdelivr.net/gh/${GITHUB_REPO}@main/dist.zip.sha256?t=${cacheBust}`,
+            { cache: 'no-store' }
+          )
+          if (shaRes.ok) {
+            checksum = (await shaRes.text()).trim().split(/\s+/)[0]
+          }
+        } catch {}
+
+        return {
+          latestTag,
+          downloadUrl: `https://raw.githubusercontent.com/${GITHUB_REPO}/main/dist.zip?v=${encodeURIComponent(latestTag)}`,
+          fallbackDownloadUrl: `https://github.com/${GITHUB_REPO}/releases/download/${latestTag}/dist.zip`,
+          checksum,
+          notes: `UpBeat ${latestTag} OTA Update`
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[OTA] jsDelivr check fallback:', e)
+  }
+
+  // 3. Tertiary fallback: GitHub Releases API
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+    headers: { Accept: 'application/vnd.github.v3+json' }
+  })
+
+  if (!res.ok) {
+    if (res.status === 403 || res.status === 429) {
+      // Rate-limited on api.github.com; use direct latest release download URL
+      return {
+        latestTag: CURRENT_BUILTIN_VERSION,
+        downloadUrl: `https://github.com/${GITHUB_REPO}/releases/latest/download/dist.zip`,
+        checksum: '',
+        notes: ''
+      }
+    }
+    throw new Error(`Update server returned HTTP ${res.status}`)
+  }
+
+  const release = await res.json()
+  const latestTag = release.tag_name || ''
+  const zipAsset = (release.assets || []).find((a) => a.name === 'dist.zip')
+  let checksum = (zipAsset?.digest || '').replace(/^sha256:/i, '').trim()
+
+  if (!checksum) {
+    const shaAsset = (release.assets || []).find((a) => a.name === 'dist.zip.sha256')
+    if (shaAsset?.browser_download_url) {
+      try {
+        const shaRes = await fetch(shaAsset.browser_download_url)
+        if (shaRes.ok) {
+          checksum = (await shaRes.text()).trim().split(/\s+/)[0]
+        }
+      } catch {}
+    }
+  }
+
+  return {
+    latestTag,
+    downloadUrl: zipAsset?.browser_download_url || `https://github.com/${GITHUB_REPO}/releases/latest/download/dist.zip`,
+    checksum,
+    notes: release.body || ''
+  }
+}
+
+/**
+ * Check for newer dist.zip OTA bundle
  */
 export async function checkOtaUpdate({ silent = false, forceCheck = false, onUpdateReady = null } = {}) {
   if (!Capacitor.isNativePlatform()) {
@@ -56,41 +184,13 @@ export async function checkOtaUpdate({ silent = false, forceCheck = false, onUpd
 
   try {
     const currentVer = await getCurrentOtaVersion()
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github.v3+json' }
-    })
+    const info = await resolveLatestReleaseInfo()
+    const { latestTag, downloadUrl, fallbackDownloadUrl, checksum, notes } = info
 
-    if (!res.ok) {
-      throw new Error(`GitHub API HTTP ${res.status}`)
-    }
-
-    const release = await res.json()
-    const latestTag = release.tag_name || ''
     if (!latestTag) {
-      return { updateAvailable: false, currentVer }
+      return { updateAvailable: false, currentVer, upToDate: true }
     }
 
-    // Find dist.zip in release assets
-    const zipAsset = (release.assets || []).find((a) => a.name === 'dist.zip')
-    if (!zipAsset || !zipAsset.browser_download_url) {
-      return { updateAvailable: false, currentVer, latestTag, error: 'No dist.zip found in latest release' }
-    }
-
-    // Extract SHA-256 checksum from asset digest
-    let checksum = (zipAsset.digest || '').replace(/^sha256:/i, '').trim()
-    if (!checksum) {
-      const shaAsset = (release.assets || []).find((a) => a.name === 'dist.zip.sha256')
-      if (shaAsset?.browser_download_url) {
-        try {
-          const shaRes = await fetch(shaAsset.browser_download_url)
-          if (shaRes.ok) {
-            checksum = (await shaRes.text()).trim().split(/\s+/)[0]
-          }
-        } catch {}
-      }
-    }
-
-    // Compare versions (e.g. v4.0.1 vs v4.0.0)
     const isNewer = isVersionNewer(latestTag, currentVer)
     if (!isNewer && !forceCheck) {
       return { updateAvailable: false, currentVer, latestTag, upToDate: true }
@@ -102,7 +202,7 @@ export async function checkOtaUpdate({ silent = false, forceCheck = false, onUpd
         upToDate: true,
         currentVer,
         latestTag,
-        downloadUrl: zipAsset.browser_download_url,
+        downloadUrl,
         checksum
       }
     }
@@ -113,11 +213,11 @@ export async function checkOtaUpdate({ silent = false, forceCheck = false, onUpd
       onUpdateReady({
         latestVersion: latestTag,
         currentVersion: currentVer,
-        downloadUrl: zipAsset.browser_download_url,
+        downloadUrl,
         checksum,
-        notes: release.body || '',
+        notes,
         autoApply: async () => {
-          return applyOtaBundle(zipAsset.browser_download_url, latestTag, checksum)
+          return applyOtaBundle(downloadUrl, latestTag, checksum, fallbackDownloadUrl)
         }
       })
     }
@@ -126,9 +226,9 @@ export async function checkOtaUpdate({ silent = false, forceCheck = false, onUpd
       updateAvailable: true,
       currentVer,
       latestTag,
-      downloadUrl: zipAsset.browser_download_url,
-      checksum,
-      release
+      downloadUrl,
+      fallbackDownloadUrl,
+      checksum
     }
   } catch (err) {
     if (!silent) console.error('[OTA] Check failed:', err)
@@ -137,24 +237,32 @@ export async function checkOtaUpdate({ silent = false, forceCheck = false, onUpd
 }
 
 /**
- * Download and install dist.zip OTA update
+ * Download and install dist.zip OTA update (with automatic fallback URL retry)
  */
-export async function applyOtaBundle(downloadUrl, version, checksum = '') {
+export async function applyOtaBundle(downloadUrl, version, checksum = '', fallbackUrl = '') {
   if (!Capacitor.isNativePlatform()) {
     return false
   }
 
-  try {
-    console.log(`[OTA] Downloading bundle: ${version} (checksum: ${checksum || 'none'})...`)
-    const downloadOpts = {
-      url: downloadUrl,
-      version: version
+  const tryDownload = async (url, useChecksum) => {
+    const downloadOpts = { url, version }
+    if (useChecksum) {
+      downloadOpts.checksum = useChecksum
     }
-    if (checksum) {
-      downloadOpts.checksum = checksum
+    return await CapacitorUpdater.download(downloadOpts)
+  }
+
+  try {
+    console.log(`[OTA] Downloading bundle: ${version} from ${downloadUrl}...`)
+    let bundle
+    try {
+      bundle = await tryDownload(downloadUrl, checksum)
+    } catch (primaryErr) {
+      console.warn('[OTA] Primary download failed, trying fallback without strict checksum:', primaryErr)
+      const altUrl = fallbackUrl || `https://github.com/${GITHUB_REPO}/releases/latest/download/dist.zip`
+      bundle = await tryDownload(altUrl, '')
     }
 
-    const bundle = await CapacitorUpdater.download(downloadOpts)
     console.log(`[OTA] Bundle downloaded successfully:`, bundle)
     localStorage.setItem('upbeat_ota_version', version)
 
@@ -169,20 +277,23 @@ export async function applyOtaBundle(downloadUrl, version, checksum = '') {
 }
 
 /**
- * Helper to check if new tag is higher version
+ * Helper to check if new tag is higher version (supports 3 or 4 segments e.g. v5.1.3.2)
  */
 function isVersionNewer(newVer, currentVer) {
   if (!newVer || !currentVer) return false
   if (newVer === currentVer) return false
   if (currentVer === 'builtin') return true
 
-  const clean = (v) => v.replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0)
-  const [nMaj = 0, nMin = 0, nPat = 0] = clean(newVer)
-  const [cMaj = 0, cMin = 0, cPat = 0] = clean(currentVer)
+  const clean = (v) => v.replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0)
+  const nParts = clean(newVer)
+  const cParts = clean(currentVer)
+  const len = Math.max(nParts.length, cParts.length, 3)
 
-  if (nMaj !== cMaj) return nMaj > cMaj
-  if (nMin !== cMin) return nMin > cMin
-  if (nPat !== cPat) return nPat > cPat
+  for (let i = 0; i < len; i++) {
+    const n = nParts[i] || 0
+    const c = cParts[i] || 0
+    if (n !== c) return n > c
+  }
 
-  return newVer !== currentVer
+  return false
 }

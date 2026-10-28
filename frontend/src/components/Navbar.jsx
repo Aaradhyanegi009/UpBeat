@@ -57,7 +57,7 @@ export default function Navbar({
       const res = await checkOtaUpdate({ silent: false, forceCheck: true })
       if (res.updateAvailable && res.downloadUrl) {
         setOtaStatusMsg(`Downloading update ${res.latestTag}...`)
-        await applyOtaBundle(res.downloadUrl, res.latestTag, res.checksum)
+        await applyOtaBundle(res.downloadUrl, res.latestTag, res.checksum, res.fallbackDownloadUrl)
         setOtaStatusMsg(`Update applied! Reloading...`)
       } else if (res.upToDate) {
         setOtaStatusMsg(`UpBeat is up to date (${res.currentVer || otaVer}) ✨`)

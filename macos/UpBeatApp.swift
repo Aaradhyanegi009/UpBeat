@@ -402,11 +402,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                 }
             }
 
-            // 2. Also check GitHub releases API
-            let releaseURL = URL(string: "https://api.github.com/repos/\(self.githubRepo)/releases/latest")!
-            var req = URLRequest(url: releaseURL)
+            // 2. Check remote version via GitHub Raw CDN (Zero API rate limit)
+            let releaseURL = URL(string: "https://raw.githubusercontent.com/\(self.githubRepo)/main/frontend/package.json?t=\(Int(Date().timeIntervalSince1970))")!
+            var req = URLRequest(url: releaseURL, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 4.0)
             req.setValue("UpBeat-MacUpdater", forHTTPHeaderField: "User-Agent")
-            req.timeoutInterval = 4.0
 
             let sem = DispatchSemaphore(value: 0)
             var releaseTag = ""
@@ -414,8 +413,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             URLSession.shared.dataTask(with: req) { data, _, _ in
                 if let d = data,
                    let json = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
-                   let tag = json["tag_name"] as? String {
-                    releaseTag = tag
+                   let ver = json["version"] as? String {
+                    releaseTag = ver.hasPrefix("v") ? ver : "v\(ver)"
                 }
                 sem.signal()
             }.resume()
