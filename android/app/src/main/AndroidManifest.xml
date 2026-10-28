@@ -16,6 +16,9 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="false"
+            android:inheritShowWhenLocked="true"
             android:exported="true">
 
             <intent-filter>
@@ -43,6 +46,7 @@
             android:name=".UpBeatMediaService"
             android:enabled="true"
             android:exported="true"
+            android:stopWithTask="false"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />

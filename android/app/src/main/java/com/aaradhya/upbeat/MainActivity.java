@@ -40,6 +40,14 @@ public class MainActivity extends BridgeActivity {
         sInstance = this;
         applyDarkSystemBars();
 
+        // Enable execution and media playback when device is locked in car
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(false);
+        } else {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -60,6 +68,7 @@ public class MainActivity extends BridgeActivity {
             wv.getSettings().setSupportMultipleWindows(true);
             wv.getSettings().setDomStorageEnabled(true);
             wv.getSettings().setDatabaseEnabled(true);
+            wv.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
             wv.addJavascriptInterface(new UpBeatJsBridge(), "UpBeatNative");
         }
 
@@ -106,14 +115,16 @@ public class MainActivity extends BridgeActivity {
 
     public synchronized void dispatchCarAction(final String action, final String payload) {
         if (action == null) return;
-        sPendingActionsQueue.add(new CarActionItem(action, payload != null ? payload : ""));
+        if (!"prewarm".equals(action)) {
+            sPendingActionsQueue.add(new CarActionItem(action, payload != null ? payload : ""));
+        }
         tryDeliverPendingCarAction(0);
     }
 
     public synchronized void tryDeliverPendingCarAction(final int attempt) {
         if (sPendingActionsQueue.isEmpty()) return;
         if (this.bridge == null || this.bridge.getWebView() == null) {
-            if (attempt < 25) {
+            if (attempt < 100) {
                 mHandler.postDelayed(() -> tryDeliverPendingCarAction(attempt + 1), 300);
             }
             return;
@@ -138,7 +149,7 @@ public class MainActivity extends BridgeActivity {
                 if (value != null && value.contains("ok")) {
                     sPendingActionsQueue.removeAll(batch);
                 } else {
-                    if (attempt < 25) {
+                    if (attempt < 100) {
                         mHandler.postDelayed(() -> tryDeliverPendingCarAction(attempt + 1), 350);
                     }
                 }
@@ -149,6 +160,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         super.onPause();
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            this.bridge.getWebView().onResume();
+            this.bridge.getWebView().resumeTimers();
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // Keep Chromium AwContents alive and streaming even when phone screen is turned off in car
         if (this.bridge != null && this.bridge.getWebView() != null) {
             this.bridge.getWebView().onResume();
             this.bridge.getWebView().resumeTimers();

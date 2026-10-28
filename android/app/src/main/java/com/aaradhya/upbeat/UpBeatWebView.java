@@ -22,6 +22,11 @@ public class UpBeatWebView extends CapacitorWebView {
     }
 
     @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, View.VISIBLE);
+    }
+
+    @Override
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(true);
     }

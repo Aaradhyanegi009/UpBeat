@@ -66,8 +66,8 @@ jobs:
       - name: Publish UpBeat.apk and macOS Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v5.1.3.2' }}
-          name: ${{ github.ref_type == 'tag' && format('UpBeat {0}', github.ref_name) || 'UpBeat v5.1.3.2 — Style Tag Fix & Performance Boost' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v5.2.0' }}
+          name: ${{ github.ref_type == 'tag' && format('UpBeat {0}', github.ref_name) || 'UpBeat v5.2.0 — Android Auto Performance & Headless Playback Engine' }}
           files: |
             android/app/build/outputs/apk/debug/UpBeat.apk
             UpBeat-macOS.zip
