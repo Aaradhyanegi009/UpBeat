@@ -38,6 +38,13 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
+        <provider
+            android:name=".UpBeatArtProvider"
+            android:authorities="com.aaradhya.upbeat.art"
+            android:enabled="true"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />

@@ -360,6 +360,7 @@ export default function App() {
             index: idx,
             title: t.title || 'Unknown Title',
             artist: t.artist || 'UpBeat',
+            video_id: t.video_id || '',
             thumbnail: t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
           }))
           window.UpBeatNative.syncQueue(JSON.stringify(items))
