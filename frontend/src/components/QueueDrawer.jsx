@@ -33,7 +33,8 @@ export default function QueueDrawer({
       {/* Drawer Panel */}
       <div className="relative w-full max-w-md bg-[#0b0b10]/98 backdrop-blur-2xl border-l border-white/[0.08] h-full flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
         {/* Sticky Header */}
-        <div className="px-4 py-3.5 sm:px-5 sm:py-4 border-b border-white/[0.08] flex items-center justify-between bg-black/40 backdrop-blur-md shrink-0">
+        <div className="pt-safe-top border-b border-white/[0.08] bg-black/40 backdrop-blur-md shrink-0">
+          <div className="px-4 py-3.5 sm:px-5 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
               <ListMusic className="w-4 h-4" />
@@ -73,6 +74,7 @@ export default function QueueDrawer({
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
           </div>
         </div>
 

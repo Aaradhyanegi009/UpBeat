@@ -631,83 +631,85 @@ export default function NowPlayingView({
       />
 
       {/* Top Header Bar */}
-      <header className="h-12 sm:h-16 px-4 sm:px-8 flex items-center justify-between shrink-0 pt-safe-top z-10">
-        <button
-          onClick={handleClose}
-          className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
-          title="Collapse to mini player"
-          aria-label="Collapse"
-        >
-          <ChevronDown className="w-6 h-6" />
-        </button>
-
-        {/* Segmented Mode Switcher: Artwork vs Live Lyrics */}
-        <div className="flex items-center p-1 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-md">
+      <header className="pt-safe-top shrink-0 z-10">
+        <div className="h-12 sm:h-16 px-4 sm:px-8 flex items-center justify-between">
           <button
-            onClick={() => setShowLyrics(false)}
-            className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-              !showLyrics
-                ? 'bg-white/15 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+            onClick={handleClose}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
+            title="Collapse to mini player"
+            aria-label="Collapse"
           >
-            Track
+            <ChevronDown className="w-6 h-6" />
           </button>
-          <button
-            onClick={() => {
-              if (!showLyrics) handleToggleLyrics()
-            }}
-            className={`px-3.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              showLyrics
-                ? 'text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-            style={
-              showLyrics
-                ? {
-                    backgroundColor: `${albumColor.primary}30`,
-                    border: `1px solid ${albumColor.primary}60`
-                  }
-                : undefined
-            }
-          >
-            <Mic2 className="w-3.5 h-3.5" style={showLyrics ? { color: albumColor.primary } : undefined} />
-            <span>Lyrics</span>
-            {lyricsState.data?.synced && (
-              <span
-                className="w-1.5 h-1.5 rounded-full animate-pulse"
-                style={{ backgroundColor: albumColor.primary }}
-                title="Live Time-Synced Lyrics Available"
-              />
-            )}
-          </button>
-        </div>
 
-        <div className="flex items-center gap-1">
-          {onToggleQueue && (
+          {/* Segmented Mode Switcher: Artwork vs Live Lyrics */}
+          <div className="flex items-center p-1 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-md">
             <button
-              onClick={onToggleQueue}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer relative"
-              title="Open Playback Queue"
-              aria-label="Open Queue"
+              onClick={() => setShowLyrics(false)}
+              className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                !showLyrics
+                  ? 'bg-white/15 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
             >
-              <ListMusic className="w-5 h-5" />
-              {queueCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-sky-500 text-[9px] font-bold text-white flex items-center justify-center">
-                  {queueCount}
-                </span>
+              Track
+            </button>
+            <button
+              onClick={() => {
+                if (!showLyrics) handleToggleLyrics()
+              }}
+              className={`px-3.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                showLyrics
+                  ? 'text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              style={
+                showLyrics
+                  ? {
+                      backgroundColor: `${albumColor.primary}30`,
+                      border: `1px solid ${albumColor.primary}60`
+                    }
+                  : undefined
+              }
+            >
+              <Mic2 className="w-3.5 h-3.5" style={showLyrics ? { color: albumColor.primary } : undefined} />
+              <span>Lyrics</span>
+              {lyricsState.data?.synced && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full animate-pulse"
+                  style={{ backgroundColor: albumColor.primary }}
+                  title="Live Time-Synced Lyrics Available"
+                />
               )}
             </button>
-          )}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {onToggleQueue && (
+              <button
+                onClick={onToggleQueue}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer relative"
+                title="Open Playback Queue"
+                aria-label="Open Queue"
+              >
+                <ListMusic className="w-5 h-5" />
+                {queueCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-sky-500 text-[9px] font-bold text-white flex items-center justify-center">
+                    {queueCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* Center Section: Live Synced Lyrics OR Artwork / Video */}
       {showLyrics ? (
-        <div className="flex-1 min-h-0 flex flex-col w-full max-w-2xl mx-auto px-5 sm:px-10 py-1 sm:py-2 z-10 relative">
+        <div className="flex-1 min-h-0 flex flex-col w-full max-w-2xl mx-auto px-5 sm:px-10 pt-2 pb-1 sm:py-2 z-10 relative">
           {/* Top Action Row: Share Lyrics & Resume Sync */}
           {lyricsState.data && lyricsState.data.lines?.length > 0 && (
-            <div className="flex items-center justify-between gap-2 pb-2 shrink-0">
+            <div className="flex items-center justify-between gap-2 pb-2.5 shrink-0">
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleToggleSelectionMode}
