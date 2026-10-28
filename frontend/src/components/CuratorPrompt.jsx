@@ -40,7 +40,7 @@ export default function CuratorPrompt({
   }
 
   return (
-    <div className="w-full bg-transparent pt-3 pb-1 select-none flex-shrink-0 z-20 overflow-hidden">
+    <div className="w-full bg-black/40 backdrop-blur-md border-b border-white/10 py-2.5 select-none flex-shrink-0 sticky top-0 z-20 overflow-hidden">
       {/* Horizontal Mood / Activity Chips Carousel - Full-Bleed Edge-to-Edge like YouTube */}
       <div className="w-full flex items-center gap-2 overflow-x-auto no-scrollbar px-3.5 sm:px-6 py-1 scroll-smooth">
         {MOOD_CHIPS.map((chip) => {

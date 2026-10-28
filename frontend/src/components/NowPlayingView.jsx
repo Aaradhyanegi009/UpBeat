@@ -631,7 +631,7 @@ export default function NowPlayingView({
       />
 
       {/* Top Header Bar */}
-      <header className="pt-safe-top shrink-0 z-10">
+      <header className="pt-safe-top bg-black/40 backdrop-blur-md border-b border-white/10 shrink-0 sticky top-0 z-20">
         <div className="h-12 sm:h-16 px-4 sm:px-8 flex items-center justify-between">
           <button
             onClick={handleClose}

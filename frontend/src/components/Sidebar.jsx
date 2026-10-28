@@ -139,7 +139,7 @@ export default function Sidebar({
 
   // 1. YouTube Music Slim Vertical Left Rail (Icon + Text Stack)
   const slimRail = (
-    <nav className="w-18 bg-black/80 backdrop-blur-2xl border-r border-white/10 flex flex-col items-center py-3 select-none h-full shrink-0">
+    <nav className="w-18 bg-black/40 backdrop-blur-md border-r border-white/10 flex flex-col items-center py-3 select-none h-full shrink-0">
       <div className="flex flex-col items-center gap-2 w-full px-2">
         {/* Home / Curator */}
         <button
@@ -246,24 +246,25 @@ export default function Sidebar({
 
   // 2. Full Expanded Drawer with Preset Sliders & Diagnostics
   const sidebarContent = (
-    <aside className="w-80 bg-black/90 backdrop-blur-2xl border-r border-white/10 flex-shrink-0 flex flex-col justify-between overflow-y-auto select-none h-full relative">
-      <div className="p-4 flex flex-col gap-4">
-        {/* Mobile / Expanded Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Sliders className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-xs font-bold text-white tracking-tight">Taste Controls</span>
+    <aside className="w-80 bg-black/75 backdrop-blur-2xl border-r border-white/10 flex-shrink-0 flex flex-col justify-between overflow-y-auto select-none h-full relative">
+      {/* Sticky Translucent Header */}
+      <div className="px-4 py-3 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+            <Sliders className="w-3.5 h-3.5" />
           </div>
-          <button
-            onClick={isOpenMobile ? onCloseMobile : onToggleSidebar}
-            className="p-1.5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-            title="Collapse Sidebar"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <span className="text-xs font-bold text-white tracking-tight">Taste Controls</span>
         </div>
+        <button
+          onClick={isOpenMobile ? onCloseMobile : onToggleSidebar}
+          className="p-1.5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          title="Collapse Sidebar"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="p-4 flex flex-col gap-4">
 
         {/* Themes Drawer (Small Collapsible Slider) */}
         <div className="rounded-2xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-sm overflow-hidden transition-all">
@@ -495,7 +496,7 @@ export default function Sidebar({
         {/* App Info */}
         <div className="pt-2 text-xs font-semibold text-zinc-400 border-t border-white/10 flex items-center justify-between">
           <span className="text-zinc-400">UpBeat Music</span>
-          <span className="text-emerald-400/80">v5.1.2</span>
+          <span className="text-emerald-400/80">v5.1.3</span>
         </div>
       </div>
 
