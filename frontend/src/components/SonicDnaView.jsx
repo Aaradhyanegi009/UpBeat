@@ -109,7 +109,7 @@ export default function SonicDnaView({
     }
   }
 
-  // 1. FAVORITES MEMORY VIEW (Matches Downloads UI/UX)
+  // 1. Favorites Memory Memo (Always declared at top level)
   const filteredFavs = useMemo(() => {
     if (!filter.trim()) return favorites
     const q = filter.toLowerCase().trim()
@@ -120,6 +120,69 @@ export default function SonicDnaView({
     )
   }, [favorites, filter])
 
+  // 2. Library Seeds Memo (Always declared at top level)
+  const filteredTracks = useMemo(() => {
+    if (!filter.trim()) return extractedTracks
+    const q = filter.toLowerCase().trim()
+    return extractedTracks.filter((t) =>
+      (t.title || '').toLowerCase().includes(q) ||
+      (t.artist || '').toLowerCase().includes(q)
+    )
+  }, [extractedTracks, filter])
+
+  // 3. Sonic DNA & Taste Profile Memos (Always declared at top level before any early return)
+  const allTracks = useMemo(() => (favorites.length > 0 ? favorites : extractedTracks), [favorites, extractedTracks])
+  const artists = useMemo(() => Array.from(new Set(allTracks.map((t) => t.artist).filter(Boolean))), [allTracks])
+
+  const topArtists = useMemo(() => {
+    return (tasteDna?.key_artists && tasteDna.key_artists.length)
+      ? tasteDna.key_artists
+      : (tasteDna?.top_artists && tasteDna.top_artists.length)
+      ? tasteDna.top_artists
+      : (artists.length ? artists.slice(0, 5) : [])
+  }, [tasteDna, artists])
+
+  const { isHighEnergy, isMelancholic } = useMemo(() => {
+    const high = allTracks.some((t) => /rock|epic|metal|hyper|phonk|battle|dance/i.test(`${t.title || ''} ${t.artist || ''}`))
+    const low = allTracks.some((t) => /slow|acoustic|indie|lofi|rain|dark|ambient|chill/i.test(`${t.title || ''} ${t.artist || ''}`))
+    return { isHighEnergy: high, isMelancholic: low }
+  }, [allTracks])
+
+  const derivedArchetype = useMemo(() => {
+    return tasteDna?.archetype || (
+      isHighEnergy ? 'High-Impact Sonic Voyager' :
+      isMelancholic ? 'Atmospheric & Ethereal Connoisseur' :
+      allTracks.length > 0 ? 'Melodic Audio Explorer' :
+      (googleUser?.name ? `${googleUser.name}'s Sonic Canvas` : 'Uncharted Sonic Explorer')
+    )
+  }, [tasteDna?.archetype, isHighEnergy, isMelancholic, allTracks.length, googleUser?.name])
+
+  const derivedSummary = useMemo(() => {
+    return tasteDna?.summary || (
+      allTracks.length > 0
+        ? `Your profile is driven by ${allTracks.length} tracks, blending ${topArtists.length ? topArtists.slice(0, 2).join(' and ') : 'diverse melodies'} with rich musical textures, dynamic rhythms, and personal listening habits.`
+        : (googleUser?.name
+            ? `Welcome ${googleUser.name}! Your unique taste profile will evolve dynamically with every song you listen to, search, or heart. Connect your seeds or explore music to build your mix.`
+            : 'Your taste profile evolves dynamically with every song you listen to, heart, or search. Search for your favorite songs or connect Google to unlock personalized mixes.')
+    )
+  }, [tasteDna?.summary, allTracks.length, topArtists, googleUser?.name])
+
+  const genrePills = useMemo(() => {
+    const raw = (tasteDna?.primary_genres && tasteDna.primary_genres.length)
+      ? tasteDna.primary_genres
+      : (allTracks.length > 0
+          ? (isHighEnergy
+              ? ['Alternative Rock', 'Soundtrack', 'Electronic Melodic', 'Dynamic Beats']
+              : ['Indie & Alternative', 'Melodic Pop', 'Atmospheric Ambient', 'Acoustic Harmonies'])
+          : ['Global Pop & Hits', 'Indie & Alternative', 'Electronic & Chill', 'Acoustic Harmonies'])
+
+    return raw.map((g, idx) => ({
+      name: g,
+      pct: [42, 28, 18, 12][idx] || 15
+    }))
+  }, [tasteDna?.primary_genres, allTracks.length, isHighEnergy])
+
+  // 1. FAVORITES MEMORY VIEW (Matches Downloads UI/UX)
   if (mode === 'favorites') {
     return (
       <div
@@ -512,15 +575,6 @@ export default function SonicDnaView({
   }
 
   // 2. YOUTUBE & SEEDS LIBRARY VIEW (Matches Downloads UI/UX)
-  const filteredTracks = useMemo(() => {
-    if (!filter.trim()) return extractedTracks
-    const q = filter.toLowerCase().trim()
-    return extractedTracks.filter((t) =>
-      (t.title || '').toLowerCase().includes(q) ||
-      (t.artist || '').toLowerCase().includes(q)
-    )
-  }, [extractedTracks, filter])
-
   if (mode === 'library') {
 
     return (
@@ -924,58 +978,7 @@ export default function SonicDnaView({
     )
   }
 
-  // 3. MODERN INTERACTIVE SONIC TASTE STUDIO (Memoized for high performance)
-  const allTracks = useMemo(() => (favorites.length > 0 ? favorites : extractedTracks), [favorites, extractedTracks])
-  const artists = useMemo(() => Array.from(new Set(allTracks.map((t) => t.artist).filter(Boolean))), [allTracks])
-
-  const topArtists = useMemo(() => {
-    return (tasteDna?.key_artists && tasteDna.key_artists.length)
-      ? tasteDna.key_artists
-      : (tasteDna?.top_artists && tasteDna.top_artists.length)
-      ? tasteDna.top_artists
-      : (artists.length ? artists.slice(0, 5) : [])
-  }, [tasteDna, artists])
-
-  const { isHighEnergy, isMelancholic } = useMemo(() => {
-    const high = allTracks.some((t) => /rock|epic|metal|hyper|phonk|battle|dance/i.test(`${t.title || ''} ${t.artist || ''}`))
-    const low = allTracks.some((t) => /slow|acoustic|indie|lofi|rain|dark|ambient|chill/i.test(`${t.title || ''} ${t.artist || ''}`))
-    return { isHighEnergy: high, isMelancholic: low }
-  }, [allTracks])
-
-  const derivedArchetype = useMemo(() => {
-    return tasteDna?.archetype || (
-      isHighEnergy ? 'High-Impact Sonic Voyager' :
-      isMelancholic ? 'Atmospheric & Ethereal Connoisseur' :
-      allTracks.length > 0 ? 'Melodic Audio Explorer' :
-      (googleUser?.name ? `${googleUser.name}'s Sonic Canvas` : 'Uncharted Sonic Explorer')
-    )
-  }, [tasteDna?.archetype, isHighEnergy, isMelancholic, allTracks.length, googleUser?.name])
-
-  const derivedSummary = useMemo(() => {
-    return tasteDna?.summary || (
-      allTracks.length > 0
-        ? `Your profile is driven by ${allTracks.length} tracks, blending ${topArtists.length ? topArtists.slice(0, 2).join(' and ') : 'diverse melodies'} with rich musical textures, dynamic rhythms, and personal listening habits.`
-        : (googleUser?.name
-            ? `Welcome ${googleUser.name}! Your unique taste profile will evolve dynamically with every song you listen to, search, or heart. Connect your seeds or explore music to build your mix.`
-            : 'Your taste profile evolves dynamically with every song you listen to, heart, or search. Search for your favorite songs or connect Google to unlock personalized mixes.')
-    )
-  }, [tasteDna?.summary, allTracks.length, topArtists, googleUser?.name])
-
-  const genrePills = useMemo(() => {
-    const raw = (tasteDna?.primary_genres && tasteDna.primary_genres.length)
-      ? tasteDna.primary_genres
-      : (allTracks.length > 0
-          ? (isHighEnergy
-              ? ['Alternative Rock', 'Soundtrack', 'Electronic Melodic', 'Dynamic Beats']
-              : ['Indie & Alternative', 'Melodic Pop', 'Atmospheric Ambient', 'Acoustic Harmonies'])
-          : ['Global Pop & Hits', 'Indie & Alternative', 'Electronic & Chill', 'Acoustic Harmonies'])
-
-    return raw.map((g, idx) => ({
-      name: g,
-      pct: [42, 28, 18, 12][idx] || 15
-    }))
-  }, [tasteDna?.primary_genres, allTracks.length, isHighEnergy])
-
+  // 3. MODERN INTERACTIVE SONIC TASTE STUDIO
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden bg-transparent select-none gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
       {/* Sticky Translucent Top Header (Matches Downloads Section) */}

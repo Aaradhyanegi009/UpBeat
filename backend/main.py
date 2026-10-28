@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="5.2.0",
-    description="UpBeat v5.2.0 - Android Auto Performance & Headless Car Playback Engine"
+    version="5.2.1",
+    description="UpBeat v5.2.1 - React Hooks Lifecycle Fix & Global Stability"
 )
 
 app.add_middleware(
