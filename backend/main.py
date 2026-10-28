@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="4.4.7.1",
-    description="UpBeat v4.4.7.1 - Offline Music & AI Studio"
+    version="5.0.0",
+    description="UpBeat v5.0 - Live Synced Lyrics, Offline Music & AI Studio"
 )
 
 app.add_middleware(
@@ -71,9 +71,11 @@ app.add_middleware(
 
 @app.middleware("http")
 async def ensure_api_prefix(request: Request, call_next):
-    path = request.scope.get("path", "")
-    if path and not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc"):
-        request.scope["path"] = f"/api{path if path.startswith('/') else '/' + path}"
+    # Only rewrite stripped /api prefixes when running inside Vercel Multi-Services
+    if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+        path = request.scope.get("path", "")
+        if path and not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc"):
+            request.scope["path"] = f"/api{path if path.startswith('/') else '/' + path}"
     return await call_next(request)
 
 
@@ -829,6 +831,30 @@ def open_downloads_folder_endpoint():
         import subprocess
         subprocess.Popen(["open", downloads_path])
     return {"status": "ok", "path": downloads_path}
+
+
+@app.get("/api/lyrics")
+def search_lyrics_endpoint(q: str = "", track_name: str = "", artist_name: str = ""):
+    """
+    Server-side proxy for LRCLIB time-synced lyrics search.
+    """
+    headers = {"User-Agent": "UpBeat/5.0.0 (https://upbeat.app)"}
+    params: Dict[str, str] = {}
+    if q:
+        params["q"] = q
+    if track_name:
+        params["track_name"] = track_name
+    if artist_name:
+        params["artist_name"] = artist_name
+    if not params:
+        return []
+    try:
+        r = ext_requests.get("https://lrclib.net/api/search", params=params, headers=headers, timeout=8)
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print(f"Lyrics proxy error: {e}")
+    return []
 
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")

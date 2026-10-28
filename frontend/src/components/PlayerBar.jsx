@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Play, Pause, SkipForward, SkipBack, Volume2, VolumeX,
   ExternalLink, Video, Music, Heart, Loader2, Download, Check, ListMusic, ChevronUp,
-  Monitor, Compass
+  Monitor, Compass, Mic2
 } from 'lucide-react'
 import { getApiBase, hasBackend, getAudioSource, searchYouTubeStandalone, getTrackDownloadUrl, openExternalUrl } from '../standaloneApi'
 import { isTrackDownloaded, saveTrackOffline, createOfflineAudioUrl, subscribeOfflineChanges } from '../offlineStorage'
@@ -62,6 +62,7 @@ export default function PlayerBar({
   const [isShuffle, setIsShuffle] = useState(false)
   const [repeatMode, setRepeatMode] = useState('off') // 'off', 'all', 'one'
   const [showVideo, setShowVideo] = useState(false)
+  const [showLyrics, setShowLyrics] = useState(false)
   const [volume, setVolume] = useState(80)
   const [isMuted, setIsMuted] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -1217,6 +1218,22 @@ export default function PlayerBar({
           <div className="flex sm:hidden items-center gap-1.5 shrink-0">
             {track && (
               <button
+                onClick={() => {
+                  setShowLyrics(true)
+                  setNowPlayingOpen(true)
+                }}
+                className={`p-1.5 rounded-md active:scale-90 transition-all cursor-pointer ${
+                  nowPlayingOpen && showLyrics ? 'text-white bg-white/15' : 'text-zinc-400 hover:text-white'
+                }`}
+                style={nowPlayingOpen && showLyrics ? { color: albumColor.primary } : undefined}
+                title="Live Synced Lyrics"
+                aria-label="Lyrics"
+              >
+                <Mic2 className="w-4 h-4" />
+              </button>
+            )}
+            {track && (
+              <button
                 onClick={() => setNowPlayingOpen(true)}
                 className="p-1.5 rounded-md text-zinc-400 hover:text-white active:scale-90 transition-transform cursor-pointer"
                 title="Expand Now Playing"
@@ -1403,6 +1420,36 @@ export default function PlayerBar({
 
             <button
               onClick={() => {
+                if (nowPlayingOpen && showLyrics) {
+                  setShowLyrics(false)
+                } else {
+                  setShowLyrics(true)
+                  setNowPlayingOpen(true)
+                }
+              }}
+              disabled={!track}
+              title="Live Synced Lyrics"
+              aria-label="Toggle Synced Lyrics"
+              className={`p-1.5 rounded-md border text-xs transition-all cursor-pointer disabled:opacity-30 ${
+                nowPlayingOpen && showLyrics
+                  ? 'text-white'
+                  : 'bg-transparent border-transparent text-[#8e8e96] hover:text-white hover:bg-[#1a1a22]'
+              }`}
+              style={
+                nowPlayingOpen && showLyrics
+                  ? {
+                      backgroundColor: `${albumColor.primary}25`,
+                      borderColor: `${albumColor.primary}55`,
+                      color: albumColor.primary
+                    }
+                  : undefined
+              }
+            >
+              <Mic2 className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => {
                 const nextShow = !showVideo
                 setShowVideo(nextShow)
                 if (nextShow) setUseIframeFallback(true)
@@ -1556,6 +1603,9 @@ export default function PlayerBar({
         isMuted={isMuted}
         setIsMuted={setIsMuted}
         isPlayingOffline={isPlayingOffline}
+        showLyrics={showLyrics}
+        setShowLyrics={setShowLyrics}
+        onSeek={commitSeek}
       />
     </>
   )

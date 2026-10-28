@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         if let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !ver.isEmpty {
             return ver
         }
-        return "4.4.7.1"
+        return "5.0"
     }()
     let githubRepo = "AaradhyaNegi009/UpBeat"
 
