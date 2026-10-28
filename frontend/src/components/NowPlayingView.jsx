@@ -521,9 +521,9 @@ export default function NowPlayingView({
 
             {/* Playing wave overlay indicator */}
             {!showVideo && isPlaying && (
-              <div className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-1">
+              <div className="absolute bottom-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: albumColor.primary }} />
-                <span className="text-[10px] font-mono text-zinc-200 uppercase tracking-wider font-semibold">Live</span>
+                <span className="text-[10px] text-zinc-200 font-semibold">Live</span>
               </div>
             )}
           </div>
@@ -541,13 +541,13 @@ export default function NowPlayingView({
               <span>{artistName}</span>
               <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" title="Verified Track" />
               {isPlayingOffline && (
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                  OFFLINE
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                  Offline
                 </span>
               )}
             </div>
             {channelInfo && (
-              <div className="text-[11px] text-zinc-400 truncate mt-0.5 font-mono">
+              <div className="text-[11px] text-zinc-400 truncate mt-0.5 font-normal">
                 via {channelInfo}
               </div>
             )}
@@ -567,7 +567,7 @@ export default function NowPlayingView({
 
         {/* Release Date & Extra Info Badges (Hidden when lyrics view is expanded to maximize lyrics space) */}
         {!showLyrics && (
-          <div className="flex items-center flex-wrap gap-2 text-xs font-mono mt-1">
+          <div className="flex items-center flex-wrap gap-2 text-xs font-medium mt-1">
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-zinc-200">
               <Calendar className="w-3.5 h-3.5 text-zinc-400" />
               <span>Released: {releaseDateStr}</span>
@@ -609,7 +609,7 @@ export default function NowPlayingView({
           }}
           className="w-full argon-slider cursor-pointer h-1.5"
         />
-        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mt-1.5">
+        <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 mt-1.5">
           <span>{formatTime(displayTime)}</span>
           <span>{effectiveDuration > 0 ? formatTime(effectiveDuration) : (track?.duration_text || '0:00')}</span>
         </div>

@@ -1731,6 +1731,7 @@ export default function App() {
         }}
         onRemoveFromQueue={handleRemoveFromQueue}
         onClearQueue={handleClearQueue}
+        onAddToQueue={handleAddToQueue}
         upcomingTracks={(playlist?.tracks || []).slice(currentTrackIdx + 1)}
       />
 
