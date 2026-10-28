@@ -1597,9 +1597,9 @@ export default function App() {
           onCycleTheme={handleCycleTheme}
         />
 
-        <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent overflow-x-hidden">
           {activeTab === 'curator' ? (
-            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col bg-transparent scroll-smooth">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 flex flex-col bg-transparent scroll-smooth">
               <CuratorPrompt
                 prompt={prompt}
                 setPrompt={handlePromptChange}
@@ -1651,6 +1651,8 @@ export default function App() {
           ) : (
             <SonicDnaView
               mode={activeTab}
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
               tasteDna={tasteDna}
               extractedTracks={extractedTracks}
               favorites={favorites}

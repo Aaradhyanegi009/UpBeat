@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
-  RefreshCw, ExternalLink, Search, Music, Heart, Play,
+  RefreshCw, ExternalLink, Search, Music, Heart, Play, Pause,
   Sparkles, Download, Check, Loader2, ListPlus, Activity,
   Sliders, Zap, ShieldCheck, Flame, Compass, ChevronRight, Disc, X, Trash2, RotateCcw
 } from 'lucide-react'
@@ -11,6 +11,8 @@ import { GoogleIcon } from './GoogleAuthModal'
 
 export default function SonicDnaView({
   mode = 'dna',
+  currentTrack,
+  isPlaying = false,
   tasteDna,
   extractedTracks = [],
   favorites = [],
@@ -107,7 +109,7 @@ export default function SonicDnaView({
     }
   }
 
-  // 1. FAVORITES MEMORY VIEW
+  // 1. FAVORITES MEMORY VIEW (Matches Downloads UI/UX)
   if (mode === 'favorites') {
     const filteredFavs = favorites.filter((t) => {
       if (!filter.trim()) return true
@@ -119,221 +121,396 @@ export default function SonicDnaView({
     })
 
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto select-none gpu-scroll">
-        <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-500 shrink-0">
-              <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
+      <div
+        className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto overflow-x-hidden select-none gpu-scroll"
+        onClick={() => setQueueMenuIdx(null)}
+      >
+        {/* Sticky Header (Exact match to Downloads section) */}
+        <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-500 shrink-0">
+                  <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
+                </div>
+                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+                  Favourites
+                </h1>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 shrink-0">
+                  {favorites.length}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 font-normal truncate">
+                <Heart className="w-3 h-3 text-rose-400 shrink-0" />
+                <span className="truncate">
+                  {favorites.length} {favorites.length === 1 ? 'track' : 'tracks'} • Saved in your profile
+                </span>
+              </p>
             </div>
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              Favourites
-            </h2>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">
-              {favorites.length}
-            </span>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              {favorites.length > 0 && onCurateFromFavorites && (
+                <button
+                  onClick={onCurateFromFavorites}
+                  title="Generate a fresh playlist inspired by your hearted songs"
+                  className="px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md shadow-white/10"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-rose-600 fill-rose-600 shrink-0" />
+                  <span>Curate Mix</span>
+                </button>
+              )}
+            </div>
           </div>
 
+          {/* Search & Filter Bar */}
           {favorites.length > 0 && (
-            <div className="flex items-center gap-2.5 w-full sm:w-auto">
-              <div className="flex-1 sm:w-52 flex items-center bg-white/[0.06] border border-white/10 rounded-full px-3.5 py-1.5 focus-within:border-rose-500/40 transition-colors">
-                <Search className="w-3.5 h-3.5 text-zinc-400 mr-2 shrink-0" />
+            <div className="mt-3 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  placeholder="Search favourites..."
-                  className="bg-transparent text-xs text-white placeholder-zinc-400 font-medium focus:outline-none w-full"
+                  placeholder="Search favourite songs by title, artist..."
+                  className="w-full bg-white/[0.06] border border-white/10 focus:border-rose-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-400 font-medium focus:outline-none transition-colors"
                 />
-                {Boolean(filter) && (
+                {filter && (
                   <button
-                    type="button"
                     onClick={() => setFilter('')}
-                    className="text-zinc-400 hover:text-white p-0.5 cursor-pointer shrink-0"
-                    title="Clear filter"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white cursor-pointer"
                   >
-                    <X className="w-3 h-3" />
+                    ✕
                   </button>
                 )}
               </div>
-
-              {onCurateFromFavorites && (
-                <button
-                  onClick={onCurateFromFavorites}
-                  title="Generate a fresh playlist inspired by your hearted songs"
-                  className="px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shadow-md shadow-white/10 active:scale-95 shrink-0"
-                >
-                  <Sparkles className="w-3.5 h-3.5 fill-black shrink-0" />
-                  <span>Curate from Favs</span>
-                </button>
-              )}
             </div>
           )}
         </div>
 
-        <div className="flex-1">
-          {filteredFavs.length === 0 ? (
-            <div className="p-14 text-center flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-2xl border border-white/10 bg-white/[0.04] flex items-center justify-center mb-3">
-                <Heart className="w-5 h-5 text-rose-400" />
+        {/* Main Track List Content */}
+        <div className="p-4 sm:p-6 flex-1 min-h-0">
+          {favorites.length === 0 ? (
+            <div className="h-full min-h-[340px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-white/10 rounded-3xl bg-[#0c0c12]/40 backdrop-blur-md">
+              <div className="w-16 h-16 rounded-3xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500 mb-4 shadow-xl">
+                <Heart className="w-8 h-8 text-rose-400" />
               </div>
-              <p className="text-sm font-bold text-white tracking-tight">
-                {favorites.length === 0 ? 'No songs hearted yet' : 'No matching favorites'}
+              <h3 className="text-base font-bold text-white tracking-tight mb-1.5">
+                No songs hearted yet
+              </h3>
+              <p className="text-xs text-zinc-400 max-w-xs">
+                Tap the heart icon on any track while listening to save it here for instant access and AI curation.
               </p>
             </div>
+          ) : filteredFavs.length === 0 ? (
+            <div className="text-center py-12 text-zinc-400 text-xs font-medium">
+              No favourite songs match "{filter}"
+            </div>
           ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
-                  <th className="py-2.5 pl-3.5 sm:pl-6 pr-2 w-8 sm:w-10">#</th>
-                  <th className="py-2.5 px-2 sm:px-3">Track</th>
-                  <th className="py-2.5 px-3 hidden md:table-cell">Artist</th>
-                  <th className="py-2.5 px-3 hidden sm:table-cell">Style</th>
-                  <th className="py-2.5 px-2 sm:px-3 text-right pr-3.5 sm:pr-6">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04] text-xs">
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl shadow-xl">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
+                      <th className="py-2.5 px-4 w-12 text-center">#</th>
+                      <th className="py-2.5 px-4">Track</th>
+                      <th className="py-2.5 px-4">Artist</th>
+                      <th className="py-2.5 px-4 w-32">Style</th>
+                      <th className="py-2.5 px-4 w-44 text-right pr-6">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04] text-xs">
+                    {filteredFavs.map((t, idx) => {
+                      const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+                      const isCur = currentTrack && currentTrack.video_id && currentTrack.video_id === t.video_id
+                      const isCurPlaying = isCur && isPlaying
+                      const isDl = downloadedSet.has(t.video_id) || downloadedVid === t.video_id
+
+                      return (
+                        <tr
+                          key={t.video_id || idx}
+                          onClick={() => onPlayTrack(t, idx, filteredFavs)}
+                          className={`group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row ${
+                            isCur ? 'bg-rose-500/10' : ''
+                          }`}
+                        >
+                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500">
+                            {isCurPlaying ? (
+                              <div className="flex items-end justify-center gap-0.5 h-3.5 w-3.5 mx-auto">
+                                <span className="w-1 bg-rose-400 rounded-full animate-[bounce_0.8s_infinite_100ms] h-full" />
+                                <span className="w-1 bg-rose-400 rounded-full animate-[bounce_0.8s_infinite_300ms] h-2/3" />
+                                <span className="w-1 bg-rose-400 rounded-full animate-[bounce_0.8s_infinite_200ms] h-4/5" />
+                              </div>
+                            ) : (
+                              <span className="group-hover:hidden">{(idx + 1).toString().padStart(2, '0')}</span>
+                            )}
+                            <Play className={`w-3.5 h-3.5 text-white fill-current mx-auto hidden ${!isCurPlaying ? 'group-hover:block' : ''}`} />
+                          </td>
+                          <td className="py-2.5 px-4 max-w-md">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 shadow-xs">
+                                {thumb ? (
+                                  <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                ) : (
+                                  <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className={`font-bold text-xs sm:text-sm truncate tracking-tight transition-colors ${isCur ? 'text-rose-300' : 'text-white group-hover:text-rose-300'}`}>
+                                  {t.title}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-4 text-zinc-400 truncate max-w-[200px] font-medium">
+                            {t.artist}
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10">
+                              {t.vibe || 'Favorite'}
+                            </span>
+                          </td>
+                          <td
+                            className="py-2.5 px-4 text-right pr-6"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-end gap-1.5">
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setQueueMenuIdx(queueMenuIdx === `fav-d-${idx}` ? null : `fav-d-${idx}`)
+                                  }}
+                                  title="Queue options"
+                                  className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer ${
+                                    queueMenuIdx === `fav-d-${idx}` ? 'text-sky-400 bg-sky-500/20' : 'text-zinc-400 hover:text-sky-300'
+                                  }`}
+                                >
+                                  <ListPlus className="w-3.5 h-3.5" />
+                                </button>
+                                {queueMenuIdx === `fav-d-${idx}` && (
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[#14141c] border border-white/10 rounded-2xl shadow-2xl z-40 text-xs font-semibold text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-xl"
+                                  >
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        onPlayNext && onPlayNext(t)
+                                        setQueueMenuIdx(null)
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-white flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <span className="text-sky-400 font-bold">⚡</span>
+                                      <span>Play Next</span>
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        onAddToQueue && onAddToQueue(t)
+                                        setQueueMenuIdx(null)
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-zinc-300 hover:text-white flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <span className="text-emerald-400 font-bold">+</span>
+                                      <span>Add to Queue</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => onToggleFavorite && onToggleFavorite(t)}
+                                title="Remove from Favorites memory"
+                                className="p-1.5 rounded-full hover:bg-white/10 text-rose-400 transition-colors cursor-pointer"
+                              >
+                                <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                              </button>
+                              {onCurateSimilar && (
+                                <button
+                                  onClick={() => onCurateSimilar(t)}
+                                  title="Curate a playlist around this song"
+                                  className="px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>Curate</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => handleDownloadTrack(t, e)}
+                                disabled={downloadingVid === t.video_id}
+                                title={downloadingVid === t.video_id ? 'Downloading...' : isDl ? 'Downloaded (Offline ready)' : 'Download Track'}
+                                className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer ${
+                                  isDl ? 'text-emerald-400' : 'text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                {downloadingVid === t.video_id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                                ) : isDl ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <Download className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              {hasBackend && (
+                                <button
+                                  onClick={() => onPushToSafari(t)}
+                                  title="Open in Safari"
+                                  className="p-1.5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Touch Card List (Exact match to Downloads section) */}
+              <div className="md:hidden flex flex-col gap-2">
                 {filteredFavs.map((t, idx) => {
                   const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+                  const isCur = currentTrack && currentTrack.video_id && currentTrack.video_id === t.video_id
+                  const isCurPlaying = isCur && isPlaying
+                  const isDl = downloadedSet.has(t.video_id) || downloadedVid === t.video_id
+
                   return (
-                    <tr
-                      key={idx}
-                      onClick={() => onPlayTrack(t, idx)}
-                      className="group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row"
+                    <div
+                      key={t.video_id || idx}
+                      onClick={() => onPlayTrack(t, idx, filteredFavs)}
+                      className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 fast-row ${
+                        isCur
+                          ? 'bg-rose-500/15 border-rose-500/40 shadow-lg shadow-rose-950/20 backdrop-blur-xl'
+                          : 'bg-[#0c0c12]/75 border-white/[0.08] hover:bg-white/[0.07] backdrop-blur-md'
+                      }`}
                     >
-                      <td className="py-2.5 pl-3.5 sm:pl-6 pr-2 text-xs font-semibold text-zinc-500">
-                        {(idx + 1).toString().padStart(2, '0')}
-                      </td>
-                      <td className="py-2.5 px-2 sm:px-3 max-w-[210px] sm:max-w-md">
-                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden flex-shrink-0">
-                            {thumb ? (
-                              <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
-                            ) : (
-                              <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
-                            )}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="relative w-12 h-12 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10 shadow-xs">
+                          {thumb ? (
+                            <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                              <Music className="w-5 h-5" />
+                            </div>
+                          )}
+                          {isCurPlaying && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-bold tracking-tight truncate ${isCur ? 'text-rose-300' : 'text-white'}`}>
+                            {t.title}
                           </div>
-                          <div className="min-w-0">
-                            <div className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-rose-300 transition-colors tracking-tight">
-                              {t.title}
-                            </div>
-                            <div className="text-[11px] text-zinc-400 truncate md:hidden mt-0.5">
-                              {t.artist}
-                            </div>
+                          <div className="text-xs text-zinc-400 truncate mt-0.5 font-normal">
+                            {t.artist}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-zinc-400 mt-1 font-medium truncate">
+                            <span>{t.duration_text || 'Saved'}</span>
+                            <span>•</span>
+                            <span className="text-rose-400 font-bold truncate">{t.vibe || 'Favourite'}</span>
                           </div>
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 text-zinc-400 truncate max-w-[200px] hidden md:table-cell font-medium">
-                        {t.artist}
-                      </td>
-                      <td className="py-2.5 px-3 hidden sm:table-cell">
-                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white/[0.04] text-zinc-300 border border-white/10">
-                          {t.vibe || 'Favorite'}
-                        </span>
-                      </td>
-                      <td
-                        className="py-2.5 pl-2 pr-3.5 sm:pr-6 text-right"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-end gap-1.5">
-                          <div className="relative">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setQueueMenuIdx(queueMenuIdx === `fav-${idx}` ? null : `fav-${idx}`)
-                              }}
-                              title="Queue options"
-                              className={`p-1.5 rounded hover:bg-[#22222a] transition-colors cursor-pointer ${
-                                queueMenuIdx === `fav-${idx}` ? 'text-sky-400 bg-sky-500/20' : 'text-[#8e8e93] hover:text-sky-300'
-                              }`}
-                            >
-                              <ListPlus className="w-3.5 h-3.5" />
-                            </button>
-                            {queueMenuIdx === `fav-${idx}` && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[#14141c] border border-[#262638] rounded-xl shadow-2xl z-40 text-xs font-medium text-left animate-in fade-in zoom-in-95 duration-100"
-                              >
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    onPlayNext && onPlayNext(t)
-                                    setQueueMenuIdx(null)
-                                  }}
-                                  className="w-full text-left px-3 py-1.5 hover:bg-[#1e1e2c] text-[#f4f4f5] flex items-center gap-2 cursor-pointer"
-                                >
-                                  <span className="text-sky-400 font-bold">⚡</span>
-                                  <span>Play Next</span>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    onAddToQueue && onAddToQueue(t)
-                                    setQueueMenuIdx(null)
-                                  }}
-                                  className="w-full text-left px-3 py-1.5 hover:bg-[#1e1e2c] text-[#a1a1aa] hover:text-white flex items-center gap-2 cursor-pointer"
-                                >
-                                  <span className="text-emerald-400 font-bold">+</span>
-                                  <span>Add to Queue</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                      </div>
+
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative">
                           <button
-                            onClick={() => onToggleFavorite && onToggleFavorite(t)}
-                            title="Remove from Favorites memory"
-                            className="p-1.5 rounded hover:bg-[#22222a] text-rose-400 transition-colors cursor-pointer"
-                          >
-                            <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                          </button>
-                          {onCurateSimilar && (
-                            <button
-                              onClick={() => onCurateSimilar(t)}
-                              title="Curate a playlist around this song"
-                              className="px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                            >
-                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                              <span className="hidden sm:inline">Curate</span>
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => handleDownloadTrack(t, e)}
-                            disabled={downloadingVid === t.video_id}
-                            title={downloadingVid === t.video_id ? 'Downloading...' : (downloadedSet.has(t.video_id) || downloadedVid === t.video_id) ? 'Downloaded (Offline ready)' : 'Download Track'}
-                            className={`p-1.5 rounded hover:bg-[#22222a] transition-colors cursor-pointer ${
-                              (downloadedSet.has(t.video_id) || downloadedVid === t.video_id) ? 'text-emerald-400' : 'text-[#a1a1aa] hover:text-white'
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setQueueMenuIdx(queueMenuIdx === `fav-m-${idx}` ? null : `fav-m-${idx}`)
+                            }}
+                            className={`p-2 rounded-full cursor-pointer transition-colors ${
+                              queueMenuIdx === `fav-m-${idx}` ? 'text-sky-300 bg-sky-500/20' : 'text-zinc-400 hover:text-sky-300 hover:bg-white/10'
                             }`}
+                            title="Queue options"
                           >
-                            {downloadingVid === t.video_id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                            ) : (downloadedSet.has(t.video_id) || downloadedVid === t.video_id) ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Download className="w-3.5 h-3.5" />
-                            )}
+                            <ListPlus className="w-4 h-4" />
                           </button>
-                          {hasBackend && (
-                            <button
-                              onClick={() => onPushToSafari(t)}
-                              title="Open in Safari"
-                              className="hidden sm:inline-flex p-1.5 rounded hover:bg-[#22222a] text-[#a1a1aa] hover:text-white transition-colors cursor-pointer"
+                          {queueMenuIdx === `fav-m-${idx}` && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[#14141c] border border-white/10 rounded-2xl shadow-2xl z-40 text-xs font-semibold text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-xl"
                             >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onPlayNext && onPlayNext(t)
+                                  setQueueMenuIdx(null)
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-white/10 text-white flex items-center gap-2 cursor-pointer"
+                              >
+                                <span className="text-sky-400 font-bold">⚡</span>
+                                <span>Play Next</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onAddToQueue && onAddToQueue(t)
+                                  setQueueMenuIdx(null)
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-white/10 text-zinc-300 hover:text-white flex items-center gap-2 cursor-pointer"
+                              >
+                                <span className="text-emerald-400 font-bold">+</span>
+                                <span>Add to Queue</span>
+                              </button>
+                            </div>
                           )}
                         </div>
-                      </td>
-                    </tr>
+
+                        {onCurateSimilar && (
+                          <button
+                            onClick={() => onCurateSimilar(t)}
+                            title="Curate similar songs"
+                            className="p-2 rounded-full text-emerald-400 hover:bg-emerald-500/15 transition-colors cursor-pointer"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={(e) => handleDownloadTrack(t, e)}
+                          disabled={downloadingVid === t.video_id}
+                          title={downloadingVid === t.video_id ? 'Downloading...' : isDl ? 'Downloaded' : 'Download Track'}
+                          className={`p-2 rounded-full transition-colors cursor-pointer ${
+                            isDl ? 'text-emerald-400' : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {downloadingVid === t.video_id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                          ) : isDl ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => onToggleFavorite && onToggleFavorite(t)}
+                          className="p-2 text-rose-400 hover:bg-rose-500/20 rounded-full cursor-pointer transition-colors"
+                          title="Remove from Favourites"
+                        >
+                          <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
+                        </button>
+                      </div>
+                    </div>
                   )
                 })}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </div>
     )
   }
 
-  // 2. YOUTUBE & SEEDS LIBRARY VIEW
+  // 2. YOUTUBE & SEEDS LIBRARY VIEW (Matches Downloads UI/UX)
   if (mode === 'library') {
     const filteredTracks = extractedTracks.filter((t) => {
       if (!filter.trim()) return true
@@ -345,220 +522,400 @@ export default function SonicDnaView({
     })
 
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto select-none gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
-        <div className="px-3.5 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
-              <Disc className="w-4 h-4 text-sky-400" />
+      <div
+        className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto overflow-x-hidden select-none gpu-scroll"
+        onClick={() => setQueueMenuIdx(null)}
+      >
+        {/* Sticky Header (Exact match to Downloads section) */}
+        <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
+                  <Disc className="w-4 h-4 text-sky-400" />
+                </div>
+                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+                  Seeds & Library
+                </h1>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
+                  {extractedTracks.length}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 font-normal truncate">
+                <Disc className="w-3 h-3 text-sky-400 shrink-0" />
+                <span className="truncate">
+                  {extractedTracks.length} {extractedTracks.length === 1 ? 'track' : 'tracks'} • Seed tracks powering your mixes
+                </span>
+              </p>
             </div>
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              Seeds & Library
-            </h2>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
-              {extractedTracks.length}
-            </span>
-          </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            <div className="flex-1 sm:w-52 flex items-center bg-white/[0.06] border border-white/10 rounded-full px-3.5 py-1.5 focus-within:border-sky-500/40 transition-colors">
-              <Search className="w-3.5 h-3.5 text-zinc-400 mr-2 shrink-0" />
-              <input
-                type="text"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Search tracks..."
-                className="bg-transparent text-xs text-white placeholder-zinc-400 font-medium focus:outline-none w-full"
-              />
-              {Boolean(filter) && (
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              {onSyncFavorites && (
                 <button
-                  type="button"
-                  onClick={() => setFilter('')}
-                  className="text-zinc-400 hover:text-white p-0.5 cursor-pointer shrink-0"
-                  title="Clear filter"
+                  onClick={onSyncFavorites}
+                  disabled={isSyncing}
+                  title="Analyze your Liked songs in Favorites and curate a fresh playlist"
+                  className="px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md shadow-white/10 disabled:opacity-50"
                 >
-                  <X className="w-3 h-3" />
+                  <Heart className={`w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
+                  <span>{isSyncing ? 'Syncing...' : 'Sync Liked'}</span>
+                </button>
+              )}
+
+              {onClearSeeds && extractedTracks.length > 0 && (
+                <button
+                  onClick={onClearSeeds}
+                  title="Clear all seed tracks from your Library"
+                  className="p-2 rounded-full text-zinc-400 hover:text-rose-400 hover:bg-white/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </button>
               )}
             </div>
-
-            {onSyncFavorites && (
-              <button
-                onClick={onSyncFavorites}
-                disabled={isSyncing}
-                title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-                className="px-4 py-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shadow-md shadow-rose-600/20 active:scale-95 shrink-0 disabled:opacity-50"
-              >
-                <Heart className={`w-3.5 h-3.5 fill-white text-white shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
-                <span>{isSyncing ? 'Syncing...' : 'Sync Liked Songs'}</span>
-              </button>
-            )}
-
-            {onClearSeeds && extractedTracks.length > 0 && (
-              <button
-                onClick={onClearSeeds}
-                title="Clear all seed tracks from your Library"
-                className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer shrink-0"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
           </div>
+
+          {/* Search & Filter Bar */}
+          {extractedTracks.length > 0 && (
+            <div className="mt-3 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Search library songs by title, artist..."
+                  className="w-full bg-white/[0.06] border border-white/10 focus:border-sky-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-400 font-medium focus:outline-none transition-colors"
+                />
+                {filter && (
+                  <button
+                    onClick={() => setFilter('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex-1">
-          {filteredTracks.length === 0 ? (
-            <div className="p-12 text-center text-xs text-zinc-400 flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-2xl border border-white/10 bg-white/[0.04] flex items-center justify-center mb-3">
-                <Music className="w-5 h-5 text-sky-400" />
+        {/* Main Track List Content */}
+        <div className="p-4 sm:p-6 flex-1 min-h-0">
+          {extractedTracks.length === 0 ? (
+            <div className="h-full min-h-[340px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-white/10 rounded-3xl bg-[#0c0c12]/40 backdrop-blur-md">
+              <div className="w-16 h-16 rounded-3xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500 mb-4 shadow-xl">
+                <Disc className="w-8 h-8 text-sky-400" />
               </div>
-              <p className="text-sm font-bold text-white tracking-tight">
-                {extractedTracks.length === 0 ? 'Your Library starts fresh' : 'No matching tracks'}
+              <h3 className="text-base font-bold text-white tracking-tight mb-1.5">
+                Your Library starts fresh
+              </h3>
+              <p className="text-xs text-zinc-400 max-w-xs">
+                Play or heart tracks to automatically build your seed library and train your personal taste profile.
               </p>
             </div>
+          ) : filteredTracks.length === 0 ? (
+            <div className="text-center py-12 text-zinc-400 text-xs font-medium">
+              No library tracks match "{filter}"
+            </div>
           ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
-                  <th className="py-2.5 pl-3.5 sm:pl-6 pr-2 w-8 sm:w-10">#</th>
-                  <th className="py-2.5 px-2 sm:px-3">Track</th>
-                  <th className="py-2.5 px-3 hidden md:table-cell">Channel / Artist</th>
-                  <th className="py-2.5 px-2 sm:px-3 text-right pr-3.5 sm:pr-6">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04] text-xs">
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl shadow-xl">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
+                      <th className="py-2.5 px-4 w-12 text-center">#</th>
+                      <th className="py-2.5 px-4">Track</th>
+                      <th className="py-2.5 px-4">Channel / Artist</th>
+                      <th className="py-2.5 px-4 w-44 text-right pr-6">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04] text-xs">
+                    {filteredTracks.map((t, idx) => {
+                      const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+                      const isFav = isTrackFavorite ? isTrackFavorite(t) : false
+                      const isCur = currentTrack && currentTrack.video_id && currentTrack.video_id === t.video_id
+                      const isCurPlaying = isCur && isPlaying
+                      const isDl = downloadedSet.has(t.video_id) || downloadedVid === t.video_id
+
+                      return (
+                        <tr
+                          key={t.video_id || idx}
+                          onClick={() => onPlayTrack(t, idx, filteredTracks)}
+                          className={`group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row ${
+                            isCur ? 'bg-sky-500/10' : ''
+                          }`}
+                        >
+                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500">
+                            {isCurPlaying ? (
+                              <div className="flex items-end justify-center gap-0.5 h-3.5 w-3.5 mx-auto">
+                                <span className="w-1 bg-sky-400 rounded-full animate-[bounce_0.8s_infinite_100ms] h-full" />
+                                <span className="w-1 bg-sky-400 rounded-full animate-[bounce_0.8s_infinite_300ms] h-2/3" />
+                                <span className="w-1 bg-sky-400 rounded-full animate-[bounce_0.8s_infinite_200ms] h-4/5" />
+                              </div>
+                            ) : (
+                              <span className="group-hover:hidden">{(idx + 1).toString().padStart(2, '0')}</span>
+                            )}
+                            <Play className={`w-3.5 h-3.5 text-white fill-current mx-auto hidden ${!isCurPlaying ? 'group-hover:block' : ''}`} />
+                          </td>
+                          <td className="py-2.5 px-4 max-w-md">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 shadow-xs">
+                                {thumb ? (
+                                  <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                ) : (
+                                  <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className={`font-bold text-xs sm:text-sm truncate tracking-tight transition-colors ${isCur ? 'text-sky-300' : 'text-white group-hover:text-sky-300'}`}>
+                                  {t.title}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-4 text-zinc-400 truncate max-w-[200px] font-medium">
+                            {t.artist}
+                          </td>
+                          <td
+                            className="py-2.5 px-4 text-right pr-6"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-end gap-1.5">
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setQueueMenuIdx(queueMenuIdx === `lib-d-${idx}` ? null : `lib-d-${idx}`)
+                                  }}
+                                  title="Queue options"
+                                  className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer ${
+                                    queueMenuIdx === `lib-d-${idx}` ? 'text-sky-400 bg-sky-500/20' : 'text-zinc-400 hover:text-sky-300'
+                                  }`}
+                                >
+                                  <ListPlus className="w-3.5 h-3.5" />
+                                </button>
+                                {queueMenuIdx === `lib-d-${idx}` && (
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[#14141c] border border-white/10 rounded-2xl shadow-2xl z-40 text-xs font-semibold text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-xl"
+                                  >
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        onPlayNext && onPlayNext(t)
+                                        setQueueMenuIdx(null)
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-white flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <span className="text-sky-400 font-bold">⚡</span>
+                                      <span>Play Next</span>
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        onAddToQueue && onAddToQueue(t)
+                                        setQueueMenuIdx(null)
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-zinc-300 hover:text-white flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <span className="text-emerald-400 font-bold">+</span>
+                                      <span>Add to Queue</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => onToggleFavorite && onToggleFavorite(t)}
+                                title={isFav ? 'Saved in Favorites memory' : 'Save to Favorites memory'}
+                                className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer ${
+                                  isFav ? 'text-rose-400' : 'text-zinc-400 hover:text-rose-300'
+                                }`}
+                              >
+                                <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
+                              </button>
+                              {onCurateSimilar && (
+                                <button
+                                  onClick={() => onCurateSimilar(t)}
+                                  title="Curate a playlist around this song"
+                                  className="px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>Curate</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => handleDownloadTrack(t, e)}
+                                disabled={downloadingVid === t.video_id}
+                                title={downloadingVid === t.video_id ? 'Downloading...' : isDl ? 'Downloaded (Offline ready)' : 'Download Track'}
+                                className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer ${
+                                  isDl ? 'text-emerald-400' : 'text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                {downloadingVid === t.video_id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                                ) : isDl ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <Download className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              {hasBackend && (
+                                <button
+                                  onClick={() => onPushToSafari(t)}
+                                  title="Open in Safari"
+                                  className="p-1.5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Touch Card List (Exact match to Downloads section) */}
+              <div className="md:hidden flex flex-col gap-2">
                 {filteredTracks.map((t, idx) => {
                   const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
                   const isFav = isTrackFavorite ? isTrackFavorite(t) : false
+                  const isCur = currentTrack && currentTrack.video_id && currentTrack.video_id === t.video_id
+                  const isCurPlaying = isCur && isPlaying
+                  const isDl = downloadedSet.has(t.video_id) || downloadedVid === t.video_id
+
                   return (
-                    <tr
-                      key={idx}
-                      onClick={() => onPlayTrack(t, idx)}
-                      className="group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row"
+                    <div
+                      key={t.video_id || idx}
+                      onClick={() => onPlayTrack(t, idx, filteredTracks)}
+                      className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 fast-row ${
+                        isCur
+                          ? 'bg-sky-500/15 border-sky-500/40 shadow-lg shadow-sky-950/20 backdrop-blur-xl'
+                          : 'bg-[#0c0c12]/75 border-white/[0.08] hover:bg-white/[0.07] backdrop-blur-md'
+                      }`}
                     >
-                      <td className="py-2.5 pl-3.5 sm:pl-6 pr-2 text-xs font-semibold text-zinc-500">
-                        {(idx + 1).toString().padStart(2, '0')}
-                      </td>
-                      <td className="py-2.5 px-2 sm:px-3 max-w-[210px] sm:max-w-md">
-                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden flex-shrink-0">
-                            {thumb ? (
-                              <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
-                            ) : (
-                              <Music className="w-4 h-4 text-zinc-500 m-auto mt-3" />
-                            )}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="relative w-12 h-12 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10 shadow-xs">
+                          {thumb ? (
+                            <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                              <Music className="w-5 h-5" />
+                            </div>
+                          )}
+                          {isCurPlaying && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-bold tracking-tight truncate ${isCur ? 'text-sky-300' : 'text-white'}`}>
+                            {t.title}
                           </div>
-                          <div className="min-w-0">
-                            <div className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-sky-300 transition-colors tracking-tight">
-                              {t.title}
-                            </div>
-                            <div className="text-[11px] text-zinc-400 truncate md:hidden mt-0.5 font-medium">
-                              {t.artist}
-                            </div>
+                          <div className="text-xs text-zinc-400 truncate mt-0.5 font-normal">
+                            {t.artist}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-zinc-400 mt-1 font-medium truncate">
+                            <span>{t.duration_text || 'Seed'}</span>
+                            <span>•</span>
+                            <span className="text-sky-400 font-bold truncate">{t.vibe || 'Library'}</span>
                           </div>
                         </div>
-                      </td>
-                      <td className="py-2.5 px-3 text-zinc-400 truncate max-w-[200px] hidden md:table-cell font-medium">
-                        {t.artist}
-                      </td>
-                      <td
-                        className="py-2.5 pl-2 pr-3.5 sm:pr-6 text-right"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-end gap-1.5">
-                          <div className="relative">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setQueueMenuIdx(queueMenuIdx === `lib-${idx}` ? null : `lib-${idx}`)
-                              }}
-                              title="Queue options"
-                              className={`p-1.5 rounded hover:bg-[#22222a] transition-colors cursor-pointer ${
-                                queueMenuIdx === `lib-${idx}` ? 'text-sky-400 bg-sky-500/20' : 'text-[#8e8e93] hover:text-sky-300'
-                              }`}
+                      </div>
+
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setQueueMenuIdx(queueMenuIdx === `lib-m-${idx}` ? null : `lib-m-${idx}`)
+                            }}
+                            className={`p-2 rounded-full cursor-pointer transition-colors ${
+                              queueMenuIdx === `lib-m-${idx}` ? 'text-sky-300 bg-sky-500/20' : 'text-zinc-400 hover:text-sky-300 hover:bg-white/10'
+                            }`}
+                            title="Queue options"
+                          >
+                            <ListPlus className="w-4 h-4" />
+                          </button>
+                          {queueMenuIdx === `lib-m-${idx}` && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[#14141c] border border-white/10 rounded-2xl shadow-2xl z-40 text-xs font-semibold text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-xl"
                             >
-                              <ListPlus className="w-3.5 h-3.5" />
-                            </button>
-                            {queueMenuIdx === `lib-${idx}` && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[#14141c] border border-[#262638] rounded-xl shadow-2xl z-40 text-xs font-medium text-left animate-in fade-in zoom-in-95 duration-100"
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onPlayNext && onPlayNext(t)
+                                  setQueueMenuIdx(null)
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-white/10 text-white flex items-center gap-2 cursor-pointer"
                               >
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    onPlayNext && onPlayNext(t)
-                                    setQueueMenuIdx(null)
-                                  }}
-                                  className="w-full text-left px-3 py-1.5 hover:bg-[#1e1e2c] text-[#f4f4f5] flex items-center gap-2 cursor-pointer"
-                                >
-                                  <span className="text-sky-400 font-bold">⚡</span>
-                                  <span>Play Next</span>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    onAddToQueue && onAddToQueue(t)
-                                    setQueueMenuIdx(null)
-                                  }}
-                                  className="w-full text-left px-3 py-1.5 hover:bg-[#1e1e2c] text-[#a1a1aa] hover:text-white flex items-center gap-2 cursor-pointer"
-                                >
-                                  <span className="text-emerald-400 font-bold">+</span>
-                                  <span>Add to Queue</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => onToggleFavorite && onToggleFavorite(t)}
-                            title={isFav ? 'Saved in Favorites memory' : 'Save to Favorites memory'}
-                            className={`p-1.5 rounded hover:bg-[#22222a] transition-colors cursor-pointer ${
-                              isFav ? 'text-rose-400' : 'text-[#8e8e93] hover:text-rose-300'
-                            }`}
-                          >
-                            <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
-                          </button>
-                          {onCurateSimilar && (
-                            <button
-                              onClick={() => onCurateSimilar(t)}
-                              title="Curate a playlist around this song"
-                              className="px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                            >
-                              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                              <span className="hidden sm:inline">Curate</span>
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => handleDownloadTrack(t, e)}
-                            disabled={downloadingVid === t.video_id}
-                            title={downloadingVid === t.video_id ? 'Downloading...' : (downloadedSet.has(t.video_id) || downloadedVid === t.video_id) ? 'Downloaded (Offline ready)' : 'Download Track'}
-                            className={`p-1.5 rounded hover:bg-[#22222a] transition-colors cursor-pointer ${
-                              (downloadedSet.has(t.video_id) || downloadedVid === t.video_id) ? 'text-emerald-400' : 'text-[#a1a1aa] hover:text-white'
-                            }`}
-                          >
-                            {downloadingVid === t.video_id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                            ) : (downloadedSet.has(t.video_id) || downloadedVid === t.video_id) ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Download className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                          {hasBackend && (
-                            <button
-                              onClick={() => onPushToSafari(t)}
-                              title="Open in Safari"
-                              className="hidden sm:inline-flex p-1.5 rounded hover:bg-[#22222a] text-[#a1a1aa] hover:text-white transition-colors cursor-pointer"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </button>
+                                <span className="text-sky-400 font-bold">⚡</span>
+                                <span>Play Next</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onAddToQueue && onAddToQueue(t)
+                                  setQueueMenuIdx(null)
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-white/10 text-zinc-300 hover:text-white flex items-center gap-2 cursor-pointer"
+                              >
+                                <span className="text-emerald-400 font-bold">+</span>
+                                <span>Add to Queue</span>
+                              </button>
+                            </div>
                           )}
                         </div>
-                      </td>
-                    </tr>
+
+                        {onCurateSimilar && (
+                          <button
+                            onClick={() => onCurateSimilar(t)}
+                            title="Curate similar songs"
+                            className="p-2 rounded-full text-emerald-400 hover:bg-emerald-500/15 transition-colors cursor-pointer"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={(e) => handleDownloadTrack(t, e)}
+                          disabled={downloadingVid === t.video_id}
+                          title={downloadingVid === t.video_id ? 'Downloading...' : isDl ? 'Downloaded' : 'Download Track'}
+                          className={`p-2 rounded-full transition-colors cursor-pointer ${
+                            isDl ? 'text-emerald-400' : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {downloadingVid === t.video_id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                          ) : isDl ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => onToggleFavorite && onToggleFavorite(t)}
+                          className={`p-2 rounded-full cursor-pointer transition-colors ${
+                            isFav ? 'text-rose-400 hover:bg-rose-500/20' : 'text-zinc-400 hover:text-rose-300 hover:bg-white/10'
+                          }`}
+                          title={isFav ? 'Saved in Favourites' : 'Save to Favourites'}
+                        >
+                          <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
                   )
                 })}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -606,7 +963,7 @@ export default function SonicDnaView({
   }))
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto bg-transparent select-none gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden bg-transparent select-none gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
       {/* Sticky Translucent Top Header (Matches Downloads Section) */}
       <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
