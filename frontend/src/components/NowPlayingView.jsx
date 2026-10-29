@@ -687,38 +687,6 @@ export default function NowPlayingView({
           </div>
 
           <div className="flex items-center gap-1">
-            {onOpenSleepTimer && (
-              <button
-                onClick={onOpenSleepTimer}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer relative ${
-                  sleepTimer?.active
-                    ? 'text-white'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/10'
-                }`}
-                style={
-                  sleepTimer?.active
-                    ? { backgroundColor: `${albumColor.primary}30`, color: albumColor.primary }
-                    : undefined
-                }
-                title={
-                  sleepTimer?.active
-                    ? (sleepTimer.mode === 'end_of_track' ? 'Sleep Timer: End of song' : `Sleep Timer: ${Math.ceil((sleepTimer.remainingSec || 0) / 60)}m left`)
-                    : 'Sleep Timer'
-                }
-                aria-label="Sleep Timer"
-              >
-                <Moon className="w-5 h-5" />
-                {sleepTimer?.active && sleepTimer.mode === 'minutes' && (
-                  <span
-                    className="absolute top-1.5 right-1 min-w-3.5 h-3.5 px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center shadow-xs"
-                    style={{ backgroundColor: albumColor.primary }}
-                  >
-                    {Math.ceil((sleepTimer.remainingSec || 0) / 60)}m
-                  </span>
-                )}
-              </button>
-            )}
-
             {onToggleQueue && (
               <button
                 onClick={onToggleQueue}
@@ -1016,8 +984,8 @@ export default function NowPlayingView({
             <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight truncate">
               {track.title}
             </h2>
-            <div className="flex items-center gap-1.5 text-sm sm:text-base text-zinc-300 font-medium truncate mt-0.5">
-              <span>{artistName}</span>
+            <div className="flex items-center gap-1.5 text-sm sm:text-base text-zinc-300 font-medium min-w-0 mt-0.5">
+              <span className="truncate">{artistName}</span>
               <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" title="Verified Track" />
               {isPlayingOffline && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
@@ -1240,15 +1208,23 @@ export default function NowPlayingView({
             title={
               sleepTimer?.active
                 ? (sleepTimer.mode === 'end_of_track' ? 'Sleep Timer: End of song' : `Sleep Timer: ${Math.ceil((sleepTimer.remainingSec || 0) / 60)}m left`)
-                : 'Sleep Timer'
+                : 'Sleep Timer & Crossfade'
             }
-            aria-label="Sleep Timer"
+            aria-label="Sleep Timer & Crossfade"
             className={`p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer active:scale-90 relative ${
               sleepTimer?.active ? 'text-white bg-white/15' : 'text-zinc-400 hover:text-white'
             }`}
             style={sleepTimer?.active ? { color: albumColor.primary } : undefined}
           >
             <Moon className="w-5 h-5" />
+            {sleepTimer?.active && sleepTimer.mode === 'minutes' && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center shadow-xs"
+                style={{ backgroundColor: albumColor.primary }}
+              >
+                {Math.ceil((sleepTimer.remainingSec || 0) / 60)}m
+              </span>
+            )}
           </button>
         )}
 

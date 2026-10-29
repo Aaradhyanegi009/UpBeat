@@ -25,6 +25,8 @@ export default function SleepTimerModal({
   onSetTimer,
   onCancelTimer,
   onAddMinutes,
+  crossfadeSec = 0,
+  onChangeCrossfade,
   albumColor = { primary: '#6366f1', accent: '#818cf8' }
 }) {
   const [customMinutes, setCustomMinutes] = useState(20)
@@ -254,6 +256,78 @@ export default function SleepTimerModal({
             />
           </button>
         </div>
+
+        {/* Crossfade Section */}
+        {typeof onChangeCrossfade === 'function' && (
+          <div className="pt-3 border-t border-white/10 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-zinc-200 block">Crossfade</span>
+                <span className="text-[11px] text-zinc-400">Overlap transitions between songs</span>
+              </div>
+              <span
+                className="text-xs font-bold px-2.5 py-0.5 rounded-full border"
+                style={
+                  crossfadeSec > 0
+                    ? {
+                        backgroundColor: `${albumColor.primary}20`,
+                        borderColor: `${albumColor.primary}45`,
+                        color: albumColor.primary
+                      }
+                    : {
+                        backgroundColor: 'rgba(255,255,255,0.06)',
+                        borderColor: 'rgba(255,255,255,0.12)',
+                        color: '#a1a1aa'
+                      }
+                }
+              >
+                {crossfadeSec > 0 ? `${crossfadeSec}s` : 'Off'}
+              </span>
+            </div>
+
+            <input
+              type="range"
+              min="0"
+              max="12"
+              step="1"
+              value={crossfadeSec}
+              onChange={(e) => onChangeCrossfade(Number(e.target.value))}
+              style={{
+                background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent || albumColor.primary} ${(crossfadeSec / 12) * 100}%, #202028 ${(crossfadeSec / 12) * 100}%, #202028 100%)`
+              }}
+              className="w-full argon-slider cursor-pointer h-1.5"
+            />
+
+            <div className="flex items-center justify-between gap-1.5">
+              {[0, 2, 5, 8, 12].map((sec) => {
+                const active = crossfadeSec === sec
+                return (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => onChangeCrossfade(sec)}
+                    className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                      active
+                        ? 'text-white border-white/30 bg-white/15'
+                        : 'text-zinc-400 border-white/10 bg-white/[0.03] hover:text-white hover:bg-white/[0.08]'
+                    }`}
+                    style={
+                      active
+                        ? {
+                            backgroundColor: `${albumColor.primary}25`,
+                            borderColor: `${albumColor.primary}55`,
+                            color: '#ffffff'
+                          }
+                        : undefined
+                    }
+                  >
+                    {sec === 0 ? 'Off' : `${sec}s`}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

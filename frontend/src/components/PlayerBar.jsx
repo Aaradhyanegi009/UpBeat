@@ -54,11 +54,34 @@ export default function PlayerBar({
   queueCount = 0,
   isQueueOpen = false,
   isNowPlayingOpen,
-  setIsNowPlayingOpen
+  setIsNowPlayingOpen,
+  crossfadeSec: externalCrossfadeSec,
+  setCrossfadeSec: externalSetCrossfadeSec
 }) {
   const [internalNowPlaying, setInternalNowPlaying] = useState(false)
   const nowPlayingOpen = typeof isNowPlayingOpen === 'boolean' ? isNowPlayingOpen : internalNowPlaying
   const setNowPlayingOpen = setIsNowPlayingOpen || setInternalNowPlaying
+
+  const [internalCrossfadeSec, setInternalCrossfadeSec] = useState(() => {
+    try {
+      const saved = localStorage.getItem('upbeat_crossfade_sec')
+      return saved !== null ? Math.max(0, Math.min(12, parseInt(saved, 10) || 0)) : 5
+    } catch {
+      return 5
+    }
+  })
+  const effectiveCrossfadeSec = typeof externalCrossfadeSec === 'number' ? externalCrossfadeSec : internalCrossfadeSec
+  const handleChangeCrossfade = useCallback((val) => {
+    const clean = Math.max(0, Math.min(12, Math.round(Number(val) || 0)))
+    if (externalSetCrossfadeSec) {
+      externalSetCrossfadeSec(clean)
+    } else {
+      setInternalCrossfadeSec(clean)
+    }
+    try {
+      localStorage.setItem('upbeat_crossfade_sec', String(clean))
+    } catch {}
+  }, [externalSetCrossfadeSec])
 
   const [isShuffle, setIsShuffle] = useState(false)
   const [repeatMode, setRepeatMode] = useState('off') // 'off', 'all', 'one'
@@ -87,6 +110,22 @@ export default function PlayerBar({
   useEffect(() => {
     sleepTimerRef.current = sleepTimer
   }, [sleepTimer])
+
+  const crossfadeSecRef = useRef(effectiveCrossfadeSec)
+  const autoCrossfadeDurationMsRef = useRef(0)
+  const volumeRef = useRef(volume)
+  const isMutedRef = useRef(isMuted)
+  const repeatModeRef = useRef(repeatMode)
+  useEffect(() => {
+    crossfadeSecRef.current = effectiveCrossfadeSec
+  }, [effectiveCrossfadeSec])
+  useEffect(() => {
+    volumeRef.current = volume
+    isMutedRef.current = isMuted
+  }, [volume, isMuted])
+  useEffect(() => {
+    repeatModeRef.current = repeatMode
+  }, [repeatMode])
 
   const audioRefA = useRef(null)
   const audioRefB = useRef(null)
@@ -731,9 +770,14 @@ export default function PlayerBar({
         return
       }
 
-      if (isPrevPlaying && isPlayingRef.current) {
-        // Smooth ~1 sec seamless transition: target audio starts at 0 volume and fades in,
-        // while the previous song keeps playing and smoothly fades out!
+      const xfadeSec = Number(crossfadeSecRef.current) || 0
+      const autoFadeMs = autoCrossfadeDurationMsRef.current
+      autoCrossfadeDurationMsRef.current = 0
+
+      if (isPrevPlaying && isPlayingRef.current && xfadeSec > 0) {
+        // Configurable dual-deck crossfade:
+        // - Full user-configured duration (2s–12s) when auto-transitioning at end of track
+        // - Snappy <=1.5s blend when manually skipping mid-track
         targetAudio.volume = 0
         try {
           await targetAudio.play()
@@ -756,19 +800,24 @@ export default function PlayerBar({
         const oldAudio = currentActive
         const oldStartVol = oldAudio.volume
         const fadeStart = Date.now()
-        const fadeDuration = 800 // ~1 sec crossfade
+        const fadeDuration = autoFadeMs > 0 ? autoFadeMs : Math.min(xfadeSec * 1000, 1500)
 
         fadeIntervalRef.current = setInterval(() => {
           const elapsed = Date.now() - fadeStart
           const progress = Math.min(1, elapsed / fadeDuration)
+          const liveTargetVol = isMutedRef.current ? 0 : volumeRef.current / 100
 
-          if (targetAudio) targetAudio.volume = targetVol * progress
-          if (oldAudio) oldAudio.volume = Math.max(0, oldStartVol * (1 - progress))
+          // Equal-power cosine crossfade curve prevents volume dip in the middle of the overlap
+          const fadeIn = Math.sin(progress * Math.PI * 0.5)
+          const fadeOut = Math.cos(progress * Math.PI * 0.5)
+
+          if (targetAudio) targetAudio.volume = Math.min(1, Math.max(0, liveTargetVol * fadeIn))
+          if (oldAudio) oldAudio.volume = Math.min(1, Math.max(0, oldStartVol * fadeOut))
 
           if (progress >= 1) {
             clearInterval(fadeIntervalRef.current)
             fadeIntervalRef.current = null
-            if (targetAudio) targetAudio.volume = targetVol
+            if (targetAudio) targetAudio.volume = liveTargetVol
             if (oldAudio) {
               oldAudio.pause()
               oldAudio.src = ''
@@ -1014,6 +1063,24 @@ export default function PlayerBar({
           Math.abs(cur - rawDur / 2) <= 3.0 &&
           timeSinceAdvance >= 1800
 
+        // Early Overlap Crossfade Trigger: start next song `xfadeSec` seconds before current song ends
+        const xfade = Number(crossfadeSecRef.current) || 0
+        const isEndSleep = sleepTimerRef.current?.active && sleepTimerRef.current?.mode === 'end_of_track'
+        if (
+          xfade > 0 &&
+          repeatModeRef.current !== 'one' &&
+          !isEndSleep &&
+          targetDur > xfade + 6 &&
+          cur >= targetDur - xfade &&
+          cur > 2 &&
+          !endedTriggeredRef.current
+        ) {
+          endedTriggeredRef.current = true
+          autoCrossfadeDurationMsRef.current = xfade * 1000
+          onNextRef.current()
+          return
+        }
+
         if ((isEnded || reachedTargetEnd || stalledNearEnd || isSbr2xFreeze) && !endedTriggeredRef.current && cur > 0.5) {
           endedTriggeredRef.current = true
           if (handleTrackEnded()) return
@@ -1187,12 +1254,26 @@ export default function PlayerBar({
               if (!isDocumentHiddenRef.current) {
                 setCurrentTime(cur)
               }
+              const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
               if (sleepTimerRef.current?.active && sleepTimerRef.current?.mode === 'end_of_track' && sleepTimerRef.current?.fadeOut) {
-                const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
                 if (targetDur > 15 && cur >= targetDur - 15) {
                   const factor = Math.max(0, (targetDur - cur) / 15)
                   const baseVol = isMuted ? 0 : volume / 100
                   e.currentTarget.volume = baseVol * factor
+                }
+              } else {
+                const xfade = Number(crossfadeSecRef.current) || 0
+                if (
+                  xfade > 0 &&
+                  repeatModeRef.current !== 'one' &&
+                  targetDur > xfade + 6 &&
+                  cur >= targetDur - xfade &&
+                  cur > 2 &&
+                  !endedTriggeredRef.current
+                ) {
+                  endedTriggeredRef.current = true
+                  autoCrossfadeDurationMsRef.current = xfade * 1000
+                  onNextRef.current()
                 }
               }
             }
@@ -1838,6 +1919,8 @@ export default function PlayerBar({
         onSetTimer={handleSetSleepTimer}
         onCancelTimer={handleCancelSleepTimer}
         onAddMinutes={handleAddSleepMinutes}
+        crossfadeSec={effectiveCrossfadeSec}
+        onChangeCrossfade={handleChangeCrossfade}
         albumColor={albumColor}
       />
     </>

@@ -66,8 +66,8 @@ jobs:
       - name: Publish UpBeat.apk and macOS Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v5.3.3' }}
-          name: ${{ github.ref_type == 'tag' && format('UpBeat {0}', github.ref_name) || 'UpBeat v5.3.3 — Live Station Artwork, Dynamic Stations & Sleep Timer' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v5.4.0' }}
+          name: ${{ github.ref_type == 'tag' && format('UpBeat {0}', github.ref_name) || 'UpBeat v5.4.0 — Dual-Deck Equal-Power Crossfade (0s-12s) & Streamlined Now Playing UI' }}
           files: |
             android/app/build/outputs/apk/debug/UpBeat.apk
             UpBeat-macOS.zip

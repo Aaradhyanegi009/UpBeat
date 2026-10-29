@@ -131,7 +131,9 @@ export default function Sidebar({
   themeInfo,
   themePreference = 'auto',
   onSelectThemePreference,
-  onCycleTheme
+  onCycleTheme,
+  crossfadeSec = 5,
+  setCrossfadeSec
 }) {
   const activePreset = PRESET_MODES.find((p) => p.id === activePresetId)
   const isPresetCustomized = activePreset && energyLevel !== activePreset.energy
@@ -491,12 +493,38 @@ export default function Sidebar({
               className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-white/10 rounded-full appearance-none"
             />
           </div>
+
+          {typeof setCrossfadeSec === 'function' && (
+            <>
+              <div className="h-[1px] bg-white/10" />
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-white tracking-tight">
+                    Crossfade
+                  </span>
+                  <span className="text-xs font-bold text-emerald-400">
+                    {crossfadeSec > 0 ? `${crossfadeSec}s` : 'Off'}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="12"
+                  step="1"
+                  value={crossfadeSec}
+                  onChange={(e) => setCrossfadeSec(parseInt(e.target.value, 10))}
+                  className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-white/10 rounded-full appearance-none"
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* App Info */}
         <div className="pt-2 text-xs font-semibold text-zinc-400 border-t border-white/10 flex items-center justify-between">
           <span className="text-zinc-400">UpBeat Music</span>
-          <span className="text-emerald-400/80">v5.3.3</span>
+          <span className="text-emerald-400/80">v5.4.0</span>
         </div>
       </div>
 

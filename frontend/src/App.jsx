@@ -149,6 +149,21 @@ export default function App() {
   const [activePresetId, setActivePresetId] = useState(() => (hasBackend() ? 'ost' : null))
   const [energyLevel, setEnergyLevel] = useState(78) // Matches 'ost' preset default (78%)
   const [trackCount, setTrackCount] = useState(8)
+  const [crossfadeSec, setCrossfadeSecState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('upbeat_crossfade_sec')
+      return saved !== null ? Math.max(0, Math.min(12, parseInt(saved, 10) || 0)) : 5
+    } catch {
+      return 5
+    }
+  })
+  const setCrossfadeSec = (val) => {
+    const clean = Math.max(0, Math.min(12, Math.round(Number(val) || 0)))
+    setCrossfadeSecState(clean)
+    try {
+      localStorage.setItem('upbeat_crossfade_sec', String(clean))
+    } catch {}
+  }
   const [activeTab, setActiveTab] = useState('curator')
   const [searchMode, setSearchMode] = useState('direct')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -1605,6 +1620,8 @@ export default function App() {
           themePreference={themePreference}
           onSelectThemePreference={handleSelectThemePreference}
           onCycleTheme={handleCycleTheme}
+          crossfadeSec={crossfadeSec}
+          setCrossfadeSec={setCrossfadeSec}
         />
 
         <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent overflow-x-hidden">
@@ -1730,6 +1747,8 @@ export default function App() {
         isQueueOpen={isQueueOpen}
         isNowPlayingOpen={isNowPlayingOpen}
         setIsNowPlayingOpen={setIsNowPlayingOpen}
+        crossfadeSec={crossfadeSec}
+        setCrossfadeSec={setCrossfadeSec}
       />
 
       {/* Playback Queue Drawer */}
