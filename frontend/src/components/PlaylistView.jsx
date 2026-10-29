@@ -1,54 +1,184 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Play, Pause, ExternalLink, Loader2, Music,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Heart, Info, KeyRound,
   ListMusic, ListPlus, Disc, Sparkles, Download, Check, MoreVertical, Radio, Volume2, LayoutGrid, Table
 } from 'lucide-react'
-import { getTrackDownloadUrl, getAudioSource } from '../standaloneApi'
+import { getTrackDownloadUrl, getAudioSource, fetchOfficialYoutubeCharts, DEFAULT_YT_CHARTS_STATIONS } from '../standaloneApi'
 import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscribeOfflineChanges } from '../offlineStorage'
 
-const CURATED_STATIONS = [
+const DEFAULT_SEED_IDS = new Set([
+  'F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE',
+  'CXDUXjsU5ao', 'TCd6PfxOy0Y', 'QpxFcMYRV08'
+])
+
+const GENERIC_CHANNELS = new Set([
+  'jusa music', '7clouds', 't-series', 'sony music india', 'zee music company',
+  'yrf', 'tips official', 'speed records', 'youtube', 'unknown artist',
+  'oaf', 'annapurna films', 'saregama music', 'eros now music'
+])
+
+const GENERIC_VIBES = new Set([
+  'yt music', 'youtube', 'playlist', 'direct match', 'song', 'video'
+])
+
+const STATION_STYLES = [
   {
-    id: 'sawano_radio',
-    title: 'Hiroyuki Sawano & Epic OST',
-    subtitle: 'Orchestral Rock • Anime Anthems',
-    query: 'Hiroyuki Sawano best epic soundtrack orchestral anime openings',
     thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
     color: 'from-amber-600/40 to-black'
   },
   {
-    id: 'focus_radio',
-    title: 'Deep Focus & Cyber Terminal',
-    subtitle: 'Minimal Synth • Dark Ambient',
-    query: 'Deep focus instrumental ambient electronic beats for programming',
     thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
     color: 'from-emerald-600/40 to-black'
   },
   {
-    id: 'velocity_radio',
-    title: 'High-Velocity DnB Flow',
-    subtitle: 'Fast Drum & Bass • Driving Rhythm',
-    query: 'Fast paced drum and bass dark synthwave driving electronic',
     thumbnail: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=600&q=80',
     color: 'from-cyan-600/40 to-black'
   },
   {
-    id: 'nocturne_radio',
-    title: 'Nocturnal Lo-Fi & Monogatari',
-    subtitle: 'Chill Aesthetic • Melodic Beats',
-    query: 'Nocturnal lofi ambient Monogatari anime aesthetics late night',
     thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
     color: 'from-purple-600/40 to-black'
   },
   {
-    id: 'hindi_radio',
-    title: 'New Hindi Songs & Chart Hits',
-    subtitle: 'Latest Trending • Bollywood Beats',
-    query: 'New Hindi songs latest releases 2025 chartbusters',
     thumbnail: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80',
     color: 'from-rose-600/40 to-black'
+  },
+  {
+    thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=600&q=80',
+    color: 'from-indigo-600/40 to-black'
   }
 ]
+
+function extractPrimaryArtist(track) {
+  if (!track) return ''
+  let rawArtist = (track.artist || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim()
+  const rawTitle = (track.title || '').trim()
+
+  if ((!rawArtist || GENERIC_CHANNELS.has(rawArtist.toLowerCase())) && rawTitle.includes(' - ')) {
+    const candidate = rawTitle.split(' - ')[0].replace(/^#VIDEO\s*\|\s*/i, '').trim()
+    if (candidate && candidate.length >= 2 && candidate.length <= 32) {
+      rawArtist = candidate
+    }
+  }
+  if (!rawArtist || GENERIC_CHANNELS.has(rawArtist.toLowerCase())) return ''
+
+  const primary = rawArtist
+    .split(/\s+(?:feat\.?|ft\.?|&|x)\s+|,\s*/i)[0]
+    .replace(/\([^)]*\)/g, '')
+    .trim()
+
+  return primary.length >= 2 && primary.length <= 28 ? primary : ''
+}
+
+function buildDynamicStations(userTracks, tasteDna, chartStations) {
+  const charts = chartStations?.length ? chartStations : DEFAULT_YT_CHARTS_STATIONS
+
+  // New user threshold: if user does not have more than 5 songs, sync Official YouTube Charts
+  if (!userTracks || userTracks.length <= 5) {
+    return charts
+  }
+
+  const artists = []
+  const seenArtists = new Set()
+  const vibes = []
+  const seenVibes = new Set()
+
+  if (Array.isArray(tasteDna?.primary_genres)) {
+    for (const g of tasteDna.primary_genres) {
+      const cleanG = String(g || '').trim()
+      if (cleanG && !seenVibes.has(cleanG.toLowerCase())) {
+        seenVibes.add(cleanG.toLowerCase())
+        vibes.push(cleanG)
+      }
+    }
+  }
+
+  for (const t of userTracks) {
+    const art = extractPrimaryArtist(t)
+    if (art && !seenArtists.has(art.toLowerCase())) {
+      seenArtists.add(art.toLowerCase())
+      artists.push(art)
+    }
+    const v = String(t?.vibe || '').trim()
+    if (v && !GENERIC_VIBES.has(v.toLowerCase()) && !seenVibes.has(v.toLowerCase())) {
+      seenVibes.add(v.toLowerCase())
+      vibes.push(v)
+    }
+  }
+
+  const dynamic = []
+
+  if (artists.length >= 2) {
+    dynamic.push({
+      id: `dyn_artists_1_${artists[0]}_${artists[1]}`,
+      title: `${artists[0]} & ${artists[1]}`,
+      subtitle: `${vibes[0] || 'Essential Mix'} • ${vibes[1] || 'Favorites Radio'}`,
+      query: `${artists[0]} ${artists[1]} best songs mix`,
+      thumbnail: STATION_STYLES[0].thumbnail,
+      color: STATION_STYLES[0].color
+    })
+  } else if (artists.length === 1) {
+    dynamic.push({
+      id: `dyn_artist_solo_${artists[0]}`,
+      title: `${artists[0]} Radio`,
+      subtitle: `${vibes[0] || 'Top Favorites'} • Personalized Mix`,
+      query: `${artists[0]} best songs mix`,
+      thumbnail: STATION_STYLES[0].thumbnail,
+      color: STATION_STYLES[0].color
+    })
+  }
+
+  if (artists.length >= 4) {
+    dynamic.push({
+      id: `dyn_artists_2_${artists[2]}_${artists[3]}`,
+      title: `${artists[2]} & ${artists[3]}`,
+      subtitle: `${vibes[1] || 'Liked Rotation'} • Curated Flow`,
+      query: `${artists[2]} ${artists[3]} hit songs mix`,
+      thumbnail: STATION_STYLES[1].thumbnail,
+      color: STATION_STYLES[1].color
+    })
+  }
+
+  if (vibes.length >= 2) {
+    const seedArtists = artists.slice(0, 2).join(' ')
+    dynamic.push({
+      id: `dyn_vibe_${vibes[0]}_${vibes[1]}`,
+      title: `${vibes[0]} & ${vibes[1]}`,
+      subtitle: tasteDna?.archetype ? `${tasteDna.archetype} • Sonic DNA` : `Custom Vibe • ${artists[0] || 'Curated'}`,
+      query: `${vibes[0]} ${vibes[1]} ${seedArtists} best tracks`,
+      thumbnail: STATION_STYLES[2].thumbnail,
+      color: STATION_STYLES[2].color
+    })
+  }
+
+  if (artists.length >= 6) {
+    dynamic.push({
+      id: `dyn_artists_3_${artists[4]}_${artists[5]}`,
+      title: `${artists[4]} & ${artists[5]}`,
+      subtitle: `${vibes[2] || 'Discovery Mix'} • Similar Artists`,
+      query: `${artists[4]} ${artists[5]} popular songs radio`,
+      thumbnail: STATION_STYLES[3].thumbnail,
+      color: STATION_STYLES[3].color
+    })
+  }
+
+  if (artists.length >= 8) {
+    dynamic.push({
+      id: `dyn_artists_4_${artists[6]}_${artists[7]}`,
+      title: `${artists[6]} & ${artists[7]}`,
+      subtitle: `${vibes[3] || 'On Repeat'} • Heavy Rotation`,
+      query: `${artists[6]} ${artists[7]} top tracks playlist`,
+      thumbnail: STATION_STYLES[4].thumbnail,
+      color: STATION_STYLES[4].color
+    })
+  }
+
+  for (const chart of charts.slice(0, 2)) {
+    dynamic.push(chart)
+  }
+
+  return dynamic.length >= 3 ? dynamic : charts
+}
 
 function cleanMusicalRationale(text) {
   if (!text) return 'Selected for its harmonic and rhythmic alignment.'
@@ -93,7 +223,11 @@ export default function PlaylistView({
   onSelectStarter,
   needsSetup,
   onOpenSettings,
-  googleUser
+  googleUser,
+  favorites = [],
+  extractedTracks = [],
+  offlineTracks = [],
+  tasteDna = null
 }) {
   const [viewMode, setViewMode] = useState('grid') // 'grid' (YouTube Music Quick picks) vs 'table'
   const [expandedIdx, setExpandedIdx] = useState(null)
@@ -102,7 +236,52 @@ export default function PlaylistView({
   const [downloadedVid, setDownloadedVid] = useState(null)
   const [downloadedSet, setDownloadedSet] = useState(new Set())
   const [activeMenuIdx, setActiveMenuIdx] = useState(null)
+  const [chartStations, setChartStations] = useState(DEFAULT_YT_CHARTS_STATIONS)
   const gridScrollRef = useRef(null)
+  const stationScrollRef = useRef(null)
+
+  useEffect(() => {
+    let active = true
+    fetchOfficialYoutubeCharts().then((charts) => {
+      if (active && Array.isArray(charts) && charts.length > 0) {
+        setChartStations(charts)
+      }
+    }).catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // Aggregate user's real curated/personal tracks (excluding default seed placeholders)
+  const userPersonalTracks = useMemo(() => {
+    const out = []
+    const seen = new Set()
+    const customSeeds = (extractedTracks || []).filter((t) => !DEFAULT_SEED_IDS.has(t?.video_id))
+    for (const t of [...(favorites || []), ...(offlineTracks || []), ...customSeeds]) {
+      if (!t) continue
+      const key = t.video_id || `${t.title || ''}::${t.artist || ''}`.toLowerCase()
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push(t)
+    }
+    return out
+  }, [favorites, offlineTracks, extractedTracks])
+
+  const dynamicStations = useMemo(
+    () => buildDynamicStations(userPersonalTracks, tasteDna, chartStations),
+    [userPersonalTracks, tasteDna, chartStations]
+  )
+
+  const handleSelectStation = (station) => {
+    if (!station) return
+    if (station.browse_id && onSelectMatchedPlaylist) {
+      onSelectMatchedPlaylist(station)
+      return
+    }
+    if (onSelectStarter && station.query) {
+      onSelectStarter(station.query)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -177,6 +356,16 @@ export default function PlaylistView({
     }
   }
 
+  const scrollStations = (direction) => {
+    if (stationScrollRef.current) {
+      const scrollAmount = stationScrollRef.current.clientWidth * 0.75
+      stationScrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      })
+    }
+  }
+
   // Loading Skeleton State
   if (isGenerating || isSearching) {
     return (
@@ -213,10 +402,10 @@ export default function PlaylistView({
 
         {/* Curated Stations Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {CURATED_STATIONS.map((station) => (
+          {dynamicStations.map((station) => (
             <div
               key={station.id}
-              onClick={() => onSelectStarter && onSelectStarter(station.query)}
+              onClick={() => handleSelectStation(station)}
               className="group relative h-44 rounded-3xl overflow-hidden cursor-pointer border border-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:scale-[1.01]"
             >
               <img
@@ -231,12 +420,12 @@ export default function PlaylistView({
                   Radio Station
                 </span>
                 
-                <div className="flex items-end justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-white group-hover:text-rose-200 transition-colors tracking-tight">
+                <div className="flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold text-white group-hover:text-rose-200 transition-colors tracking-tight truncate">
                       {station.title}
                     </h3>
-                    <p className="text-xs text-zinc-300 mt-1 font-medium">{station.subtitle}</p>
+                    <p className="text-xs text-zinc-300 mt-1 font-medium truncate">{station.subtitle}</p>
                   </div>
 
                   <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all shadow-lg shadow-black/40 shrink-0 ml-2">
@@ -665,20 +854,44 @@ export default function PlaylistView({
 
       {/* 4. "Listen together" / Curated Stations Carousel (Matches Screenshot Second Section!) */}
       <div className="px-3.5 sm:px-6 pt-8 pb-4">
-        <div className="mb-3">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 font-bold block mb-0.5">
-            STATION
-          </span>
-          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            Listen together
-          </h2>
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 font-bold block mb-0.5">
+              STATION
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              Listen together
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => scrollStations('left')}
+              className="w-8 h-8 rounded-full border border-white/20 hover:border-white/50 hover:bg-white/10 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer"
+              title="Previous stations"
+              aria-label="Scroll stations left"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => scrollStations('right')}
+              className="w-8 h-8 rounded-full border border-white/20 hover:border-white/50 hover:bg-white/10 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer"
+              title="Next stations"
+              aria-label="Scroll stations right"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2">
-          {CURATED_STATIONS.map((station) => (
+        <div
+          ref={stationScrollRef}
+          className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth"
+        >
+          {dynamicStations.map((station) => (
             <div
               key={station.id}
-              onClick={() => onSelectStarter && onSelectStarter(station.query)}
+              onClick={() => handleSelectStation(station)}
               className="group relative w-64 sm:w-72 h-44 rounded-2xl overflow-hidden cursor-pointer shrink-0 border border-white/[0.08] hover:border-white/30 transition-all shadow-xl"
             >
               <img
@@ -693,12 +906,12 @@ export default function PlaylistView({
                   Station
                 </span>
                 
-                <div className="flex items-end justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-white group-hover:text-rose-300 transition-colors">
+                <div className="flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-white group-hover:text-rose-300 transition-colors truncate">
                       {station.title}
                     </h3>
-                    <p className="text-[11px] text-zinc-300 mt-0.5">{station.subtitle}</p>
+                    <p className="text-[11px] text-zinc-300 mt-0.5 truncate">{station.subtitle}</p>
                   </div>
 
                   <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:scale-105 transition-all shadow-md shadow-white/30 shrink-0 ml-2">

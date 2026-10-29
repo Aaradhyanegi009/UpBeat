@@ -1069,20 +1069,29 @@ export default function App() {
       }
 
       if (tracks.length > 0) {
-        setPlaylist((prev) =>
-          prev
-            ? {
-                ...prev,
-                playlist_title: pl.title,
-                subtitle: `${pl.subtitle} • 0 AI tokens`,
-                vibe_description: `${pl.subtitle} • Prepared playlist`,
-                active_source: 'playlist',
-                active_browse_id: pl.browse_id,
-                tracks
-              }
-            : prev
-        )
+        setPlaylist((prev) => ({
+          ...(prev || {
+            is_direct_search: true,
+            search_query: pl.title,
+            matched_playlists: [pl],
+            youtube_results: [],
+            song_results: []
+          }),
+          playlist_title: pl.title,
+          subtitle: `${pl.subtitle} • 0 AI tokens`,
+          vibe_description: `${pl.subtitle} • Prepared playlist`,
+          active_source: 'playlist',
+          active_browse_id: pl.browse_id,
+          tracks
+        }))
+        if (!currentTrack) {
+          setCurrentTrack(tracks[0])
+          setCurrentTrackIdx(0)
+        }
         showNotify(`Loaded "${pl.title}" (${tracks.length} tracks • 0 tokens)`, 'info')
+      } else if (pl.query) {
+        setPrompt(pl.query)
+        handleDirectSearch(pl.query, 'auto')
       } else {
         showNotify('Could not load tracks from that playlist', 'warning')
       }
@@ -1638,6 +1647,10 @@ export default function App() {
                 needsSetup={!isConfigured()}
                 onOpenSettings={() => setShowKeyModal(true)}
                 googleUser={googleUser}
+                favorites={favorites}
+                extractedTracks={extractedTracks}
+                offlineTracks={offlineTracks}
+                tasteDna={tasteDna}
               />
             </div>
           ) : activeTab === 'offline' ? (
