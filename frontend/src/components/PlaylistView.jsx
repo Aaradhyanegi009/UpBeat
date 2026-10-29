@@ -22,32 +22,22 @@ const GENERIC_VIBES = new Set([
   'yt music', 'youtube', 'playlist', 'direct match', 'song', 'video'
 ])
 
-const STATION_STYLES = [
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
-    color: 'from-amber-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
-    color: 'from-emerald-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=600&q=80',
-    color: 'from-cyan-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
-    color: 'from-purple-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80',
-    color: 'from-rose-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=600&q=80',
-    color: 'from-indigo-600/40 to-black'
-  }
+const STATION_COLORS = [
+  'from-amber-600/40 to-black',
+  'from-emerald-600/40 to-black',
+  'from-cyan-600/40 to-black',
+  'from-purple-600/40 to-black',
+  'from-rose-600/40 to-black',
+  'from-indigo-600/40 to-black'
 ]
+
+function trackArtwork(track) {
+  if (!track) return ''
+  if (track.video_id && track.video_id.length === 11) {
+    return `https://i.ytimg.com/vi/${track.video_id}/hqdefault.jpg`
+  }
+  return track.thumbnail || ''
+}
 
 function extractPrimaryArtist(track) {
   if (!track) return ''
@@ -79,8 +69,9 @@ function buildDynamicStations(userTracks, tasteDna, chartStations) {
   }
 
   const artists = []
-  const seenArtists = new Set()
+  const artistArt = new Map() // artist -> artwork of the user's own track by that artist
   const vibes = []
+  const vibeArt = new Map()
   const seenVibes = new Set()
 
   if (Array.isArray(tasteDna?.primary_genres)) {
@@ -95,81 +86,103 @@ function buildDynamicStations(userTracks, tasteDna, chartStations) {
 
   for (const t of userTracks) {
     const art = extractPrimaryArtist(t)
-    if (art && !seenArtists.has(art.toLowerCase())) {
-      seenArtists.add(art.toLowerCase())
+    const key = art.toLowerCase()
+    if (art && !artistArt.has(key)) {
+      artistArt.set(key, trackArtwork(t))
       artists.push(art)
     }
     const v = String(t?.vibe || '').trim()
-    if (v && !GENERIC_VIBES.has(v.toLowerCase()) && !seenVibes.has(v.toLowerCase())) {
-      seenVibes.add(v.toLowerCase())
-      vibes.push(v)
+    const vKey = v.toLowerCase()
+    if (v && !GENERIC_VIBES.has(vKey)) {
+      if (!seenVibes.has(vKey)) {
+        seenVibes.add(vKey)
+        vibes.push(v)
+      }
+      if (!vibeArt.has(vKey)) vibeArt.set(vKey, trackArtwork(t))
     }
   }
 
+  // Keep every card visually distinct: never reuse the same artwork twice
+  const usedArt = new Set()
+  const pickArt = (...candidates) => {
+    for (const c of candidates) {
+      if (c && !usedArt.has(c)) {
+        usedArt.add(c)
+        return c
+      }
+    }
+    for (const t of userTracks) {
+      const c = trackArtwork(t)
+      if (c && !usedArt.has(c)) {
+        usedArt.add(c)
+        return c
+      }
+    }
+    return candidates.find(Boolean) || charts[0]?.thumbnail || ''
+  }
+  const artOf = (name) => artistArt.get((name || '').toLowerCase())
+
   const dynamic = []
+  const push = (station) => {
+    dynamic.push({ ...station, color: STATION_COLORS[dynamic.length % STATION_COLORS.length] })
+  }
 
   if (artists.length >= 2) {
-    dynamic.push({
+    push({
       id: `dyn_artists_1_${artists[0]}_${artists[1]}`,
       title: `${artists[0]} & ${artists[1]}`,
       subtitle: `${vibes[0] || 'Essential Mix'} • ${vibes[1] || 'Favorites Radio'}`,
       query: `${artists[0]} ${artists[1]} best songs mix`,
-      thumbnail: STATION_STYLES[0].thumbnail,
-      color: STATION_STYLES[0].color
+      thumbnail: pickArt(artOf(artists[0]), artOf(artists[1]))
     })
   } else if (artists.length === 1) {
-    dynamic.push({
+    push({
       id: `dyn_artist_solo_${artists[0]}`,
       title: `${artists[0]} Radio`,
       subtitle: `${vibes[0] || 'Top Favorites'} • Personalized Mix`,
       query: `${artists[0]} best songs mix`,
-      thumbnail: STATION_STYLES[0].thumbnail,
-      color: STATION_STYLES[0].color
+      thumbnail: pickArt(artOf(artists[0]))
     })
   }
 
   if (artists.length >= 4) {
-    dynamic.push({
+    push({
       id: `dyn_artists_2_${artists[2]}_${artists[3]}`,
       title: `${artists[2]} & ${artists[3]}`,
       subtitle: `${vibes[1] || 'Liked Rotation'} • Curated Flow`,
       query: `${artists[2]} ${artists[3]} hit songs mix`,
-      thumbnail: STATION_STYLES[1].thumbnail,
-      color: STATION_STYLES[1].color
+      thumbnail: pickArt(artOf(artists[2]), artOf(artists[3]))
     })
   }
 
   if (vibes.length >= 2) {
     const seedArtists = artists.slice(0, 2).join(' ')
-    dynamic.push({
+    push({
       id: `dyn_vibe_${vibes[0]}_${vibes[1]}`,
       title: `${vibes[0]} & ${vibes[1]}`,
       subtitle: tasteDna?.archetype ? `${tasteDna.archetype} • Sonic DNA` : `Custom Vibe • ${artists[0] || 'Curated'}`,
       query: `${vibes[0]} ${vibes[1]} ${seedArtists} best tracks`,
-      thumbnail: STATION_STYLES[2].thumbnail,
-      color: STATION_STYLES[2].color
+      thumbnail: pickArt(vibeArt.get(vibes[0].toLowerCase()), vibeArt.get(vibes[1].toLowerCase()))
     })
   }
 
   if (artists.length >= 6) {
-    dynamic.push({
+    push({
       id: `dyn_artists_3_${artists[4]}_${artists[5]}`,
       title: `${artists[4]} & ${artists[5]}`,
       subtitle: `${vibes[2] || 'Discovery Mix'} • Similar Artists`,
       query: `${artists[4]} ${artists[5]} popular songs radio`,
-      thumbnail: STATION_STYLES[3].thumbnail,
-      color: STATION_STYLES[3].color
+      thumbnail: pickArt(artOf(artists[4]), artOf(artists[5]))
     })
   }
 
   if (artists.length >= 8) {
-    dynamic.push({
+    push({
       id: `dyn_artists_4_${artists[6]}_${artists[7]}`,
       title: `${artists[6]} & ${artists[7]}`,
       subtitle: `${vibes[3] || 'On Repeat'} • Heavy Rotation`,
       query: `${artists[6]} ${artists[7]} top tracks playlist`,
-      thumbnail: STATION_STYLES[4].thumbnail,
-      color: STATION_STYLES[4].color
+      thumbnail: pickArt(artOf(artists[6]), artOf(artists[7]))
     })
   }
 

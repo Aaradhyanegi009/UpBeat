@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="5.3.2",
-    description="UpBeat v5.3.2 - Dynamic Preference Stations, YouTube Charts Sync & Sleep Timer"
+    version="5.3.3",
+    description="UpBeat v5.3.3 - Live Station Artwork, Dynamic Stations & Sleep Timer"
 )
 
 app.add_middleware(

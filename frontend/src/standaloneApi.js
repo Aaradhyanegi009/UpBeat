@@ -1323,33 +1323,17 @@ export async function fetchTrackLyrics(track, durationSec = 0) {
 
 // ---------------------------------------------------------------------------
 // Official YouTube Music Charts Sync (FEmusic_charts)
+// Thumbnails are live: each station uses the current #1 track's artwork from the
+// chart itself (falls back to YouTube's official chart cover art).
 // ---------------------------------------------------------------------------
 
-const STATION_BACKDROPS = [
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
-    color: 'from-rose-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80',
-    color: 'from-amber-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
-    color: 'from-indigo-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=600&q=80',
-    color: 'from-cyan-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
-    color: 'from-purple-600/40 to-black'
-  },
-  {
-    thumbnail: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=600&q=80',
-    color: 'from-emerald-600/40 to-black'
-  }
+const STATION_COLORS = [
+  'from-rose-600/40 to-black',
+  'from-amber-600/40 to-black',
+  'from-indigo-600/40 to-black',
+  'from-cyan-600/40 to-black',
+  'from-purple-600/40 to-black',
+  'from-emerald-600/40 to-black'
 ]
 
 export const DEFAULT_YT_CHARTS_STATIONS = [
@@ -1359,8 +1343,8 @@ export const DEFAULT_YT_CHARTS_STATIONS = [
     title: 'Trending 20 India',
     subtitle: 'Chart • YouTube Charts',
     query: 'Trending 20 India latest hit songs',
-    thumbnail: STATION_BACKDROPS[0].thumbnail,
-    color: STATION_BACKDROPS[0].color
+    thumbnail: 'https://yt3.googleusercontent.com/WI2UEaJBjl5bvSz12by1__hO_EZNyuyTChu9LfuQ9J__PtSx17FT5p8kDV4BKBmCnEb2pkkmhS0=s576',
+    color: STATION_COLORS[0]
   },
   {
     id: 'yt_chart_weekly_hindi',
@@ -1368,8 +1352,8 @@ export const DEFAULT_YT_CHARTS_STATIONS = [
     title: 'Top Weekly Hindi',
     subtitle: 'Chart • YouTube Charts',
     query: 'Top Weekly Hindi songs latest Bollywood chartbusters',
-    thumbnail: STATION_BACKDROPS[1].thumbnail,
-    color: STATION_BACKDROPS[1].color
+    thumbnail: 'https://yt3.googleusercontent.com/1n6BXDFo06jkTV1M-PIKTVzWnJ0G2bO1dEULK8hd696MNPmKbCufOLTJKyNn_vw1CZp5A7-y5A=s576',
+    color: STATION_COLORS[1]
   },
   {
     id: 'yt_chart_weekly_intl',
@@ -1377,8 +1361,8 @@ export const DEFAULT_YT_CHARTS_STATIONS = [
     title: 'Top Weekly International',
     subtitle: 'Chart • YouTube Charts',
     query: 'Top Weekly International global pop hits',
-    thumbnail: STATION_BACKDROPS[2].thumbnail,
-    color: STATION_BACKDROPS[2].color
+    thumbnail: 'https://yt3.googleusercontent.com/L9VXOyadNeUOMdulaFpShmaUd2uZzwxX-kp75nxYbkC83hKSfsSZ60sxD--nnyB1gbhpT1dNjrt_=s576',
+    color: STATION_COLORS[2]
   },
   {
     id: 'yt_chart_daily_top',
@@ -1386,8 +1370,8 @@ export const DEFAULT_YT_CHARTS_STATIONS = [
     title: 'Daily Top Music Videos',
     subtitle: 'Chart • YouTube Charts',
     query: 'Daily Top Music Videos India trending hits',
-    thumbnail: STATION_BACKDROPS[3].thumbnail,
-    color: STATION_BACKDROPS[3].color
+    thumbnail: 'https://yt3.googleusercontent.com/sKX7k9NOsv3uxZiNZS3oVEsQvL7t9hVD-8mNtFsYeX3b7e5Txi3MmIkg4uFQkEyDfGv5xlg2Yxg=s576',
+    color: STATION_COLORS[3]
   },
   {
     id: 'yt_chart_released',
@@ -1395,8 +1379,8 @@ export const DEFAULT_YT_CHARTS_STATIONS = [
     title: 'RELEASED: Fresh Hits',
     subtitle: 'Official • YouTube Music',
     query: 'New music releases latest hits official playlist',
-    thumbnail: STATION_BACKDROPS[4].thumbnail,
-    color: STATION_BACKDROPS[4].color
+    thumbnail: 'https://yt3.googleusercontent.com/lOelGF98ZubR8vIHHka6or5abqPOhGlLsLQgwUoXTfpWW8lNLMWh35e8Y7o4_Dx6AkJgsdC1trMzIqo=w544-h544-l90-rj',
+    color: STATION_COLORS[4]
   },
   {
     id: 'yt_chart_top100',
@@ -1404,12 +1388,32 @@ export const DEFAULT_YT_CHARTS_STATIONS = [
     title: 'Top 100 Music Videos',
     subtitle: 'Chart • YouTube Charts',
     query: 'Top 100 Music Videos India official chart',
-    thumbnail: STATION_BACKDROPS[5].thumbnail,
-    color: STATION_BACKDROPS[5].color
+    thumbnail: 'https://yt3.googleusercontent.com/QCTBEmkHpNlVAUXqZxRnA3pBDjOHVu6hYOC4ohJxahRsBk1Ipq12UckceblwYonwGwWCgaph5lJp=s576',
+    color: STATION_COLORS[5]
   }
 ]
 
+const CHARTS_CACHE_KEY = 'upbeat_yt_charts_cache_v2'
 let _chartsMemoryCache = null
+
+/** Returns the current #1 track's artwork URL for a chart/playlist, or '' on failure. */
+async function fetchChartTopArtwork(browseId) {
+  try {
+    const resp = await callInnertube('browse', { context: YTM_CONTEXT, browseId }, 'music')
+    if (!resp.ok) return ''
+    const data = await resp.json()
+    for (const item of findNodes(data, 'musicResponsiveListItemRenderer')) {
+      const vid = item?.playlistItemData?.videoId
+      if (vid && vid.length === 11) return `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
+    }
+  } catch {}
+  return ''
+}
+
+async function withLiveArtwork(stations) {
+  const arts = await Promise.all(stations.map((s) => (s.browse_id ? fetchChartTopArtwork(s.browse_id) : '')))
+  return stations.map((s, i) => (arts[i] ? { ...s, thumbnail: arts[i], cover: s.thumbnail } : s))
+}
 
 export async function fetchOfficialYoutubeCharts() {
   if (_chartsMemoryCache && Date.now() - _chartsMemoryCache.ts < 60 * 60 * 1000) {
@@ -1417,7 +1421,7 @@ export async function fetchOfficialYoutubeCharts() {
   }
 
   try {
-    const raw = localStorage.getItem('upbeat_yt_charts_cache_v1')
+    const raw = localStorage.getItem(CHARTS_CACHE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed?.stations?.length >= 4 && Date.now() - (parsed.ts || 0) < 2 * 60 * 60 * 1000) {
@@ -1428,54 +1432,51 @@ export async function fetchOfficialYoutubeCharts() {
   } catch {}
 
   try {
+    let liveCharts = []
     const resp = await callInnertube('browse', { context: YTM_CONTEXT, browseId: 'FEmusic_charts' }, 'music')
-    if (!resp.ok) return DEFAULT_YT_CHARTS_STATIONS
-    const data = await resp.json()
+    if (resp.ok) {
+      const data = await resp.json()
+      const seenIds = new Set()
+      const blockedRegional = /bhojpuri|haryanvi|telugu|tamil/i
 
-    const liveCharts = []
-    const seenIds = new Set()
-    const blockedRegional = /bhojpuri|haryanvi|telugu|tamil/i
+      for (const r of findNodes(data, 'musicTwoRowItemRenderer')) {
+        const bid = r?.navigationEndpoint?.browseEndpoint?.browseId || ''
+        if (!bid.startsWith('VL') || seenIds.has(bid)) continue
+        const rawTitle = (r.title?.runs || []).map((x) => x.text || '').join('').trim()
+        const rawSub = (r.subtitle?.runs || []).map((x) => x.text || '').join('').trim()
+        if (!rawTitle || blockedRegional.test(rawTitle)) continue
 
-    for (const r of findNodes(data, 'musicTwoRowItemRenderer')) {
-      const bid = r?.navigationEndpoint?.browseEndpoint?.browseId || ''
-      if (!bid.startsWith('VL') || seenIds.has(bid)) continue
-      const rawTitle = (r.title?.runs || []).map((x) => x.text || '').join('').trim()
-      const rawSub = (r.subtitle?.runs || []).map((x) => x.text || '').join('').trim()
-      if (!rawTitle || blockedRegional.test(rawTitle)) continue
+        seenIds.add(bid)
+        const cleanTitle = rawTitle
+          .replace(/^Top Weekly Videos\s+/i, 'Top Weekly ')
+          .replace(/\s+-\s+India$/i, '')
+          .trim()
+        const cover = r.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails?.slice(-1)[0]?.url || ''
+        const fallback = DEFAULT_YT_CHARTS_STATIONS.find((d) => d.browse_id === bid)
 
-      seenIds.add(bid)
-      const cleanTitle = rawTitle
-        .replace(/^Top Weekly Videos\s+/i, 'Top Weekly ')
-        .replace(/\s+-\s+India$/i, '')
-        .trim()
+        liveCharts.push({
+          id: `yt_chart_${bid}`,
+          browse_id: bid,
+          title: cleanTitle,
+          subtitle: rawSub || 'Chart • YouTube Charts',
+          query: `${cleanTitle} official YouTube chart songs`,
+          thumbnail: cover || fallback?.thumbnail || DEFAULT_YT_CHARTS_STATIONS[0].thumbnail,
+          color: STATION_COLORS[liveCharts.length % STATION_COLORS.length]
+        })
+        if (liveCharts.length >= 6) break
+      }
 
-      const styleIdx = liveCharts.length % STATION_BACKDROPS.length
-      liveCharts.push({
-        id: `yt_chart_${bid}`,
-        browse_id: bid,
-        title: cleanTitle,
-        subtitle: rawSub || 'Chart • YouTube Charts',
-        query: `${cleanTitle} official YouTube chart songs`,
-        thumbnail: STATION_BACKDROPS[styleIdx].thumbnail,
-        color: STATION_BACKDROPS[styleIdx].color
-      })
-      if (liveCharts.length >= 6) break
+      if (liveCharts.length < 6 && !seenIds.has(DEFAULT_YT_CHARTS_STATIONS[4].browse_id)) {
+        liveCharts.push({ ...DEFAULT_YT_CHARTS_STATIONS[4], color: STATION_COLORS[liveCharts.length % STATION_COLORS.length] })
+      }
     }
 
-    // Ensure RELEASED: Fresh Hits is included if fewer than 6 charts matched
-    if (liveCharts.length < 6 && !seenIds.has('VLRDCLAK5uy_ksEjgm3H_7zOJ_RHzRjN1wY-_FFcs7aAU')) {
-      const idx = liveCharts.length % STATION_BACKDROPS.length
-      liveCharts.push({
-        ...DEFAULT_YT_CHARTS_STATIONS[4],
-        thumbnail: STATION_BACKDROPS[idx].thumbnail,
-        color: STATION_BACKDROPS[idx].color
-      })
-    }
-
-    const finalStations = liveCharts.length >= 4 ? liveCharts : DEFAULT_YT_CHARTS_STATIONS
+    const base = liveCharts.length >= 4 ? liveCharts : DEFAULT_YT_CHARTS_STATIONS
+    const finalStations = await withLiveArtwork(base)
     _chartsMemoryCache = { stations: finalStations, ts: Date.now() }
     try {
-      localStorage.setItem('upbeat_yt_charts_cache_v1', JSON.stringify(_chartsMemoryCache))
+      localStorage.removeItem('upbeat_yt_charts_cache_v1')
+      localStorage.setItem(CHARTS_CACHE_KEY, JSON.stringify(_chartsMemoryCache))
     } catch {}
     return finalStations
   } catch {
