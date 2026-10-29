@@ -365,7 +365,12 @@ export async function createOfflineAudioUrl(videoId) {
   const track = await getOfflineTrack(videoId)
   if (!track || !track.blob) return null
 
-  const url = URL.createObjectURL(track.blob)
+  // Ensure blob has a valid audio MIME type so browser audio decoders accept it
+  const blob = track.blob.type && track.blob.type.startsWith('audio/')
+    ? track.blob
+    : new Blob([track.blob], { type: track.mimeType || 'audio/mp4' })
+
+  const url = URL.createObjectURL(blob)
   _blobUrlCache.set(videoId, url)
   return url
 }
