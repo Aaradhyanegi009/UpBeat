@@ -3,7 +3,7 @@ import {
   ChevronDown, Heart, Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Download, Check, Loader2,
   ListMusic, ExternalLink, Video, Calendar, Sparkles, Volume2, VolumeX, Music, ShieldCheck, Mic2,
-  Share2, Copy, X
+  Share2, Copy, X, Moon
 } from 'lucide-react'
 import { fetchTrackExtendedMeta, fetchTrackLyrics, openExternalUrl } from '../standaloneApi'
 
@@ -58,7 +58,9 @@ export default function NowPlayingView({
   isPlayingOffline,
   showLyrics: externalShowLyrics,
   setShowLyrics: externalSetShowLyrics,
-  onSeek
+  onSeek,
+  sleepTimer,
+  onOpenSleepTimer
 }) {
   const [extendedMeta, setExtendedMeta] = useState(null)
   const [internalShowLyrics, setInternalShowLyrics] = useState(false)
@@ -685,6 +687,38 @@ export default function NowPlayingView({
           </div>
 
           <div className="flex items-center gap-1">
+            {onOpenSleepTimer && (
+              <button
+                onClick={onOpenSleepTimer}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer relative ${
+                  sleepTimer?.active
+                    ? 'text-white'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/10'
+                }`}
+                style={
+                  sleepTimer?.active
+                    ? { backgroundColor: `${albumColor.primary}30`, color: albumColor.primary }
+                    : undefined
+                }
+                title={
+                  sleepTimer?.active
+                    ? (sleepTimer.mode === 'end_of_track' ? 'Sleep Timer: End of song' : `Sleep Timer: ${Math.ceil((sleepTimer.remainingSec || 0) / 60)}m left`)
+                    : 'Sleep Timer'
+                }
+                aria-label="Sleep Timer"
+              >
+                <Moon className="w-5 h-5" />
+                {sleepTimer?.active && sleepTimer.mode === 'minutes' && (
+                  <span
+                    className="absolute top-1.5 right-1 min-w-3.5 h-3.5 px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center shadow-xs"
+                    style={{ backgroundColor: albumColor.primary }}
+                  >
+                    {Math.ceil((sleepTimer.remainingSec || 0) / 60)}m
+                  </span>
+                )}
+              </button>
+            )}
+
             {onToggleQueue && (
               <button
                 onClick={onToggleQueue}
@@ -1199,6 +1233,24 @@ export default function NowPlayingView({
         >
           <Video className="w-5 h-5" />
         </button>
+
+        {onOpenSleepTimer && (
+          <button
+            onClick={onOpenSleepTimer}
+            title={
+              sleepTimer?.active
+                ? (sleepTimer.mode === 'end_of_track' ? 'Sleep Timer: End of song' : `Sleep Timer: ${Math.ceil((sleepTimer.remainingSec || 0) / 60)}m left`)
+                : 'Sleep Timer'
+            }
+            aria-label="Sleep Timer"
+            className={`p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer active:scale-90 relative ${
+              sleepTimer?.active ? 'text-white bg-white/15' : 'text-zinc-400 hover:text-white'
+            }`}
+            style={sleepTimer?.active ? { color: albumColor.primary } : undefined}
+          >
+            <Moon className="w-5 h-5" />
+          </button>
+        )}
 
         {/* Volume controls on larger screens */}
         <div className="hidden sm:flex items-center gap-2">

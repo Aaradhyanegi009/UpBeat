@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Play, Pause, SkipForward, SkipBack, Volume2, VolumeX,
   ExternalLink, Video, Music, Heart, Loader2, Download, Check, ListMusic, ChevronUp,
-  Monitor, Compass, Mic2
+  Monitor, Compass, Mic2, Moon
 } from 'lucide-react'
 import { getApiBase, hasBackend, getAudioSource, searchYouTubeStandalone, getTrackDownloadUrl, openExternalUrl } from '../standaloneApi'
 import { isTrackDownloaded, saveTrackOffline, createOfflineAudioUrl, subscribeOfflineChanges } from '../offlineStorage'
 import { useAlbumColor, DEFAULT_LAVENDER_THEME } from '../utils/colorExtractor'
 import NowPlayingView from './NowPlayingView'
+import SleepTimerModal from './SleepTimerModal'
 
 function formatTime(sec) {
   if (!sec || isNaN(sec) || sec < 0) return '0:00'
@@ -72,6 +73,20 @@ export default function PlayerBar({
   const [resolvedVid, setResolvedVid] = useState('')
   const [isLoadingStream, setIsLoadingStream] = useState(false)
   const [useIframeFallback, setUseIframeFallback] = useState(false)
+
+  const [sleepTimer, setSleepTimer] = useState({
+    active: false,
+    mode: 'off', // 'off' | 'minutes' | 'end_of_track'
+    targetTimestamp: null,
+    totalDurationSec: 0,
+    fadeOut: true,
+    remainingSec: 0
+  })
+  const [isSleepModalOpen, setIsSleepModalOpen] = useState(false)
+  const sleepTimerRef = useRef(sleepTimer)
+  useEffect(() => {
+    sleepTimerRef.current = sleepTimer
+  }, [sleepTimer])
 
   const audioRefA = useRef(null)
   const audioRefB = useRef(null)
@@ -275,6 +290,172 @@ export default function PlayerBar({
     }
   }, [track, thumbUrl, resolvedVid, effectiveDuration, currentTime])
 
+  const restoreVolume = useCallback(() => {
+    const baseVol = isMuted ? 0 : volume / 100
+    const activeAudio = getActiveAudio()
+    if (activeAudio) {
+      try {
+        activeAudio.volume = baseVol
+      } catch {}
+    }
+    const p = playerRef.current
+    if (p && typeof p.setVolume === 'function') {
+      try {
+        p.setVolume(isMuted ? 0 : volume)
+      } catch {}
+    }
+  }, [isMuted, volume])
+
+  const handleTrackEnded = useCallback(() => {
+    if (sleepTimerRef.current?.active && sleepTimerRef.current?.mode === 'end_of_track') {
+      setSleepTimer({
+        active: false,
+        mode: 'off',
+        targetTimestamp: null,
+        totalDurationSec: 0,
+        fadeOut: true,
+        remainingSec: 0
+      })
+      const active = getActiveAudio()
+      if (active) {
+        try {
+          active.pause()
+          active.volume = isMuted ? 0 : volume / 100
+        } catch {}
+      }
+      const p = playerRef.current
+      if (p && typeof p.pauseVideo === 'function') {
+        try {
+          p.pauseVideo()
+          p.setVolume(isMuted ? 0 : volume)
+        } catch {}
+      }
+      setIsPlaying(false)
+      notifyNativePlayback(false, currentTimeRef.current, effectiveDuration)
+      return true
+    }
+    return false
+  }, [isMuted, volume, effectiveDuration, notifyNativePlayback, setIsPlaying])
+
+  const handleSetSleepTimer = useCallback((type, fadeOut = true) => {
+    restoreVolume()
+    if (type === 'end_of_track') {
+      setSleepTimer({
+        active: true,
+        mode: 'end_of_track',
+        targetTimestamp: null,
+        totalDurationSec: 0,
+        fadeOut,
+        remainingSec: 0
+      })
+    } else if (typeof type === 'number' && type > 0) {
+      const sec = Math.round(type * 60)
+      const target = Date.now() + sec * 1000
+      setSleepTimer({
+        active: true,
+        mode: 'minutes',
+        targetTimestamp: target,
+        totalDurationSec: sec,
+        fadeOut,
+        remainingSec: sec
+      })
+    }
+  }, [restoreVolume])
+
+  const handleCancelSleepTimer = useCallback(() => {
+    restoreVolume()
+    setSleepTimer({
+      active: false,
+      mode: 'off',
+      targetTimestamp: null,
+      totalDurationSec: 0,
+      fadeOut: true,
+      remainingSec: 0
+    })
+  }, [restoreVolume])
+
+  const handleAddSleepMinutes = useCallback((mins) => {
+    restoreVolume()
+    setSleepTimer((prev) => {
+      if (!prev.active || prev.mode !== 'minutes' || !prev.targetTimestamp) return prev
+      const addMs = mins * 60 * 1000
+      const newTarget = prev.targetTimestamp + addMs
+      const remaining = Math.max(0, Math.round((newTarget - Date.now()) / 1000))
+      return {
+        ...prev,
+        targetTimestamp: newTarget,
+        totalDurationSec: prev.totalDurationSec + mins * 60,
+        remainingSec: remaining
+      }
+    })
+  }, [restoreVolume])
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (!sleepTimer.active || sleepTimer.mode !== 'minutes' || !sleepTimer.targetTimestamp) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      const now = Date.now()
+      const remaining = Math.max(0, Math.round((sleepTimer.targetTimestamp - now) / 1000))
+
+      setSleepTimer((prev) => {
+        if (!prev.active || prev.mode !== 'minutes') return prev
+        return { ...prev, remainingSec: remaining }
+      })
+
+      // Smooth volume fade-out over last 30 seconds
+      const baseVol = isMuted ? 0 : volume / 100
+      if (sleepTimer.fadeOut && remaining <= 30 && remaining > 0) {
+        const fadeFactor = remaining / 30
+        const fadedVol = Math.max(0, Math.min(baseVol, baseVol * fadeFactor))
+        const activeAudio = getActiveAudio()
+        if (activeAudio) {
+          try {
+            activeAudio.volume = fadedVol
+          } catch {}
+        }
+        const p = playerRef.current
+        if (p && typeof p.setVolume === 'function') {
+          try {
+            p.setVolume(fadedVol * 100)
+          } catch {}
+        }
+      }
+
+      if (remaining <= 0) {
+        clearInterval(interval)
+        const activeAudio = getActiveAudio()
+        if (activeAudio) {
+          try {
+            activeAudio.pause()
+            activeAudio.volume = baseVol
+          } catch {}
+        }
+        const p = playerRef.current
+        if (p && typeof p.pauseVideo === 'function') {
+          try {
+            p.pauseVideo()
+            p.setVolume(isMuted ? 0 : volume)
+          } catch {}
+        }
+        setIsPlaying(false)
+        notifyNativePlayback(false, currentTimeRef.current, effectiveDuration)
+        setSleepTimer({
+          active: false,
+          mode: 'off',
+          targetTimestamp: null,
+          totalDurationSec: 0,
+          fadeOut: true,
+          remainingSec: 0
+        })
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [sleepTimer.active, sleepTimer.mode, sleepTimer.targetTimestamp, sleepTimer.fadeOut, isMuted, volume, effectiveDuration, notifyNativePlayback, setIsPlaying])
+
   // Prime both audio decks on first user interaction so Safari never blocks background transitions
   const primedRef = useRef(false)
   const primeAudioEngines = useCallback(() => {
@@ -312,6 +493,7 @@ export default function PlayerBar({
     endedTriggeredRef.current = false
     lastNativeReportSecRef.current = sec
     notifyNativePlayback(Boolean(isPlayingRef.current), sec, effectiveDuration)
+    restoreVolume()
     const activeAudio = getActiveAudio()
     if (!useIframeFallback && activeAudio) {
       try {
@@ -732,6 +914,7 @@ export default function PlayerBar({
               if (e.data === 0) {
                 if (useIframeFallback && currentVidRef.current === resolvedVid && !endedTriggeredRef.current) {
                   endedTriggeredRef.current = true
+                  if (handleTrackEnded()) return
                   onNextRef.current()
                 }
               } else if (e.data === 1) {
@@ -833,6 +1016,7 @@ export default function PlayerBar({
 
         if ((isEnded || reachedTargetEnd || stalledNearEnd || isSbr2xFreeze) && !endedTriggeredRef.current && cur > 0.5) {
           endedTriggeredRef.current = true
+          if (handleTrackEnded()) return
           onNextRef.current()
         }
         return
@@ -855,6 +1039,7 @@ export default function PlayerBar({
               const effectiveDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
               if (cur >= effectiveDur - 0.3 && effectiveDur > 5 && !endedTriggeredRef.current) {
                 endedTriggeredRef.current = true
+                if (handleTrackEnded()) return
                 onNextRef.current()
               }
             }
@@ -1002,6 +1187,14 @@ export default function PlayerBar({
               if (!isDocumentHiddenRef.current) {
                 setCurrentTime(cur)
               }
+              if (sleepTimerRef.current?.active && sleepTimerRef.current?.mode === 'end_of_track' && sleepTimerRef.current?.fadeOut) {
+                const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
+                if (targetDur > 15 && cur >= targetDur - 15) {
+                  const factor = Math.max(0, (targetDur - cur) / 15)
+                  const baseVol = isMuted ? 0 : volume / 100
+                  e.currentTarget.volume = baseVol * factor
+                }
+              }
             }
           }}
           onLoadedMetadata={(e) => {
@@ -1051,6 +1244,7 @@ export default function PlayerBar({
                   return
                 }
                 endedTriggeredRef.current = true
+                if (handleTrackEnded()) return
                 onNextRef.current()
               }
             }
@@ -1067,6 +1261,7 @@ export default function PlayerBar({
                   return
                 }
                 endedTriggeredRef.current = true
+                if (handleTrackEnded()) return
                 onNextRef.current()
               }
             }
@@ -1080,6 +1275,7 @@ export default function PlayerBar({
                 return
               }
               endedTriggeredRef.current = true
+              if (handleTrackEnded()) return
               onNextRef.current()
             }
           }}
@@ -1505,6 +1701,31 @@ export default function PlayerBar({
               </button>
             )}
 
+            <button
+              onClick={() => setIsSleepModalOpen(true)}
+              title={
+                sleepTimer.active
+                  ? (sleepTimer.mode === 'end_of_track' ? 'Sleep Timer: End of song' : `Sleep Timer: ${Math.ceil(sleepTimer.remainingSec / 60)}m left`)
+                  : 'Sleep Timer'
+              }
+              aria-label="Sleep Timer"
+              className={`p-1.5 rounded-md transition-colors cursor-pointer relative ${
+                sleepTimer.active
+                  ? 'text-indigo-400 bg-indigo-500/15'
+                  : 'text-[#8e8e96] hover:text-white hover:bg-[#1a1a22]'
+              }`}
+            >
+              <Moon className="w-4 h-4" />
+              {sleepTimer.active && sleepTimer.mode === 'minutes' && (
+                <span
+                  className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center pointer-events-none"
+                  style={{ backgroundColor: albumColor.primary }}
+                >
+                  {Math.ceil(sleepTimer.remainingSec / 60)}m
+                </span>
+              )}
+            </button>
+
             <div className="hidden lg:flex items-center gap-2">
               <button
                 onClick={() => setIsMuted(!isMuted)}
@@ -1606,6 +1827,18 @@ export default function PlayerBar({
         showLyrics={showLyrics}
         setShowLyrics={setShowLyrics}
         onSeek={commitSeek}
+        sleepTimer={sleepTimer}
+        onOpenSleepTimer={() => setIsSleepModalOpen(true)}
+      />
+
+      <SleepTimerModal
+        isOpen={isSleepModalOpen}
+        onClose={() => setIsSleepModalOpen(false)}
+        sleepTimer={sleepTimer}
+        onSetTimer={handleSetSleepTimer}
+        onCancelTimer={handleCancelSleepTimer}
+        onAddMinutes={handleAddSleepMinutes}
+        albumColor={albumColor}
       />
     </>
   )
