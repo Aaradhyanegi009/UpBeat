@@ -524,6 +524,25 @@ function parseYtmSongs(data) {
     })
     if (out.length >= 25) break
   }
+
+  // Cross-populate fallback_ids among songs with matching titles
+  for (let i = 0; i < out.length; i++) {
+    const tA = out[i]
+    const cleanA = (tA.title || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    const fallbacks = []
+    for (let j = 0; j < out.length; j++) {
+      if (i === j) continue
+      const tB = out[j]
+      const cleanB = (tB.title || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (cleanA && cleanB && (cleanA.includes(cleanB) || cleanB.includes(cleanA))) {
+        if (tB.video_id && !fallbacks.includes(tB.video_id)) {
+          fallbacks.push(tB.video_id)
+        }
+      }
+    }
+    tA.fallback_ids = fallbacks
+  }
+
   return out
 }
 
@@ -717,11 +736,14 @@ const IOS_PLAYER_CLIENT = {
 
 const streamCache = new Map()
 
-/** Returns { url, duration } for a video id (works in the APK without the Mac). */
-export async function resolveStandaloneAudio(videoId) {
+/** Returns { url, duration, video_id } for a video id (works in the APK without the Mac). */
+export async function resolveStandaloneAudio(videoId, track = null) {
   if (!videoId) return null
   const cached = streamCache.get(videoId)
   if (cached && Date.now() - cached.ts < 25 * 60 * 1000) return cached
+
+  let lastTitle = (track?.title || '').trim()
+  let lastArtist = (track?.artist || '').trim()
 
   for (const client of [ANDROID_PLAYER_CLIENT, IOS_PLAYER_CLIENT]) {
     try {
@@ -733,6 +755,9 @@ export async function resolveStandaloneAudio(videoId) {
       }, 'youtube')
       if (!resp.ok) continue
       const data = await resp.json()
+      if (data?.videoDetails?.title && !lastTitle) lastTitle = data.videoDetails.title
+      if (data?.videoDetails?.author && !lastArtist) lastArtist = data.videoDetails.author
+
       if (data?.playabilityStatus?.status !== 'OK') continue
 
       // Prefer progressive formats (itag 18) first because Android WebView <audio>
@@ -759,11 +784,61 @@ export async function resolveStandaloneAudio(videoId) {
         Math.round(Number(chosen.approxDurationMs || 0) / 1000) ||
         0
 
-      const entry = { url: chosen.url, duration, ts: Date.now() }
+      const entry = { url: chosen.url, duration, video_id: videoId, ts: Date.now() }
       streamCache.set(videoId, entry)
       return entry
     } catch {}
   }
+
+  // Automatic recovery for restricted songs (age-restricted / login-required):
+  // Resolve an unblocked official alternative on YouTube Music
+  const query = `${lastTitle} ${lastArtist}`.trim()
+  if (query) {
+    try {
+      const searchRes = await ytmSearchRaw(query, true)
+      const candidateSongs = parseYtmSongs(searchRes)
+      for (const cand of candidateSongs) {
+        if (!cand?.video_id || cand.video_id === videoId) continue
+        for (const client of [IOS_PLAYER_CLIENT, ANDROID_PLAYER_CLIENT]) {
+          try {
+            const resp = await callInnertube('player', {
+              context: { client },
+              videoId: cand.video_id,
+              contentCheckOk: true,
+              racyCheckOk: true
+            }, 'youtube')
+            if (!resp.ok) continue
+            const data = await resp.json()
+            if (data?.playabilityStatus?.status !== 'OK') continue
+
+            const progressive = (data?.streamingData?.formats || []).filter((f) => f.url)
+            const adaptive = (data?.streamingData?.adaptiveFormats || [])
+              .filter((f) => f.url && (f.mimeType || '').startsWith('audio/mp4'))
+              .sort((a, b) => {
+                const aIsHe = (a.mimeType || '').includes('mp4a.40.5') || a.itag === 139 || a.itag === 599
+                const bIsHe = (b.mimeType || '').includes('mp4a.40.5') || b.itag === 139 || b.itag === 599
+                if (aIsHe !== bIsHe) return aIsHe ? 1 : -1
+                return (b.bitrate || 0) - (a.bitrate || 0)
+              })
+
+            const chosen = client.clientName === 'ANDROID' ? (progressive[0] || adaptive[0]) : (adaptive[0] || progressive[0])
+            if (!chosen?.url) continue
+
+            const duration =
+              Number(data?.videoDetails?.lengthSeconds || 0) ||
+              Math.round(Number(chosen.approxDurationMs || 0) / 1000) ||
+              0
+
+            const entry = { url: chosen.url, duration, video_id: cand.video_id, ts: Date.now() }
+            streamCache.set(videoId, entry)
+            streamCache.set(cand.video_id, entry)
+            return entry
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
   return null
 }
 
@@ -783,16 +858,17 @@ export async function getAudioSource(videoId, track = null) {
         const info = await resp.json()
         return {
           url: apiUrl(`/audio/${videoId}${qs}`),
-          duration: Number(info?.duration || 0)
+          duration: Number(info?.duration || 0),
+          video_id: info?.video_id || info?.resolved_video_id || videoId
         }
       }
     } catch {}
     // If Mac backend fails (e.g. yt-dlp bot challenge/login-required), try direct Innertube player
-    const standalone = await resolveStandaloneAudio(videoId)
+    const standalone = await resolveStandaloneAudio(videoId, track)
     if (standalone?.url) return standalone
     return null
   }
-  return resolveStandaloneAudio(videoId)
+  return resolveStandaloneAudio(videoId, track)
 }
 
 export function getTrackDownloadUrl(track) {

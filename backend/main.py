@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="5.4.3",
-    description="UpBeat v5.4.3 - Direct unblocked stream promotion, resilient audio lifecycle without synthetic pauses or snippet rejection errors"
+    version="5.4.4",
+    description="UpBeat v5.4.4 - Restricted song unblocked fallback resolution, Songs section fallback linking, and corrupted download purge"
 )
 
 app.add_middleware(
@@ -284,11 +284,22 @@ def audio_info_endpoint(video_id: str, title: str = "", artist: str = "", expect
     if not info or not info.get("url"):
         raise HTTPException(status_code=404, detail="Audio stream unavailable")
     dur_sec = int(info.get("duration") or 0)
+    resolved_id = info.get("video_id") or video_id
+    q_params = []
+    if title:
+        q_params.append(f"title={urllib.parse.quote(title)}")
+    if artist:
+        q_params.append(f"artist={urllib.parse.quote(artist)}")
+    if expected_duration:
+        q_params.append(f"expected_duration={expected_duration}")
+    qs = f"?{'&'.join(q_params)}" if q_params else ""
     return {
-        "video_id": video_id,
+        "video_id": resolved_id,
+        "resolved_video_id": resolved_id,
+        "original_video_id": video_id,
         "duration": dur_sec,
         "duration_text": format_seconds(dur_sec),
-        "url": f"/api/audio/{video_id}",
+        "url": f"/api/audio/{video_id}{qs}",
         "title": info.get("title", ""),
         "artist": info.get("uploader", ""),
     }
@@ -402,7 +413,13 @@ def stream_audio_endpoint(video_id: str, request: Request, title: str = "", arti
 
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
-        range_header = request.headers.get("range") or request.headers.get("Range")
+        if (expected_duration > 60 and file_size < 800000) or file_size < 50000:
+            try:
+                os.remove(local_path)
+            except OSError:
+                pass
+        else:
+            range_header = request.headers.get("range") or request.headers.get("Range")
         start = 0
         end = file_size - 1
         is_partial = False
@@ -617,7 +634,13 @@ def download_audio_endpoint(
     # 1. If file is already cached on disk, serve directly from disk
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
-        resp_headers = {
+        if file_size < 50000:
+            try:
+                os.remove(local_path)
+            except OSError:
+                pass
+        else:
+            resp_headers = {
             "Content-Disposition": _make_content_disposition(filename),
             "Accept-Ranges": "bytes",
             "Cache-Control": "public, max-age=86400",

@@ -331,6 +331,7 @@ def _resolve_cloud_fallback_audio(
                     alt_dur = int(alt_stream.get("duration") or 0)
                     if expected_duration > 45 and abs(alt_dur - expected_duration) > max(55, expected_duration * 0.35):
                         continue
+                    alt_stream["video_id"] = alt_vid
                     return alt_stream
     except Exception:
         pass
@@ -1227,6 +1228,23 @@ def _parse_ytm_songs(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         )
         if len(out) >= 25:
             break
+
+    # Cross-populate fallback_ids among songs with matching titles
+    for i in range(len(out)):
+        t_a = out[i]
+        clean_a = re.sub(r"[^a-z0-9]", "", (t_a.get("title") or "").lower())
+        fallbacks = []
+        for j in range(len(out)):
+            if i == j:
+                continue
+            t_b = out[j]
+            clean_b = re.sub(r"[^a-z0-9]", "", (t_b.get("title") or "").lower())
+            if clean_a and clean_b and (clean_a in clean_b or clean_b in clean_a):
+                b_vid = t_b.get("video_id")
+                if b_vid and b_vid not in fallbacks:
+                    fallbacks.append(b_vid)
+        t_a["fallback_ids"] = fallbacks
+
     return out
 
 

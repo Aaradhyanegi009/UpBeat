@@ -795,6 +795,10 @@ export default function PlayerBar({
           const streamInfo = await getAudioSource(resolvedVid, track)
           if (cancelled) return
           streamSrc = typeof streamInfo === 'string' ? streamInfo : streamInfo?.url
+          if (streamInfo?.video_id && streamInfo.video_id !== resolvedVid) {
+            targetAudio.dataset.vid = streamInfo.video_id
+            setResolvedVid(streamInfo.video_id)
+          }
         } catch {} finally {
           if (!cancelled) setIsLoadingStream(false)
         }
@@ -822,7 +826,7 @@ export default function PlayerBar({
               } catch {}
               if (active.src && active.src.includes('/api/audio/')) {
                 try {
-                  const direct = await resolveStandaloneAudio(resolvedVid)
+                  const direct = await resolveStandaloneAudio(resolvedVid, track)
                   if (direct?.url && !cancelled) {
                     active.src = direct.url
                     await active.play()
@@ -1516,7 +1520,7 @@ export default function PlayerBar({
             // If backend proxy failed, try direct Innertube standalone stream for the same song first
             if (failedSrc.includes('/api/audio/')) {
               try {
-                const direct = await resolveStandaloneAudio(resolvedVid)
+                const direct = await resolveStandaloneAudio(resolvedVid, track)
                 if (direct?.url && e.currentTarget.dataset.vid === resolvedVid) {
                   e.currentTarget.src = direct.url
                   e.currentTarget.play().catch(() => {})
