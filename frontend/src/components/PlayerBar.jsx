@@ -225,9 +225,13 @@ export default function PlayerBar({
 
     if (authDur > 0) {
       // The authoritative duration is established from official YouTube track metadata
-      // and /api/audio-info. WebKit/Chromium audio.duration is notoriously prone to
-      // 32kbps bitrate inflation (e.g. 4:00 -> 15:32) and HE-AAC SBR 2x bug (4:00 -> 8:00).
-      // Always clamp duration to the authoritative duration!
+      // and /api/audio-info. If authDur was a bogus short value (e.g. <=60s) but the audio
+      // element has loaded a full track (>75s), update authDur to the real duration!
+      if (authDur <= 60 && rawDur > 75) {
+        authoritativeDurationRef.current = Math.round(rawDur)
+        setDuration(Math.round(rawDur))
+        return
+      }
       setDuration(authDur)
     } else {
       authoritativeDurationRef.current = Math.round(rawDur)
@@ -583,6 +587,7 @@ export default function PlayerBar({
   }, [primeAudioEngines])
 
   const commitSeek = (targetSec) => {
+    finishCrossfadeNow()
     const sec = Math.max(0, Number(targetSec) || 0)
     currentTimeRef.current = sec
     setCurrentTime(sec)
@@ -675,7 +680,8 @@ export default function PlayerBar({
       if (track.video_id && !isMismatchedShortDur) {
         if (initialDur <= 0 && hasBackend()) {
           try {
-            const r = await fetch(`${getApiBase()}/audio-info/${track.video_id}`)
+            const expParam = initialDur > 0 ? `&expected_duration=${initialDur}` : ''
+            const r = await fetch(`${getApiBase()}/audio-info/${track.video_id}?title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}${expParam}`)
             if (r.ok) {
               const info = await r.json()
               const durSec = Number(info?.duration || 0)
@@ -900,7 +906,7 @@ export default function PlayerBar({
         const oldAudio = currentActive
         const oldStartVol = oldAudio.volume
         const fadeStart = Date.now()
-        const fadeDuration = autoFadeMs > 0 ? autoFadeMs : Math.min(xfadeSec * 1000, 1500)
+        const fadeDuration = Math.max(300, autoFadeMs > 0 ? autoFadeMs : Math.min(xfadeSec * 1000, 1500))
         fadeOutAudioRef.current = oldAudio
 
         fadeIntervalRef.current = setInterval(() => {
@@ -1152,10 +1158,13 @@ export default function PlayerBar({
         // Multi-tier End-of-Track and Freeze Protection:
         // Must be currently playing the resolvedVid, cur must have progressed (> 0.5s),
         // and targetDur must be established (> 5s).
+        // If rawDur is valid and longer than targetDur, targetDur was an underestimate.
+        // Never trigger early crossfade if audio still has more to play!
+        const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
         const timeSinceAdvance = Date.now() - (lastCurChangeTimeRef.current || Date.now())
         const isEnded = Boolean(audio.ended)
-        const reachedTargetEnd = targetDur > 5 && cur >= targetDur - 0.4
-        const stalledNearEnd = targetDur > 5 && cur >= targetDur - 2.0 && cur > 5 && timeSinceAdvance >= 1500
+        const reachedTargetEnd = effectiveEndDur > 5 && cur >= effectiveEndDur - 0.4
+        const stalledNearEnd = effectiveEndDur > 5 && cur >= effectiveEndDur - 2.0 && cur > 5 && timeSinceAdvance >= 1500
         const isSbr2xFreeze =
           typeof rawDur === 'number' &&
           rawDur > 20 &&
@@ -1182,8 +1191,8 @@ export default function PlayerBar({
           xfade > 0 &&
           repeatModeRef.current !== 'one' &&
           !isEndSleep &&
-          targetDur > xfade + 6 &&
-          cur >= targetDur - xfade &&
+          effectiveEndDur > xfade + 6 &&
+          cur >= effectiveEndDur - xfade &&
           cur > 2 &&
           !isEndTriggered()
         ) {
@@ -1370,9 +1379,13 @@ export default function PlayerBar({
                 clearLoadWatchdog()
               }
               const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
-              if (sleepTimerRef.current?.active && sleepTimerRef.current?.mode === 'end_of_track' && sleepTimerRef.current?.fadeOut) {
-                if (targetDur > 15 && cur >= targetDur - 15) {
-                  const factor = Math.max(0, (targetDur - cur) / 15)
+              const rawDur = e.currentTarget.duration
+              const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
+
+              const isEndSleep = sleepTimerRef.current?.active && sleepTimerRef.current?.mode === 'end_of_track'
+              if (isEndSleep) {
+                if (sleepTimerRef.current?.fadeOut && effectiveEndDur > 15 && cur >= effectiveEndDur - 15) {
+                  const factor = Math.max(0, (effectiveEndDur - cur) / 15)
                   const baseVol = isMuted ? 0 : volume / 100
                   e.currentTarget.volume = baseVol * factor
                 }
@@ -1381,8 +1394,8 @@ export default function PlayerBar({
                 if (
                   xfade > 0 &&
                   repeatModeRef.current !== 'one' &&
-                  targetDur > xfade + 6 &&
-                  cur >= targetDur - xfade &&
+                  effectiveEndDur > xfade + 6 &&
+                  cur >= effectiveEndDur - xfade &&
                   cur > 2 &&
                   !isEndTriggered(e.currentTarget.dataset.vid)
                 ) {
@@ -1394,9 +1407,26 @@ export default function PlayerBar({
             }
           }}
           onLoadedMetadata={(e) => {
+            const raw = e.currentTarget.duration
+            const authDur = authoritativeDurationRef.current || parseDurationText(track?.duration_text) || 0
+            if (e.currentTarget.dataset.vid === resolvedVid && raw > 0 && authDur > 75 && raw < Math.min(65, authDur * 0.5)) {
+              console.warn(`[UpBeat] Snippet detected (${raw}s vs expected ${authDur}s) for ${resolvedVid}. Trying fallback.`)
+              e.currentTarget.pause()
+              e.currentTarget.removeAttribute('src')
+              e.currentTarget.load()
+              if (fallbackQueueRef.current.length > 0) {
+                const nextAlt = fallbackQueueRef.current.shift()
+                setResolvedVid(nextAlt)
+                return
+              } else if (!useIframeFallback) {
+                setUseIframeFallback(true)
+                return
+              }
+            }
+
             setIsLoadingStream(false)
-            if (activeDeckRef.current === deck) {
-              sanitizeDuration(e.currentTarget.duration)
+            if (activeDeckRef.current === deck || e.currentTarget.dataset.vid === resolvedVid) {
+              sanitizeDuration(raw)
             }
             if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
               e.currentTarget.play().catch(() => {})
@@ -1406,7 +1436,7 @@ export default function PlayerBar({
             setIsLoadingStream(false)
           }}
           onDurationChange={(e) => {
-            if (activeDeckRef.current === deck) {
+            if (activeDeckRef.current === deck || e.currentTarget.dataset.vid === resolvedVid) {
               sanitizeDuration(e.currentTarget.duration)
             }
           }}
@@ -1433,7 +1463,9 @@ export default function PlayerBar({
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid) {
               const cur = e.currentTarget.currentTime || 0
               const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
-              if (targetDur > 5 && cur > 5 && cur >= targetDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
+              const rawDur = e.currentTarget.duration
+              const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
+              if (effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
                 if (repeatMode === 'one') {
                   commitSeek(0)
                   e.currentTarget.currentTime = 0
@@ -1450,7 +1482,9 @@ export default function PlayerBar({
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid) {
               const cur = e.currentTarget.currentTime || 0
               const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
-              if (targetDur > 5 && cur > 5 && cur >= targetDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
+              const rawDur = e.currentTarget.duration
+              const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
+              if (effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
                 if (repeatMode === 'one') {
                   commitSeek(0)
                   e.currentTarget.currentTime = 0
@@ -1465,6 +1499,20 @@ export default function PlayerBar({
           }}
           onEnded={(e) => {
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid && !isEndTriggered(e.currentTarget.dataset.vid)) {
+              const cur = e.currentTarget.currentTime || 0
+              const expectedDur = authoritativeDurationRef.current || parseDurationText(track?.duration_text) || 0
+              if (expectedDur > 75 && cur < Math.min(65, expectedDur * 0.5)) {
+                console.warn(`[UpBeat] Track ended prematurely at ${cur}s (expected ~${expectedDur}s). Recovering fallback.`)
+                if (fallbackQueueRef.current.length > 0) {
+                  const nextAlt = fallbackQueueRef.current.shift()
+                  setResolvedVid(nextAlt)
+                  return
+                } else if (!useIframeFallback) {
+                  setUseIframeFallback(true)
+                  return
+                }
+              }
+
               if (repeatMode === 'one') {
                 commitSeek(0)
                 e.currentTarget.currentTime = 0

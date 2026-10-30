@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="5.4.1",
-    description="UpBeat v5.4.1 - Fix web playback freeze, browser autoplay blocks, and skip loops"
+    version="5.4.2",
+    description="UpBeat v5.4.2 - Strict title & snippet verification for stream resolution, sleep timer end-of-track fix, and crossfade duration safety"
 )
 
 app.add_middleware(
@@ -279,8 +279,8 @@ async def innertube_proxy_endpoint(request: Request):
 
 
 @app.get("/api/audio-info/{video_id}")
-def audio_info_endpoint(video_id: str):
-    info = get_audio_stream_url(video_id)
+def audio_info_endpoint(video_id: str, title: str = "", artist: str = "", expected_duration: int = 0):
+    info = get_audio_stream_url(video_id, title=title, artist=artist, expected_duration=expected_duration)
     if not info or not info.get("url"):
         raise HTTPException(status_code=404, detail="Audio stream unavailable")
     dur_sec = int(info.get("duration") or 0)
@@ -386,7 +386,7 @@ def _materialize_segments_to_file(segment_urls: List[str], local_path: str, ua: 
 
 
 @app.api_route("/api/audio/{video_id}", methods=["GET", "HEAD"])
-def stream_audio_endpoint(video_id: str, request: Request):
+def stream_audio_endpoint(video_id: str, request: Request, title: str = "", artist: str = "", expected_duration: int = 0):
     """
     Streams the exact official audio track (m4a/mp4).
     If the track has been downloaded locally, streams instantly from disk with zero network latency.
@@ -394,7 +394,7 @@ def stream_audio_endpoint(video_id: str, request: Request):
     """
     local_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.m4a")
     if not os.path.exists(local_path):
-        info_check = get_audio_stream_url(video_id)
+        info_check = get_audio_stream_url(video_id, title=title, artist=artist, expected_duration=expected_duration)
         if info_check and info_check.get("segment_urls"):
             _materialize_segments_to_file(
                 info_check["segment_urls"], local_path, info_check.get("ua", "Mozilla/5.0")
@@ -443,7 +443,7 @@ def stream_audio_endpoint(video_id: str, request: Request):
             headers=headers,
         )
 
-    info = get_audio_stream_url(video_id)
+    info = get_audio_stream_url(video_id, title=title, artist=artist, expected_duration=expected_duration)
     if not info or not info.get("url"):
         raise HTTPException(status_code=404, detail="Audio stream unavailable")
 

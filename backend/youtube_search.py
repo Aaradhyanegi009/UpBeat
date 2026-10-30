@@ -80,6 +80,23 @@ def format_seconds(sec: int) -> str:
     return f"{m}:{s:02d}"
 
 
+def parse_duration_seconds(text: str) -> int:
+    if not text:
+        return 0
+    clean = str(text).strip()
+    if clean.isdigit():
+        return int(clean)
+    parts = clean.split(":")
+    try:
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        if len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+    except ValueError:
+        pass
+    return 0
+
+
 def get_video_duration(video_id: str) -> str:
     """Fetches real video duration via fast Innertube player endpoint (0.3s) without heavy scraping."""
     if not video_id or len(video_id) != 11:
@@ -220,17 +237,44 @@ def _get_sc_client_id(force_refresh: bool = False) -> str:
 
 
 def _resolve_cloud_fallback_audio(
-    video_id: str, title: str = "", artist: str = ""
+    video_id: str, title: str = "", artist: str = "", expected_duration: int = 0
 ) -> Optional[Dict[str, Any]]:
     """
-    Cloud-safe audio resolver for Vercel Serverless when YouTube blocks AWS datacenter IPs.
-    1. Resolves track title & artist via YouTube's public oEmbed endpoint (never blocked on cloud IPs).
-    2. Checks JioSaavn 320kbps AAC (.m4a) CDN if title + artist match the original recording.
-    3. Falls back to SoundCloud API v2 full-length AAC (.m4a fMP4) stream.
+    Cloud-safe audio resolver when YouTube blocks direct IP stream requests.
+    1. Resolves canonical title, artist, and duration via YouTube Innertube / oEmbed.
+    2. Checks JioSaavn 320kbps AAC (.m4a) with strict title & duration validation.
+    3. Checks SoundCloud API v2 full-length AAC (.m4a) with strict title-word matching and duration check.
+    4. Falls back to finding an unblocked official alternative video on YouTube.
     """
     now = time.time()
     clean_title = (title or "").strip()
     clean_artist = (artist or "").strip()
+
+    # Query YouTube Innertube player endpoint to retrieve official lengthSeconds & title even if login required
+    if video_id and (not clean_title or expected_duration <= 0):
+        try:
+            pl_resp = _SESSION.post(
+                "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+                json={
+                    "context": {"client": {"clientName": "IOS", "clientVersion": "20.10.4", "deviceMake": "Apple", "deviceModel": "iPhone16,2", "osName": "iPhone", "osVersion": "18.3.2.22D82", "hl": "en", "gl": "US"}},
+                    "videoId": video_id,
+                    "contentCheckOk": True,
+                    "racyCheckOk": True,
+                },
+                headers={"User-Agent": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X; US)", "Content-Type": "application/json"},
+                timeout=3.0,
+            )
+            if pl_resp.status_code == 200:
+                pld = pl_resp.json()
+                vd = pld.get("videoDetails", {})
+                if not clean_title and vd.get("title"):
+                    clean_title = vd.get("title")
+                if not clean_artist and vd.get("author"):
+                    clean_artist = vd.get("author")
+                if expected_duration <= 0 and vd.get("lengthSeconds"):
+                    expected_duration = int(vd.get("lengthSeconds") or 0)
+        except Exception:
+            pass
 
     if not clean_title and video_id:
         try:
@@ -261,10 +305,18 @@ def _resolve_cloud_fallback_audio(
     if search_artist.lower() in ("jusa music", "unknown artist", "unknown"):
         search_artist = ""
 
-    query = f"{search_title} {search_artist}".strip()
+    # Don't repeat artist if title already contains artist
+    if search_artist and search_artist.lower() in search_title.lower():
+        query = search_title
+    else:
+        query = f"{search_title} {search_artist}".strip()
+
     q_lower = query.lower()
     avoid_words = ["karaoke", "instrumental", "tribute", "8-bit", "lullaby", "ringtone", "nightcore", "slowed", "reverb", "sped up"]
     active_avoid = [w for w in avoid_words if w not in q_lower]
+
+    title_words = [w for w in re.findall(r"[a-z0-9]+", search_title.lower()) if len(w) > 2 and w not in ("official", "audio", "video", "lyrics", "lyric", "full")]
+    artist_words = [w for w in re.findall(r"[a-z0-9]+", search_artist.lower()) if len(w) > 2]
 
     # Tier A: JioSaavn 320kbps direct .m4a stream (only when artist & title both match closely)
     try:
@@ -275,8 +327,6 @@ def _resolve_cloud_fallback_audio(
         )
         if sr.status_code == 200:
             results = sr.json().get("data", {}).get("results") or []
-            title_words = [w for w in re.findall(r"[a-z0-9]+", search_title.lower()) if len(w) > 2]
-            artist_words = [w for w in re.findall(r"[a-z0-9]+", search_artist.lower()) if len(w) > 2]
             for s in results:
                 s_name = (s.get("name") or "").lower()
                 s_label = (s.get("label") or "").lower()
@@ -290,6 +340,12 @@ def _resolve_cloud_fallback_audio(
                     continue
                 if artist_words and not any(w in combined for w in artist_words):
                     continue
+                s_dur = int(s.get("duration") or 0)
+                # Reject snippets or mismatched durations
+                if s_dur < 65 and expected_duration > 75:
+                    continue
+                if expected_duration > 45 and abs(s_dur - expected_duration) > max(45, expected_duration * 0.35):
+                    continue
                 dl_urls = s.get("downloadUrl") or []
                 best_dl = dl_urls[-1].get("url") if dl_urls else None
                 if best_dl:
@@ -300,7 +356,7 @@ def _resolve_cloud_fallback_audio(
                         "ua": "Mozilla/5.0",
                         "title": clean_title,
                         "uploader": clean_artist or s_artists,
-                        "duration": int(s.get("duration") or 0),
+                        "duration": s_dur,
                         "ts": now,
                     }
     except Exception:
@@ -322,12 +378,29 @@ def _resolve_cloud_fallback_audio(
                 candidates = []
                 for t in collection:
                     dur_ms = int(t.get("duration") or 0)
+                    dur_sec = dur_ms // 1000
                     full_dur_ms = int(t.get("full_duration") or dur_ms)
-                    if t.get("policy") == "SNIP" or dur_ms <= 45000 or (full_dur_ms > 60000 and dur_ms <= 35000):
+
+                    # Reject snippets, samples, teasers, and previews
+                    if t.get("policy") == "SNIP":
                         continue
+                    if full_dur_ms > 0 and dur_ms < full_dur_ms * 0.7:
+                        continue
+                    if dur_ms < 65000 and not any(k in q_lower for k in ("intro", "outro", "interlude", "skit", "short")):
+                        continue
+                    if expected_duration > 45 and abs(dur_sec - expected_duration) > max(45, expected_duration * 0.35):
+                        continue
+
                     t_title = (t.get("title") or "").lower()
                     t_user = (t.get("user", {}).get("username") or "").lower()
                     combined = f"{t_title} {t_user}"
+
+                    # Strict title matching: must contain significant title words
+                    if title_words:
+                        matched_words = sum(1 for w in title_words if w in t_title)
+                        if matched_words < min(len(title_words), 2):
+                            continue
+
                     penalty = sum(1 for w in active_avoid if w in combined) * 10
                     if "cover" in combined and "cover" not in q_lower:
                         penalty += 5
@@ -352,6 +425,7 @@ def _resolve_cloud_fallback_audio(
                     if not stream_target:
                         continue
 
+                    cand_dur = int((best_t.get("duration") or 0) // 1000)
                     if chosen_tr.get("format", {}).get("protocol") == "progressive":
                         return {
                             "url": stream_target,
@@ -360,7 +434,7 @@ def _resolve_cloud_fallback_audio(
                             "ua": "Mozilla/5.0",
                             "title": clean_title,
                             "uploader": clean_artist,
-                            "duration": int((best_t.get("duration") or 0) // 1000),
+                            "duration": cand_dur,
                             "ts": now,
                         }
 
@@ -378,17 +452,34 @@ def _resolve_cloud_fallback_audio(
                             "ua": "Mozilla/5.0",
                             "title": clean_title,
                             "uploader": clean_artist,
-                            "duration": int((best_t.get("duration") or 0) // 1000),
+                            "duration": cand_dur,
                             "ts": now,
                         }
             break
         except Exception:
             pass
 
+    # Tier C: Unblocked YouTube alternative resolution
+    # If the original video is age-restricted / login-blocked on YouTube, search YouTube Music
+    # for an official unblocked video of the same song and resolve its direct audio stream.
+    try:
+        catalog_candidates = search_youtube_music_catalog(f"{search_title} {search_artist}".strip())
+        for c in catalog_candidates[:4]:
+            alt_vid = c.get("video_id")
+            if alt_vid and alt_vid != video_id:
+                alt_stream = _fast_innertube_audio(alt_vid)
+                if alt_stream and alt_stream.get("url"):
+                    alt_dur = int(alt_stream.get("duration") or 0)
+                    if expected_duration > 45 and abs(alt_dur - expected_duration) > max(55, expected_duration * 0.35):
+                        continue
+                    return alt_stream
+    except Exception:
+        pass
+
     return None
 
 
-def get_audio_stream_url(video_id: str, title: str = "", artist: str = "") -> Optional[Dict[str, Any]]:
+def get_audio_stream_url(video_id: str, title: str = "", artist: str = "", expected_duration: int = 0) -> Optional[Dict[str, Any]]:
     """
     Resolves the direct high-quality m4a audio stream URL for any YouTube video_id
     using ultra-fast Innertube player endpoint (0.35s) with yt-dlp and cloud-safe fallbacks.
@@ -409,7 +500,12 @@ def get_audio_stream_url(video_id: str, title: str = "", artist: str = "") -> Op
     now = time.time()
     cached = _STREAM_CACHE.get(video_id)
     if cached and (now - cached.get("ts", 0)) < 1500:
-        return cached
+        cached_dur = int(cached.get("duration") or 0)
+        # Discard corrupted/snippet cache entry if duration is invalid
+        if expected_duration > 60 and cached_dur > 0 and cached_dur < min(65, expected_duration * 0.5):
+            _STREAM_CACHE.pop(video_id, None)
+        else:
+            return cached
 
     # On Vercel serverless, prioritize fast Innertube (0.3s) and cloud-safe fallback
     if os.environ.get("VERCEL"):
@@ -429,7 +525,7 @@ def get_audio_stream_url(video_id: str, title: str = "", artist: str = "") -> Op
         except Exception as e:
             print(f"Innertube audio error for {video_id}: {e}")
 
-        cloud_info = _resolve_cloud_fallback_audio(video_id, title=title, artist=artist)
+        cloud_info = _resolve_cloud_fallback_audio(video_id, title=title, artist=artist, expected_duration=expected_duration)
         if cloud_info and cloud_info.get("url"):
             _STREAM_CACHE[video_id] = cloud_info
             return cloud_info
@@ -488,7 +584,7 @@ def get_audio_stream_url(video_id: str, title: str = "", artist: str = "") -> Op
         print(f"Innertube fallback audio error for {video_id}: {e}")
 
     try:
-        cloud_info = _resolve_cloud_fallback_audio(video_id, title=title, artist=artist)
+        cloud_info = _resolve_cloud_fallback_audio(video_id, title=title, artist=artist, expected_duration=expected_duration)
         if cloud_info and cloud_info.get("url"):
             _STREAM_CACHE[video_id] = cloud_info
             return cloud_info
@@ -837,15 +933,19 @@ def search_youtube_single(query: str) -> Optional[Dict]:
 
         # Pre-verify video_id is streamable; if blocked or login required, promote first working fallback
         if video_id:
-            info = get_audio_stream_url(video_id)
-            if not info and fallback_ids:
+            exp_dur = parse_duration_seconds(duration_text)
+            info = get_audio_stream_url(video_id, title=query, expected_duration=exp_dur)
+            info_dur = int(info.get("duration") or 0) if info else 0
+            is_bad_info = (not info) or (exp_dur > 60 and info_dur > 0 and info_dur < min(65, exp_dur * 0.5))
+            if is_bad_info and fallback_ids:
                 for alt_idx, alt_vid in enumerate(list(fallback_ids)):
-                    alt_info = get_audio_stream_url(alt_vid)
-                    if alt_info:
+                    alt_info = get_audio_stream_url(alt_vid, title=query, expected_duration=exp_dur)
+                    alt_dur = int(alt_info.get("duration") or 0) if alt_info else 0
+                    if alt_info and (exp_dur <= 60 or alt_dur >= min(65, exp_dur * 0.5)):
                         fallback_ids.pop(alt_idx)
                         fallback_ids.insert(0, video_id)
                         video_id = alt_vid
-                        duration_text = format_seconds(int(alt_info.get("duration") or 0))
+                        duration_text = format_seconds(alt_dur)
                         break
 
         result = {
