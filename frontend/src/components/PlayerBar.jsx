@@ -792,7 +792,7 @@ export default function PlayerBar({
         setIsPlayingOffline(false)
         setIsLoadingStream(true)
         try {
-          const streamInfo = await getAudioSource(resolvedVid)
+          const streamInfo = await getAudioSource(resolvedVid, track)
           if (cancelled) return
           streamSrc = typeof streamInfo === 'string' ? streamInfo : streamInfo?.url
         } catch {} finally {
@@ -831,6 +831,10 @@ export default function PlayerBar({
                 } catch {}
               }
               if (tryNextFallback()) return
+              if (!useIframeFallback) {
+                setUseIframeFallback(true)
+                return
+              }
               onNextRef.current()
             }
           }
@@ -879,7 +883,12 @@ export default function PlayerBar({
         let started = true
         try {
           await targetAudio.play()
-        } catch {
+        } catch (err) {
+          if (err?.name === 'NotAllowedError') {
+            setIsPlaying(false)
+            isPlayingRef.current = false
+            return
+          }
           started = false
         }
         if (cancelled) return // a newer track owns the decks now — touch nothing
@@ -933,13 +942,23 @@ export default function PlayerBar({
         activeDeckRef.current = targetDeck
         targetAudio.volume = targetVol
         if (isPlayingRef.current) {
-          targetAudio.play().catch(() => {
+          targetAudio.play().catch((err) => {
+            if (err?.name === 'NotAllowedError') {
+              setIsPlaying(false)
+              isPlayingRef.current = false
+              return
+            }
             // Autoplay recovery: if target deck failed, try currentActive
             if (currentActive && currentActive !== targetAudio) {
               currentActive.dataset.vid = resolvedVid
               currentActive.src = streamSrc
               currentActive.volume = targetVol
-              currentActive.play().catch(() => {
+              currentActive.play().catch((err2) => {
+                if (err2?.name === 'NotAllowedError') {
+                  setIsPlaying(false)
+                  isPlayingRef.current = false
+                  return
+                }
                 tryNextFallback()
               })
               return
@@ -1407,26 +1426,9 @@ export default function PlayerBar({
             }
           }}
           onLoadedMetadata={(e) => {
-            const raw = e.currentTarget.duration
-            const authDur = authoritativeDurationRef.current || parseDurationText(track?.duration_text) || 0
-            if (e.currentTarget.dataset.vid === resolvedVid && raw > 0 && authDur > 75 && raw < Math.min(65, authDur * 0.5)) {
-              console.warn(`[UpBeat] Snippet detected (${raw}s vs expected ${authDur}s) for ${resolvedVid}. Trying fallback.`)
-              e.currentTarget.pause()
-              e.currentTarget.removeAttribute('src')
-              e.currentTarget.load()
-              if (fallbackQueueRef.current.length > 0) {
-                const nextAlt = fallbackQueueRef.current.shift()
-                setResolvedVid(nextAlt)
-                return
-              } else if (!useIframeFallback) {
-                setUseIframeFallback(true)
-                return
-              }
-            }
-
             setIsLoadingStream(false)
             if (activeDeckRef.current === deck || e.currentTarget.dataset.vid === resolvedVid) {
-              sanitizeDuration(raw)
+              sanitizeDuration(e.currentTarget.duration)
             }
             if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
               e.currentTarget.play().catch(() => {})
@@ -1450,14 +1452,9 @@ export default function PlayerBar({
               notifyNativePlayback(true, e.currentTarget.currentTime || 0, effectiveDuration)
             }
           }}
-          onPause={(e) => {
-            if (activeDeckRef.current === deck && !fadeIntervalRef.current && e.currentTarget.dataset.vid === resolvedVid) {
-              const audio = e.currentTarget
-              if (audio && !audio.ended) {
-                setIsPlaying(false)
-                notifyNativePlayback(false, audio.currentTime || 0, effectiveDuration)
-              }
-            }
+          onPause={() => {
+            // Synthetic pause events fired by the browser during buffering, source changes,
+            // or deck swaps must NEVER flip the user's playback state to paused!
           }}
           onWaiting={(e) => {
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid) {
@@ -1499,20 +1496,6 @@ export default function PlayerBar({
           }}
           onEnded={(e) => {
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid && !isEndTriggered(e.currentTarget.dataset.vid)) {
-              const cur = e.currentTarget.currentTime || 0
-              const expectedDur = authoritativeDurationRef.current || parseDurationText(track?.duration_text) || 0
-              if (expectedDur > 75 && cur < Math.min(65, expectedDur * 0.5)) {
-                console.warn(`[UpBeat] Track ended prematurely at ${cur}s (expected ~${expectedDur}s). Recovering fallback.`)
-                if (fallbackQueueRef.current.length > 0) {
-                  const nextAlt = fallbackQueueRef.current.shift()
-                  setResolvedVid(nextAlt)
-                  return
-                } else if (!useIframeFallback) {
-                  setUseIframeFallback(true)
-                  return
-                }
-              }
-
               if (repeatMode === 'one') {
                 commitSeek(0)
                 e.currentTarget.currentTime = 0

@@ -524,7 +524,7 @@ export default function Sidebar({
         {/* App Info */}
         <div className="pt-2 text-xs font-semibold text-zinc-400 border-t border-white/10 flex items-center justify-between">
           <span className="text-zinc-400">UpBeat Music</span>
-          <span className="text-emerald-400/80">v5.4.2</span>
+          <span className="text-emerald-400/80">v5.4.3</span>
         </div>
       </div>
 

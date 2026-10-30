@@ -318,6 +318,23 @@ def _resolve_cloud_fallback_audio(
     title_words = [w for w in re.findall(r"[a-z0-9]+", search_title.lower()) if len(w) > 2 and w not in ("official", "audio", "video", "lyrics", "lyric", "full")]
     artist_words = [w for w in re.findall(r"[a-z0-9]+", search_artist.lower()) if len(w) > 2]
 
+    # Tier 1: Unblocked YouTube alternative resolution (0.3s)
+    # If the original video is age-restricted / login-blocked on YouTube, search YouTube Music
+    # for an official unblocked video of the same song and resolve its direct high-quality audio stream.
+    try:
+        catalog_candidates = search_youtube_music_catalog(f"{search_title} {search_artist}".strip())
+        for c in catalog_candidates[:5]:
+            alt_vid = c.get("video_id")
+            if alt_vid and alt_vid != video_id:
+                alt_stream = _fast_innertube_audio(alt_vid)
+                if alt_stream and alt_stream.get("url"):
+                    alt_dur = int(alt_stream.get("duration") or 0)
+                    if expected_duration > 45 and abs(alt_dur - expected_duration) > max(55, expected_duration * 0.35):
+                        continue
+                    return alt_stream
+    except Exception:
+        pass
+
     # Tier A: JioSaavn 320kbps direct .m4a stream (only when artist & title both match closely)
     try:
         sr = _SESSION.get(
@@ -458,23 +475,6 @@ def _resolve_cloud_fallback_audio(
             break
         except Exception:
             pass
-
-    # Tier C: Unblocked YouTube alternative resolution
-    # If the original video is age-restricted / login-blocked on YouTube, search YouTube Music
-    # for an official unblocked video of the same song and resolve its direct audio stream.
-    try:
-        catalog_candidates = search_youtube_music_catalog(f"{search_title} {search_artist}".strip())
-        for c in catalog_candidates[:4]:
-            alt_vid = c.get("video_id")
-            if alt_vid and alt_vid != video_id:
-                alt_stream = _fast_innertube_audio(alt_vid)
-                if alt_stream and alt_stream.get("url"):
-                    alt_dur = int(alt_stream.get("duration") or 0)
-                    if expected_duration > 45 and abs(alt_dur - expected_duration) > max(55, expected_duration * 0.35):
-                        continue
-                    return alt_stream
-    except Exception:
-        pass
 
     return None
 
@@ -934,19 +934,18 @@ def search_youtube_single(query: str) -> Optional[Dict]:
         # Pre-verify video_id is streamable; if blocked or login required, promote first working fallback
         if video_id:
             exp_dur = parse_duration_seconds(duration_text)
-            info = get_audio_stream_url(video_id, title=query, expected_duration=exp_dur)
-            info_dur = int(info.get("duration") or 0) if info else 0
-            is_bad_info = (not info) or (exp_dur > 60 and info_dur > 0 and info_dur < min(65, exp_dur * 0.5))
-            if is_bad_info and fallback_ids:
+            primary_stream = _fast_innertube_audio(video_id)
+            if not primary_stream and fallback_ids:
                 for alt_idx, alt_vid in enumerate(list(fallback_ids)):
-                    alt_info = get_audio_stream_url(alt_vid, title=query, expected_duration=exp_dur)
-                    alt_dur = int(alt_info.get("duration") or 0) if alt_info else 0
-                    if alt_info and (exp_dur <= 60 or alt_dur >= min(65, exp_dur * 0.5)):
-                        fallback_ids.pop(alt_idx)
-                        fallback_ids.insert(0, video_id)
-                        video_id = alt_vid
-                        duration_text = format_seconds(alt_dur)
-                        break
+                    alt_stream = _fast_innertube_audio(alt_vid)
+                    if alt_stream and alt_stream.get("url"):
+                        alt_dur = int(alt_stream.get("duration") or 0)
+                        if exp_dur <= 45 or abs(alt_dur - exp_dur) <= max(55, exp_dur * 0.35):
+                            fallback_ids.pop(alt_idx)
+                            fallback_ids.insert(0, video_id)
+                            video_id = alt_vid
+                            duration_text = format_seconds(alt_dur)
+                            break
 
         result = {
             "video_id": video_id,

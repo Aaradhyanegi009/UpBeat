@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="5.4.2",
-    description="UpBeat v5.4.2 - Strict title & snippet verification for stream resolution, sleep timer end-of-track fix, and crossfade duration safety"
+    version="5.4.3",
+    description="UpBeat v5.4.3 - Direct unblocked stream promotion, resilient audio lifecycle without synthetic pauses or snippet rejection errors"
 )
 
 app.add_middleware(

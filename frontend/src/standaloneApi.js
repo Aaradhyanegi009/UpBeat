@@ -768,14 +768,21 @@ export async function resolveStandaloneAudio(videoId) {
 }
 
 /** Audio source for the player: Mac backend proxy when available, otherwise direct stream. */
-export async function getAudioSource(videoId) {
+export async function getAudioSource(videoId, track = null) {
   if (hasBackend()) {
     try {
-      const resp = await fetch(apiUrl(`/audio-info/${videoId}`))
+      const qParams = new URLSearchParams()
+      if (track?.title) qParams.set('title', track.title)
+      if (track?.artist) qParams.set('artist', track.artist)
+      const expDur = parseDurationText(track?.duration_text) || Number(track?.duration || 0)
+      if (expDur > 0) qParams.set('expected_duration', String(expDur))
+      const qs = qParams.toString() ? `?${qParams.toString()}` : ''
+
+      const resp = await fetch(apiUrl(`/audio-info/${videoId}${qs}`))
       if (resp.ok) {
         const info = await resp.json()
         return {
-          url: apiUrl(`/audio/${videoId}`),
+          url: apiUrl(`/audio/${videoId}${qs}`),
           duration: Number(info?.duration || 0)
         }
       }
