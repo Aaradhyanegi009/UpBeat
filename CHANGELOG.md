@@ -4,6 +4,36 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v5.5.2] - 2026-11-01
+
+### 🎨 Light Mode Global Contrast Audit & Clean Typography
+- **Eliminated All Invisible Text**:
+  - Audited `SonicDnaView.jsx`: fixed "Explore Boundaries" button (`text-[var(--text-primary)]`), Genre Affinity style names (`g.name` now high-contrast slate `#0F172A` instead of invisible white), percentage badges, key anchoring artists, and core profile tracks.
+  - Fixed "Sync Liked" and "Sync YouTube Likes" buttons across `Navbar.jsx`, `SonicDnaView.jsx`, and `Sidebar.jsx` with deep contrast text (`#9f1239` / `text-rose-950 dark:text-rose-200 font-bold`).
+  - Audited Direct Search subtabs in `PlaylistView.jsx` (Videos, Songs, Matched Playlists): replaced low-contrast pastel pills with high-contrast, bold tokens (`text-rose-950`, `text-purple-950`, `text-emerald-950 font-bold`).
+  - Added global light-mode CSS rules in `index.css` ensuring `.text-white` on standard light surfaces automatically resolves to deep slate ink (`#0F172A`), while preserving `#FFFFFF` over album art cards (`squircle-card`) and solid accent buttons.
+
+### 🎵 Curated Daily Top Charts Open First
+- **Curated Stations Placed at Top**:
+  - Reordered `PlaylistView.jsx` so the Curated section ("Listen together" / Top Charts & Made For You) opens **first** at the very top of the page, allowing immediate access to global hits across all languages without scrolling.
+  - Updated `App.jsx` default generation from regional `"New Hindi Songs"` to `'Top 50 Global Daily Chart Hits'`.
+
+### 🎧 Authentic Personalized Artist Mixes & Real Song Artwork
+- **Purged All Generic Stock Photos**:
+  - Replaced all Unsplash stock photos across Tier 1 (Charts) and Tier 2 (Personalized) with authentic YouTube Music song thumbnails (`https://i.ytimg.com/vi/${id}/hqdefault.jpg`).
+- **Paired Artist Mixes Seeded from User Library**:
+  - Upgraded personalized mix engine in `standaloneApi.js`: extracts user's authentic artists (e.g., Maroon 5, Post Malone, Arctic Monkeys, Lukas Graham, Billie Eilish, Sawano) to generate dynamic paired artist mixes (e.g. `Maroon 5 & Post Malone Mix`, `Arctic Monkeys & Lukas Graham Mix`, `Billie Eilish & Friends Mix`, `Rediscover Favorites Mix`).
+  - Each station card displays the actual album artwork from the artist's tracks as its cover.
+  - Defined and exported `DEFAULT_SEED_IDS` in `standaloneApi.js` to ensure unhindered mix generation.
+
+### 🧹 Minimalist Discovery Header
+- **Removed All AI-Generated Filler Sentences & Badges**:
+  - Stripped out `"LIVE DISCOVERY • 8–9 Live Streams"` badge and `"Regional daily charts & personalized Sonic DNA streams..."` tagline.
+  - Renamed shelves to clean, Spotify/YTM-style headings: **Daily Top Charts** and **Made For You**.
+  - Removed intrusive new user unlock banner.
+
+---
+
 ## [v5.5.1] - 2026-11-01
 
 ### 🛠️ Polish & Refinements

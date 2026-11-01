@@ -259,8 +259,235 @@ export default function PlaylistView({
       className="w-full flex flex-col bg-transparent pb-[130px] select-none transition-colors"
       onClick={() => setActiveMenuIdx(null)}
     >
-      {/* 1. Header: Quick picks with Spatial Breathing Room & Universal Shuffle */}
-      <div className="px-5 sm:px-8 lg:px-10 pt-4 pb-2 flex flex-col gap-3">
+      {/* 1. Curated Playlists & Daily Top Charts (Opens First) */}
+      <div className="px-5 sm:px-8 lg:px-10 pt-4 sm:pt-6 flex flex-col gap-5 sm:gap-6">
+        {/* Section Header */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[1.35rem] sm:text-[1.5rem] font-bold text-[var(--text-primary)] tracking-tight">
+              Listen together
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Refresh Feed Button */}
+            <button
+              onClick={handleRefreshFeed}
+              disabled={isRefreshingFeed}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--border-subtle)] hover:border-[var(--border-strong)] bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text-primary)] transition-all cursor-pointer active:scale-95 shadow-xs"
+              title="Refresh feed with fresh rotation & live tracks"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingFeed ? 'animate-spin text-rose-500' : 'text-zinc-400'}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+
+            {/* Carousel navigation controls */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => scrollContainer(tier1ScrollRef, 'left')}
+                className="w-8 h-8 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                title="Previous charts"
+                aria-label="Scroll charts left"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => scrollContainer(tier1ScrollRef, 'right')}
+                className="w-8 h-8 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                title="Next charts"
+                aria-label="Scroll charts right"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Top Charts Shelf */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-blue-500" />
+              <span>Daily Top Charts</span>
+            </span>
+          </div>
+
+          <div
+            ref={tier1ScrollRef}
+            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory"
+          >
+            {tier1Blocks.map((block) => {
+              const isRerolling = rerollingBlockId === block.id
+              return (
+                <div
+                  key={block.id}
+                  onClick={() => handleSelectBlock(block)}
+                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-all duration-300 hover:scale-[1.02] shadow-xl"
+                >
+                  <img
+                    src={block.thumbnail}
+                    alt=""
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-65"
+                    loading="lazy"
+                  />
+                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/45`} />
+
+                  <div className="absolute inset-0 p-4 flex flex-col justify-between z-10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-white font-bold px-2 py-0.5 rounded-full bg-white/20 border border-white/20 backdrop-blur-md">
+                        {block.badge}
+                      </span>
+
+                      <button
+                        onClick={(e) => handleRerollBlock(block.id, e)}
+                        disabled={isRerolling}
+                        title="Randomize / Reroll block"
+                        className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-90"
+                      >
+                        <RotateCcw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-rose-400' : ''}`} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-end justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-bold text-white group-hover:text-rose-300 transition-colors truncate drop-shadow-sm">
+                          {block.title}
+                        </h3>
+                        <p className="text-[11px] text-zinc-300 mt-0.5 truncate drop-shadow-sm">
+                          {block.subtitle}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => handleShuffleBlock(block, e)}
+                          title="Shuffle Play Station"
+                          className="w-8 h-8 rounded-full bg-black/60 hover:bg-rose-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
+                        >
+                          <Shuffle className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSelectBlock(block)
+                          }}
+                          title="Play Station"
+                          className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Made For You (Personalized Mixes) Shelf */}
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+              <span>Made For You</span>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => scrollContainer(tier2ScrollRef, 'left')}
+                className="w-7 h-7 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                title="Previous personal streams"
+                aria-label="Scroll personal streams left"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => scrollContainer(tier2ScrollRef, 'right')}
+                className="w-7 h-7 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                title="Next personal streams"
+                aria-label="Scroll personal streams right"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={tier2ScrollRef}
+            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory"
+          >
+            {tier2Blocks.map((block) => {
+              const isRerolling = rerollingBlockId === block.id
+              return (
+                <div
+                  key={block.id}
+                  onClick={() => handleSelectBlock(block)}
+                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-all duration-300 hover:scale-[1.02] shadow-xl"
+                >
+                  <img
+                    src={block.thumbnail}
+                    alt=""
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-65"
+                    loading="lazy"
+                  />
+                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/45`} />
+
+                  <div className="absolute inset-0 p-4 flex flex-col justify-between z-10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-white font-bold px-2 py-0.5 rounded-full bg-white/20 border border-white/20 backdrop-blur-md">
+                        {block.badge}
+                      </span>
+
+                      <button
+                        onClick={(e) => handleRerollBlock(block.id, e)}
+                        disabled={isRerolling}
+                        title="Randomize / Reroll block"
+                        className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-90"
+                      >
+                        <RotateCcw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-rose-400' : ''}`} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-end justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors truncate drop-shadow-sm">
+                          {block.title}
+                        </h3>
+                        <p className="text-[11px] text-zinc-300 mt-0.5 truncate drop-shadow-sm">
+                          {block.subtitle}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => handleShuffleBlock(block, e)}
+                          title="Shuffle Play Station"
+                          className="w-8 h-8 rounded-full bg-black/60 hover:bg-purple-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
+                        >
+                          <Shuffle className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSelectBlock(block)
+                          }}
+                          title="Play Station"
+                          className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Header: Quick picks with Spatial Breathing Room & Universal Shuffle */}
+      <div className="px-5 sm:px-8 lg:px-10 pt-8 pb-2 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3.5 min-w-0">
             {googleUser?.picture ? (
@@ -360,20 +587,20 @@ export default function PlaylistView({
           </div>
         </div>
 
-        {/* Direct Search Subtabs */}
+        {/* Direct Search Subtabs with High Contrast */}
         {isDirectSearch && (youtubeResults.length > 0 || songResults.length > 0 || matchedPlaylists.length > 0) && (
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
             {youtubeResults.length > 0 && (
               <button
                 type="button"
                 onClick={() => onSelectYoutubeResults && onSelectYoutubeResults()}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
+                className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
                   activeSource === 'youtube'
-                    ? 'bg-rose-500/20 border-rose-500/60 text-rose-300 font-semibold'
-                    : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    ? 'bg-rose-500/20 border-rose-500/60 text-rose-950 dark:text-rose-200'
+                    : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
                 }`}
               >
-                <Play className="w-3 h-3 text-rose-400 fill-rose-400" />
+                <Play className="w-3 h-3 text-rose-500 fill-rose-500" />
                 <span>Videos ({youtubeResults.length})</span>
               </button>
             )}
@@ -382,13 +609,13 @@ export default function PlaylistView({
               <button
                 type="button"
                 onClick={() => onSelectDirectSongs && onSelectDirectSongs()}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
+                className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
                   activeSource === 'songs'
-                    ? 'bg-purple-500/20 border-purple-500/60 text-purple-300 font-semibold'
-                    : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    ? 'bg-purple-500/20 border-purple-500/60 text-purple-950 dark:text-purple-200'
+                    : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
                 }`}
               >
-                <Disc className="w-3 h-3 text-purple-400" />
+                <Disc className="w-3 h-3 text-purple-500" />
                 <span>Songs ({songResults.length})</span>
               </button>
             )}
@@ -402,11 +629,11 @@ export default function PlaylistView({
                   onClick={() => onSelectMatchedPlaylist && onSelectMatchedPlaylist(pl)}
                   className={`px-3.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
                     isActivePl
-                      ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 font-semibold'
-                      : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      ? 'bg-emerald-500/25 border-emerald-500/60 text-emerald-950 dark:text-emerald-200 font-bold'
+                      : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
                   }`}
                 >
-                  <ListMusic className="w-3 h-3 text-emerald-400" />
+                  <ListMusic className="w-3 h-3 text-emerald-500" />
                   <span className="truncate max-w-[180px]">{pl.title}</span>
                 </button>
               )
@@ -604,258 +831,6 @@ export default function PlaylistView({
           </div>
         )
       )}
-
-      {/* 3. Dynamic "Listen together" / Discovery Engine (8–9 Live Blocks) */}
-      <div className="px-5 sm:px-8 lg:px-10 pt-8 sm:pt-10 flex flex-col gap-6">
-        {/* Section Header */}
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-rose-500 font-bold px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20">
-                LIVE DISCOVERY
-              </span>
-              <span className="text-xs text-[var(--text-muted)] font-medium">8–9 Live Streams</span>
-            </div>
-            <h2 className="text-[1.35rem] sm:text-[1.5rem] font-bold text-[var(--text-primary)] tracking-tight">
-              Listen together
-            </h2>
-            <p className="text-[0.82rem] text-[var(--text-secondary)] mt-0.5">
-              Regional daily charts & personalized Sonic DNA streams tailored to your taste profile
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Refresh Feed Button */}
-            <button
-              onClick={handleRefreshFeed}
-              disabled={isRefreshingFeed}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--border-subtle)] hover:border-[var(--border-strong)] bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text-primary)] transition-all cursor-pointer active:scale-95 shadow-xs"
-              title="Refresh feed with fresh rotation & live tracks"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingFeed ? 'animate-spin text-rose-500' : 'text-zinc-400'}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-
-            {/* Carousel navigation controls */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => scrollContainer(tier1ScrollRef, 'left')}
-                className="w-8 h-8 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
-                title="Previous charts"
-                aria-label="Scroll charts left"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => scrollContainer(tier1ScrollRef, 'right')}
-                className="w-8 h-8 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
-                title="Next charts"
-                aria-label="Scroll charts right"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Tier 1 Shelf: 4 Mandatory Regional & Viral Chart Blocks */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-blue-500" />
-              <span>Regional & Global Daily Charts (Tier 1)</span>
-            </span>
-          </div>
-
-          <div
-            ref={tier1ScrollRef}
-            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory"
-          >
-            {tier1Blocks.map((block) => {
-              const isRerolling = rerollingBlockId === block.id
-              return (
-                <div
-                  key={block.id}
-                  onClick={() => handleSelectBlock(block)}
-                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-all duration-300 hover:scale-[1.02] shadow-xl"
-                >
-                  <img
-                    src={block.thumbnail}
-                    alt=""
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-65"
-                    loading="lazy"
-                  />
-                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/45`} />
-                  
-                  {/* Card Content Overlay */}
-                  <div className="absolute inset-0 p-4 flex flex-col justify-between z-10">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-white font-bold px-2 py-0.5 rounded-full bg-white/20 border border-white/20 backdrop-blur-md">
-                        {block.badge}
-                      </span>
-
-                      {/* Reroll Button (Pillar 4) */}
-                      <button
-                        onClick={(e) => handleRerollBlock(block.id, e)}
-                        disabled={isRerolling}
-                        title="Randomize / Reroll block"
-                        className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-90"
-                      >
-                        <RotateCcw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-rose-400' : ''}`} />
-                      </button>
-                    </div>
-
-                    <div className="flex items-end justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-bold text-white group-hover:text-rose-300 transition-colors truncate drop-shadow-sm">
-                          {block.title}
-                        </h3>
-                        <p className="text-[11px] text-zinc-300 mt-0.5 truncate drop-shadow-sm">
-                          {block.subtitle}
-                        </p>
-                      </div>
-
-                      {/* Shuffle Play & Direct Play buttons */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => handleShuffleBlock(block, e)}
-                          title="Shuffle Play Station"
-                          className="w-8 h-8 rounded-full bg-black/60 hover:bg-rose-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
-                        >
-                          <Shuffle className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleSelectBlock(block)
-                          }}
-                          title="Play Station"
-                          className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Tier 2 Shelf: 4-5 Personalized Sonic DNA Blocks */}
-        <div className="flex flex-col gap-2 pt-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-              <Dna className="w-3.5 h-3.5 text-purple-500" />
-              <span>Personalized Sonic DNA & Taste Streams (Tier 2)</span>
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => scrollContainer(tier2ScrollRef, 'left')}
-                className="w-7 h-7 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
-                title="Previous personal streams"
-                aria-label="Scroll personal streams left"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => scrollContainer(tier2ScrollRef, 'right')}
-                className="w-7 h-7 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
-                title="Next personal streams"
-                aria-label="Scroll personal streams right"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* New User Guidance Banner if <= 5 songs */}
-          {isNewUser && (
-            <div className="px-4 py-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 text-purple-300">
-                <Sparkles className="w-4 h-4 shrink-0 text-purple-400" />
-                <span>Heart your first 5 tracks to fully unlock your personalized Sonic Archetype & Deep Cut blocks!</span>
-              </div>
-            </div>
-          )}
-
-          <div
-            ref={tier2ScrollRef}
-            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory"
-          >
-            {tier2Blocks.map((block) => {
-              const isRerolling = rerollingBlockId === block.id
-              return (
-                <div
-                  key={block.id}
-                  onClick={() => handleSelectBlock(block)}
-                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-all duration-300 hover:scale-[1.02] shadow-xl"
-                >
-                  <img
-                    src={block.thumbnail}
-                    alt=""
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-65"
-                    loading="lazy"
-                  />
-                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/45`} />
-                  
-                  {/* Card Content Overlay */}
-                  <div className="absolute inset-0 p-4 flex flex-col justify-between z-10">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-white font-bold px-2 py-0.5 rounded-full bg-white/20 border border-white/20 backdrop-blur-md">
-                        {block.badge}
-                      </span>
-
-                      {/* Reroll Button (Pillar 4) */}
-                      <button
-                        onClick={(e) => handleRerollBlock(block.id, e)}
-                        disabled={isRerolling}
-                        title="Randomize / Reroll block"
-                        className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer active:scale-90"
-                      >
-                        <RotateCcw className={`w-3 h-3 ${isRerolling ? 'animate-spin text-rose-400' : ''}`} />
-                      </button>
-                    </div>
-
-                    <div className="flex items-end justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors truncate drop-shadow-sm">
-                          {block.title}
-                        </h3>
-                        <p className="text-[11px] text-zinc-300 mt-0.5 truncate drop-shadow-sm">
-                          {block.subtitle}
-                        </p>
-                      </div>
-
-                      {/* Shuffle Play & Direct Play buttons */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => handleShuffleBlock(block, e)}
-                          title="Shuffle Play Station"
-                          className="w-8 h-8 rounded-full bg-black/60 hover:bg-purple-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
-                        >
-                          <Shuffle className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleSelectBlock(block)
-                          }}
-                          title="Play Station"
-                          className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

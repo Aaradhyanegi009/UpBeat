@@ -1644,8 +1644,8 @@ export default function PlayerBar({
                     disabled={downloadState === 'downloading'}
                     title={downloadState === 'downloading' ? 'Downloading...' : (downloadState === 'success' || isDownloaded) ? 'Downloaded (Offline ready)' : 'Download Track'}
                     aria-label="Download Track"
-                    className={`hidden sm:flex p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer shrink-0 ${
-                      isDownloaded ? 'text-emerald-400' : 'text-[#71717a] hover:text-white'
+                    className={`hidden sm:flex p-1.5 rounded-full hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shrink-0 ${
+                      isDownloaded ? 'text-emerald-400' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     {downloadState === 'downloading' ? (
@@ -1674,7 +1674,7 @@ export default function PlayerBar({
                   setNowPlayingOpen(true)
                 }}
                 className={`p-1.5 rounded-md active:scale-90 transition-all cursor-pointer ${
-                  nowPlayingOpen && showLyrics ? 'text-white bg-white/15' : 'text-zinc-400 hover:text-white'
+                  nowPlayingOpen && showLyrics ? 'text-white bg-white/15' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
                 style={nowPlayingOpen && showLyrics ? { color: albumColor.primary } : undefined}
                 title="Live Synced Lyrics"
@@ -1686,7 +1686,7 @@ export default function PlayerBar({
             {track && (
               <button
                 onClick={() => setNowPlayingOpen(true)}
-                className="p-1.5 rounded-md text-zinc-400 hover:text-white active:scale-90 transition-transform cursor-pointer"
+                className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-90 transition-transform cursor-pointer"
                 title="Expand Now Playing"
                 aria-label="Expand Now Playing"
               >
@@ -1856,8 +1856,8 @@ export default function PlayerBar({
                 title="Open Playback Queue"
                 className={`p-1.5 rounded-md relative transition-colors cursor-pointer ${
                   isQueueOpen
-                    ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                    : 'text-[#8e8e96] hover:text-white hover:bg-[#1a1a22]'
+                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
                 <ListMusic className="w-4 h-4" />
@@ -1884,7 +1884,7 @@ export default function PlayerBar({
               className={`p-1.5 rounded-md border text-xs transition-all cursor-pointer disabled:opacity-30 ${
                 nowPlayingOpen && showLyrics
                   ? 'text-white'
-                  : 'bg-transparent border-transparent text-[#8e8e96] hover:text-white hover:bg-[#1a1a22]'
+                  : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
               }`}
               style={
                 nowPlayingOpen && showLyrics
@@ -1909,8 +1909,8 @@ export default function PlayerBar({
               title="Toggle Video Preview"
               className={`p-1.5 rounded-md border text-xs transition-colors cursor-pointer disabled:opacity-30 ${
                 showVideo
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                  : 'bg-transparent border-transparent text-[#8e8e96] hover:text-white'
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                  : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
               }`}
             >
               <Video className="w-4 h-4" />
@@ -1925,8 +1925,8 @@ export default function PlayerBar({
                   (downloadState === 'success' || isDownloaded)
                     ? 'text-emerald-400 bg-emerald-500/15'
                     : downloadState === 'downloading'
-                    ? 'text-emerald-300 animate-pulse bg-emerald-500/10'
-                    : 'text-[#8e8e96] hover:text-white hover:bg-[#1a1a22]'
+                    ? 'text-emerald-400 animate-pulse bg-emerald-500/10'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
                 {downloadState === 'downloading' ? (
@@ -1950,7 +1950,7 @@ export default function PlayerBar({
                   }
                 }}
                 title="Open on YouTube / Browser"
-                className="p-1.5 rounded-md text-[#8e8e96] hover:text-white hover:bg-[#1a1a22] transition-colors cursor-pointer"
+                className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
               >
                 <ExternalLink className="w-4 h-4" />
               </button>
@@ -1967,7 +1967,7 @@ export default function PlayerBar({
               className={`p-1.5 rounded-md transition-colors cursor-pointer relative ${
                 sleepTimer.active
                   ? 'text-indigo-400 bg-indigo-500/15'
-                  : 'text-[#8e8e96] hover:text-white hover:bg-[#1a1a22]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
               }`}
             >
               <Moon className="w-4 h-4" />
@@ -1984,7 +1984,7 @@ export default function PlayerBar({
             <div className="hidden lg:flex items-center gap-2">
               <button
                 onClick={() => setIsMuted(!isMuted)}
-                className="text-[#8e8e96] hover:text-white transition-colors cursor-pointer"
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
               >
                 {isMuted || volume === 0 ? (
                   <VolumeX className="w-4 h-4 text-[#52525b]" />

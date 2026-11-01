@@ -1755,7 +1755,7 @@ export default function App() {
                 onSelectMatchedPlaylist={handleSelectMatchedPlaylist}
                 onSelectYoutubeResults={handleSelectYoutubeResults}
                 onSelectDirectSongs={handleSelectDirectSongs}
-                onGenerateDefault={() => handleDirectSearch('New Hindi Songs', 'auto')}
+                onGenerateDefault={() => handleDirectSearch('Top 50 Global Daily Chart Hits', 'auto')}
                 onSelectStarter={(q) => {
                   setPrompt(q)
                   handleDirectSearch(q, 'auto')

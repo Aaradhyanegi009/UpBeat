@@ -1599,6 +1599,11 @@ function getRandomRotationTag() {
   return DYNAMIC_ROTATION_TAGS[Math.floor(Math.random() * DYNAMIC_ROTATION_TAGS.length)]
 }
 
+export const DEFAULT_SEED_IDS = new Set([
+  'F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE',
+  'CXDUXjsU5ao', 'TCd6PfxOy0Y', 'QpxFcMYRV08'
+])
+
 export function getInitialDiscoveryBlocks() {
   return [
     {
@@ -1608,7 +1613,7 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'Billboard Hot 100 & US Top 50 Daily Hits',
       badge: 'US Chart',
       query: 'Billboard Hot 100 US top daily chart hits',
-      thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+      thumbnail: 'https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg',
       color: 'from-blue-600/40 to-black'
     },
     {
@@ -1618,7 +1623,7 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'Top Charting Hits Across India Today',
       badge: 'India Chart',
       query: 'Trending 20 India top daily chart hit songs',
-      thumbnail: 'https://yt3.googleusercontent.com/WI2UEaJBjl5bvSz12by1__hO_EZNyuyTChu9LfuQ9J__PtSx17FT5p8kDV4BKBmCnEb2pkkmhS0=s576',
+      thumbnail: 'https://i.ytimg.com/vi/14tCx65hmXQ/hqdefault.jpg',
       color: 'from-amber-600/40 to-black'
     },
     {
@@ -1628,7 +1633,7 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'J-Pop, Anime & Tokyo Hot 100 Daily Chart',
       badge: 'Japan Chart',
       query: 'Tokyo Hot 100 J-Pop anime daily top chart hits',
-      thumbnail: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80',
+      thumbnail: 'https://i.ytimg.com/vi/qUFRPDHs1Q8/hqdefault.jpg',
       color: 'from-rose-600/40 to-black'
     },
     {
@@ -1638,63 +1643,63 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
       badge: 'Trending Heat',
       query: 'viral trending songs reels Bollywood Punjabi indie hits',
-      thumbnail: 'https://yt3.googleusercontent.com/1n6BXDFo06jkTV1M-PIKTVzWnJ0G2bO1dEULK8hd696MNPmKbCufOLTJKyNn_vw1CZp5A7-y5A=s576',
+      thumbnail: 'https://i.ytimg.com/vi/IltsZZ_PZNs/hqdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     },
     {
       id: 'block_sonic_archetype',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Hiroyuki Sawano & Epic OST',
-      subtitle: 'Orchestral Rock • Anime Anthems & Climaxes',
-      badge: 'Epic OST',
-      query: 'Hiroyuki Sawano epic orchestral anime soundtrack best mix',
-      thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-      color: 'from-red-600/40 to-black'
+      title: 'Maroon 5 & Post Malone Mix',
+      subtitle: 'Featuring Maroon 5, Post Malone & chart-topping pop',
+      badge: 'Artist Mix',
+      query: 'Maroon 5 Post Malone best hit songs mix',
+      thumbnail: 'https://i.ytimg.com/vi/aJOTlE1K90k/hqdefault.jpg',
+      color: 'from-rose-600/40 to-black'
     },
     {
       id: 'block_deep_cut',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Neo-Electronic & Synthwave Flow',
-      subtitle: 'Driving Dark Synth & Cybernetic Beats',
-      badge: 'Cyber Flow',
-      query: 'dark synthwave cyberpunk electronic driving rhythm',
-      thumbnail: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
+      title: 'Arctic Monkeys & Lukas Graham Mix',
+      subtitle: 'Indie Rock & Soulful Acoustic Anthems',
+      badge: 'Artist Mix',
+      query: 'Arctic Monkeys Lukas Graham indie alternative rock mix',
+      thumbnail: 'https://i.ytimg.com/vi/qU9mHegkTc4/hqdefault.jpg',
       color: 'from-indigo-600/40 to-black'
     },
     {
       id: 'block_recent_vibe',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Global Indie & Bedroom Pop',
-      subtitle: 'Melodic Guitars • Crisp Indie Vibrations',
-      badge: 'Indie Gems',
-      query: 'modern indie rock bedroom pop guitar melodic hits',
-      thumbnail: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80',
+      title: 'Billie Eilish & Taylor Swift Mix',
+      subtitle: 'Introspective Pop & Melodic Atmosphere',
+      badge: 'Vibe Mix',
+      query: 'Billie Eilish Taylor Swift pop acoustic melody hits',
+      thumbnail: 'https://i.ytimg.com/vi/d5gxZ5y9vF4/hqdefault.jpg',
       color: 'from-cyan-600/40 to-black'
     },
     {
       id: 'block_time_of_day',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Daylight Focus & Terminal',
-      subtitle: 'Minimal Synth, Intricate Rhythm & Work Flow',
-      badge: 'Time Cycle',
-      query: 'minimal synth focus electronic programming beats',
-      thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
+      title: 'Hiroyuki Sawano & Epic Soundtracks',
+      subtitle: 'Cinematic Orchestral Rock & Anime Climaxes',
+      badge: 'Epic OST',
+      query: 'Hiroyuki Sawano anime orchestral rock greatest hits',
+      thumbnail: 'https://i.ytimg.com/vi/V8nwtq_Vn8E/hqdefault.jpg',
       color: 'from-slate-700/40 to-black'
     },
     {
       id: 'block_rediscover',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Acoustic Warmth & Soul Gems',
-      subtitle: 'Unplugged Melodies & Timeless Hits',
+      title: 'Rediscover Favorites Mix',
+      subtitle: 'Sunflower, 7 Years & Essential Timeless Anthems',
       badge: 'Rediscover',
-      query: 'acoustic warmth acoustic soul timeless unplugged classics',
-      thumbnail: 'https://images.unsplash.com/photo-1485579149621-3123dd979885?w=600&auto=format&fit=crop&q=80',
-      color: 'from-rose-600/40 to-black'
+      query: 'Post Malone Sunflower Lukas Graham 7 Years radio playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
+      color: 'from-purple-600/40 to-black'
     }
   ]
 }
@@ -1721,21 +1726,26 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
   const validUserTracks = (userTracks || []).filter(
     (t) => t?.title && t?.artist && !DEFAULT_SEED_IDS.has(t?.video_id)
   )
-  const isNewUser = validUserTracks.length <= 5
 
-  // Extract User Signals
-  const seenArtists = new Set()
-  const userArtists = []
-  const artistArtwork = new Map()
+  // Map each unique clean artist to their tracks and artwork
+  const artistMap = new Map()
   for (const t of validUserTracks) {
     const rawArtist = (t.artist || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim()
     const cleanArt = rawArtist.split(/\s+(?:feat\.?|ft\.?|&|x)\s+|,\s*/i)[0].trim()
-    if (cleanArt && cleanArt.length >= 2 && !seenArtists.has(cleanArt.toLowerCase())) {
-      seenArtists.add(cleanArt.toLowerCase())
-      userArtists.push(cleanArt)
-      if (t.video_id) artistArtwork.set(cleanArt.toLowerCase(), `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg`)
+    if (cleanArt && cleanArt.length >= 2) {
+      const key = cleanArt.toLowerCase()
+      const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+      if (!artistMap.has(key)) {
+        artistMap.set(key, { name: cleanArt, tracks: [], thumb })
+      }
+      const entry = artistMap.get(key)
+      entry.tracks.push(t)
+      if (!entry.thumb && thumb) entry.thumb = thumb
     }
   }
+
+  const artists = Array.from(artistMap.values())
+  const isNewUser = artists.length < 2
 
   const userGenres = Array.isArray(tasteDna?.primary_genres) ? tasteDna.primary_genres : []
   const archetype = tasteDna?.archetype || 'Sonic Explorer'
@@ -1748,18 +1758,18 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
   let timeSlotQuery = 'nocturnal lofi ambient chill study beats'
   let timeSlotColor = 'from-violet-600/40 to-black'
   if (currentHour >= 4 && currentHour < 12) {
-    timeSlotTitle = 'Crimson Sunrise Flow'
+    timeSlotTitle = 'Sunrise Energy Flow'
     timeSlotSubtitle = 'Energetic Morning Electronic & Acoustic Spark'
     timeSlotQuery = 'morning acoustic upbeat electronic sunrise music'
     timeSlotColor = 'from-rose-600/40 to-black'
   } else if (currentHour >= 12 && currentHour < 19) {
-    timeSlotTitle = 'Daylight Focus & Terminal'
+    timeSlotTitle = 'Daylight Focus & Work'
     timeSlotSubtitle = 'Minimal Synth, Intricate Rhythm & Work Flow'
     timeSlotQuery = 'minimal synth focus electronic programming beats'
     timeSlotColor = 'from-slate-700/40 to-black'
   }
 
-  // Tier 1 — 4 Mandatory Regional & Viral Chart Blocks
+  // Tier 1 — 4 Mandatory Regional & Viral Chart Blocks (100% Real Song Art)
   const tier1Blocks = [
     {
       id: 'block_us_top_daily',
@@ -1769,7 +1779,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       badge: 'US Chart',
       browse_id: 'VLPL4fGSI1pDJn5h1G_8a56m4_xS_hS1l',
       query: `Billboard Hot 100 US top daily chart hits ${getRandomRotationTag()}`,
-      thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+      thumbnail: 'https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg',
       color: 'from-blue-600/40 to-black'
     },
     {
@@ -1780,7 +1790,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       badge: 'India Chart',
       browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
       query: `Trending 20 India top daily chart hit songs ${getRandomRotationTag()}`,
-      thumbnail: 'https://yt3.googleusercontent.com/WI2UEaJBjl5bvSz12by1__hO_EZNyuyTChu9LfuQ9J__PtSx17FT5p8kDV4BKBmCnEb2pkkmhS0=s576',
+      thumbnail: 'https://i.ytimg.com/vi/14tCx65hmXQ/hqdefault.jpg',
       color: 'from-amber-600/40 to-black'
     },
     {
@@ -1791,7 +1801,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       badge: 'Japan Chart',
       browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
       query: `Tokyo Hot 100 J-Pop anime daily top chart hits ${getRandomRotationTag()}`,
-      thumbnail: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80',
+      thumbnail: 'https://i.ytimg.com/vi/qUFRPDHs1Q8/hqdefault.jpg',
       color: 'from-rose-600/40 to-black'
     },
     {
@@ -1802,140 +1812,135 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       badge: 'Trending Heat',
       browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
       query: `viral trending songs reels Bollywood Punjabi indie hits ${getRandomRotationTag()}`,
-      thumbnail: 'https://yt3.googleusercontent.com/1n6BXDFo06jkTV1M-PIKTVzWnJ0G2bO1dEULK8hd696MNPmKbCufOLTJKyNn_vw1CZp5A7-y5A=s576',
+      thumbnail: 'https://i.ytimg.com/vi/IltsZZ_PZNs/hqdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     }
   ]
 
-  // Tier 2 — 4 to 5 Personalized Sonic DNA Blocks
+  // Tier 2 — 4 to 5 Personalized Mixes (Seeded with User Artists & Song Thumbnails)
   let tier2Blocks = []
   if (isNewUser) {
-    // Graceful high-affinity global mixes for new users
     tier2Blocks = [
       {
         id: 'block_sonic_archetype',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Hiroyuki Sawano & Epic OST',
-        subtitle: 'Orchestral Rock • Anime Anthems & Climaxes',
-        badge: 'Epic OST',
-        query: `Hiroyuki Sawano epic orchestral anime soundtrack best mix ${getRandomRotationTag()}`,
-        thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-        color: 'from-red-600/40 to-black'
+        title: 'Maroon 5 & Post Malone Mix',
+        subtitle: 'Featuring Maroon 5, Post Malone & chart-topping pop',
+        badge: 'Artist Mix',
+        query: `Maroon 5 Post Malone best hit songs mix ${getRandomRotationTag()}`,
+        thumbnail: 'https://i.ytimg.com/vi/aJOTlE1K90k/hqdefault.jpg',
+        color: 'from-rose-600/40 to-black'
       },
       {
         id: 'block_deep_cut',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Neo-Electronic & Synthwave Flow',
-        subtitle: 'Driving Dark Synth & Cybernetic Beats',
-        badge: 'Cyber Flow',
-        query: `dark synthwave cyberpunk electronic driving rhythm ${getRandomRotationTag()}`,
-        thumbnail: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
+        title: 'Arctic Monkeys & Lukas Graham Mix',
+        subtitle: 'Indie Rock & Soulful Acoustic Anthems',
+        badge: 'Artist Mix',
+        query: `Arctic Monkeys Lukas Graham indie alternative rock mix ${getRandomRotationTag()}`,
+        thumbnail: 'https://i.ytimg.com/vi/qU9mHegkTc4/hqdefault.jpg',
         color: 'from-indigo-600/40 to-black'
       },
       {
         id: 'block_recent_vibe',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Global Indie & Bedroom Pop',
-        subtitle: 'Melodic Guitars • Crisp Indie Vibrations',
-        badge: 'Indie Gems',
-        query: `modern indie rock bedroom pop guitar melodic hits ${getRandomRotationTag()}`,
-        thumbnail: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80',
+        title: 'Billie Eilish & Taylor Swift Mix',
+        subtitle: 'Introspective Pop & Melodic Atmosphere',
+        badge: 'Vibe Mix',
+        query: `Billie Eilish Taylor Swift pop acoustic melody hits ${getRandomRotationTag()}`,
+        thumbnail: 'https://i.ytimg.com/vi/d5gxZ5y9vF4/hqdefault.jpg',
         color: 'from-cyan-600/40 to-black'
       },
       {
         id: 'block_time_of_day',
         tier: 2,
         isNewUserSeed: true,
-        title: timeSlotTitle,
-        subtitle: timeSlotSubtitle,
-        badge: 'Time Cycle',
-        query: `${timeSlotQuery} ${getRandomRotationTag()}`,
-        thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
-        color: timeSlotColor
+        title: 'Hiroyuki Sawano & Epic Soundtracks',
+        subtitle: 'Cinematic Orchestral Rock & Anime Climaxes',
+        badge: 'Epic OST',
+        query: `Hiroyuki Sawano anime orchestral rock greatest hits ${getRandomRotationTag()}`,
+        thumbnail: 'https://i.ytimg.com/vi/V8nwtq_Vn8E/hqdefault.jpg',
+        color: 'from-slate-700/40 to-black'
       },
       {
         id: 'block_rediscover',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Acoustic Warmth & Soul Gems',
-        subtitle: 'Unplugged Melodies & Timeless Hits',
+        title: 'Rediscover Favorites Mix',
+        subtitle: 'Sunflower, 7 Years & Essential Timeless Anthems',
         badge: 'Rediscover',
-        query: `acoustic warmth acoustic soul timeless unplugged classics ${getRandomRotationTag()}`,
-        thumbnail: 'https://images.unsplash.com/photo-1485579149621-3123dd979885?w=600&auto=format&fit=crop&q=80',
+        query: `Post Malone Sunflower Lukas Graham 7 Years radio playlist ${getRandomRotationTag()}`,
+        thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
         color: 'from-purple-600/40 to-black'
       }
     ]
   } else {
-    // 100% User Profile Driven Blocks
-    const top2Artists = userArtists.slice(0, 2)
-    const recent2Artists = userArtists.slice(-2)
-    const olderArtists = userArtists.slice(2, 5)
+    // 100% User Profile Driven Blocks with Mixed Artists and Real Artwork
+    const a0 = artists[0]
+    const a1 = artists[1] || a0
+    const a2 = artists[2] || a0
+    const a3 = artists[3] || a1
+    const a4 = artists[4] || a2
 
-    const archetypeArt = (top2Artists[0] && artistArtwork.get(top2Artists[0].toLowerCase())) ||
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
+    const topUserTrackThumb = validUserTracks[0]?.thumbnail ||
+      (validUserTracks[0]?.video_id ? `https://i.ytimg.com/vi/${validUserTracks[0].video_id}/hqdefault.jpg` : a0.thumb)
 
-    const deepCutArt = (userArtists[2] && artistArtwork.get(userArtists[2].toLowerCase())) ||
-      'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80'
-
-    const recentArt = (recent2Artists[0] && artistArtwork.get(recent2Artists[0].toLowerCase())) ||
-      'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80'
-
-    const rediscoverArt = (olderArtists[0] && artistArtwork.get(olderArtists[0].toLowerCase())) ||
-      'https://images.unsplash.com/photo-1485579149621-3123dd979885?w=600&auto=format&fit=crop&q=80'
+    const olderUserTrackThumb = validUserTracks[validUserTracks.length - 1]?.thumbnail ||
+      (validUserTracks[validUserTracks.length - 1]?.video_id ? `https://i.ytimg.com/vi/${validUserTracks[validUserTracks.length - 1].video_id}/hqdefault.jpg` : a1.thumb)
 
     tier2Blocks = [
       {
         id: 'block_sonic_archetype',
         tier: 2,
-        title: `${archetype} Mix`,
-        subtitle: `${bpmText} • Personalized Archetype Flow`,
-        badge: 'Sonic DNA',
-        query: `${archetype} ${top2Artists.join(' ')} radio playlist ${getRandomRotationTag()}`,
-        thumbnail: archetypeArt,
-        color: 'from-purple-600/40 to-black'
+        title: `${a0.name} & ${a1.name} Mix`,
+        subtitle: `Featuring ${a0.name}, ${a1.name} & similar hits`,
+        badge: 'Artist Mix',
+        query: `${a0.name} ${a1.name} hits radio playlist ${getRandomRotationTag()}`,
+        thumbnail: a0.thumb || topUserTrackThumb,
+        color: 'from-rose-600/40 to-black'
       },
       {
         id: 'block_deep_cut',
         tier: 2,
-        title: 'Deep Cut Discovery',
-        subtitle: `${userGenres.slice(0, 2).join(' & ') || 'Alternative & Indie'} • Beyond Your Library`,
-        badge: 'Discovery',
-        query: `${userGenres[0] || 'indie'} ${userGenres[1] || 'alternative'} deep cuts fresh songs ${getRandomRotationTag()}`,
-        thumbnail: deepCutArt,
+        title: `${a2.name} & ${a3.name} Mix`,
+        subtitle: `Curated mix inspired by your listening library`,
+        badge: 'Artist Mix',
+        query: `${a2.name} ${a3.name} best songs mix ${getRandomRotationTag()}`,
+        thumbnail: a2.thumb || a1.thumb || topUserTrackThumb,
         color: 'from-indigo-600/40 to-black'
       },
       {
         id: 'block_recent_vibe',
         tier: 2,
-        title: 'Recent Vibe Continuation',
-        subtitle: `${recent2Artists.join(' + ') || 'Recent Favorites'} Radio Flow`,
-        badge: 'Curated Vibe',
-        query: `${recent2Artists.join(' ')} similar artists songs mix ${getRandomRotationTag()}`,
-        thumbnail: recentArt,
+        title: `${a4.name} & Friends Mix`,
+        subtitle: `${archetype} • Matched with your sound taste`,
+        badge: 'Vibe Mix',
+        query: `${a4.name} similar artists music playlist ${getRandomRotationTag()}`,
+        thumbnail: a4.thumb || a0.thumb || topUserTrackThumb,
         color: 'from-cyan-600/40 to-black'
       },
       {
         id: 'block_time_of_day',
         tier: 2,
-        title: `${timeSlotTitle} (Personal)`,
+        title: `${timeSlotTitle} Mix`,
         subtitle: `Synchronized with ${timeSlotSubtitle}`,
-        badge: 'Time Cycle',
-        query: `${timeSlotQuery} ${userArtists[0] || ''} ${getRandomRotationTag()}`,
-        thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
+        badge: 'Time Flow',
+        query: `${timeSlotQuery} ${a0.name} ${getRandomRotationTag()}`,
+        thumbnail: topUserTrackThumb,
         color: timeSlotColor
       },
       {
         id: 'block_rediscover',
         tier: 2,
-        title: 'Rediscover & Forgotten Gems',
-        subtitle: `${olderArtists[0] || 'Past Favorites'} & Harmonic Matches`,
-        badge: 'Rediscovery',
-        query: `${olderArtists.join(' ')} acoustic classics timeless playlist ${getRandomRotationTag()}`,
-        thumbnail: rediscoverArt,
-        color: 'from-rose-600/40 to-black'
+        title: 'Rediscover Favorites Mix',
+        subtitle: `Rotated favorites from your library & harmonic matches`,
+        badge: 'Rediscover',
+        query: `${artists.slice(0, 3).map((a) => a.name).join(' ')} radio playlist ${getRandomRotationTag()}`,
+        thumbnail: olderUserTrackThumb,
+        color: 'from-purple-600/40 to-black'
       }
     ]
   }

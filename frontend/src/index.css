@@ -133,17 +133,21 @@
 
 /* Light mode overrides for legacy dark container classes to maintain soft slight-gray/white contrast */
 .theme-light .bg-black\/40,
+.theme-light .bg-black\/50,
 .theme-light .bg-black\/60,
 .theme-light .bg-black\/75,
+.theme-light .bg-\[\#0c0c12\],
 .theme-light .bg-\[\#0c0c12\]\/75,
 .theme-light .bg-\[\#0c0c12\]\/80,
+.theme-light .bg-\[\#0c0c12\]\/95,
 .theme-light .bg-\[\#0c0c12\]\/40,
 .theme-light .bg-\[\#121214\],
 .theme-light .bg-\[\#14141c\],
-.theme-light .bg-\[\#18181b\] {
-  background-color: var(--bg-card) !important;
-  border-color: var(--border-subtle) !important;
-  color: var(--text-primary) !important;
+.theme-light .bg-\[\#18181b\],
+.theme-light .bg-\[\#1a1a22\] {
+  background-color: #F8F8FC !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #0F172A !important;
 }
 
 .theme-light .border-white\/10,
@@ -152,6 +156,53 @@
 .theme-light .border-white\/\[0\.04\],
 .theme-light .divide-white\/\[0\.04\] {
   border-color: var(--border-subtle) !important;
+}
+
+/* Light mode text contrast audit & deep legibility guarantees */
+.theme-light .text-white {
+  color: #0F172A !important;
+}
+
+.theme-light .text-zinc-100,
+.theme-light .text-zinc-200 {
+  color: #0F172A !important;
+}
+
+.theme-light .text-zinc-300,
+.theme-light .text-zinc-400 {
+  color: #475569 !important;
+}
+
+/* Preserve white text exclusively on top of album artwork, dark scrims, or solid accent buttons */
+.theme-light .squircle-card .text-white,
+.theme-light .squircle-card .text-zinc-300,
+.theme-light .squircle-card .drop-shadow-sm,
+.theme-light button[class*="bg-rose-600"] .text-white,
+.theme-light button[class*="bg-black"] .text-white,
+.theme-light [class*="bg-gradient-to-"] .text-white,
+.theme-light [class*="bg-sky-500"] .text-white,
+.theme-light [class*="bg-rose-500"] .text-white {
+  color: #FFFFFF !important;
+}
+
+/* High-contrast colors for pills and active badges on light backgrounds */
+.theme-light .text-rose-200,
+.theme-light .text-rose-300 {
+  color: #9f1239 !important;
+}
+
+.theme-light .text-emerald-300,
+.theme-light .text-emerald-400 {
+  color: #065f46 !important;
+}
+
+.theme-light .text-purple-300,
+.theme-light .text-purple-400 {
+  color: #581c87 !important;
+}
+
+.theme-light .text-sky-300 {
+  color: #075985 !important;
 }
 
 /* Squircle & Luxury Pill UI System (Signature squircle aesthetic) */
