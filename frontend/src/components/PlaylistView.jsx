@@ -152,12 +152,20 @@ export default function PlaylistView({
 
   const handleSelectBlock = (block) => {
     if (!block) return
-    if (onSelectStarter && block.query) {
-      onSelectStarter(block.query)
-      return
-    }
+    // 1. Matched / curated chart playlist takes top priority (e.g. Billboard Hot 100)
     if (block.browse_id && onSelectMatchedPlaylist) {
       onSelectMatchedPlaylist(block)
+      return
+    }
+    // 2. Preloaded library tracks (e.g. rotated Rediscover favorites)
+    if (block.preloadedTracks && block.preloadedTracks.length > 0 && onSelectDirectSongs) {
+      onSelectDirectSongs(block.preloadedTracks, block.title, block.subtitle)
+      return
+    }
+    // 3. Search query fallback with generalized playlist intent detection
+    if (onSelectStarter && block.query) {
+      const mode = /\b(chart|billboard|playlist|top \d+|daily|hits)\b/i.test(block.query) ? 'playlists' : 'auto'
+      onSelectStarter(block.query, mode)
     }
   }
 

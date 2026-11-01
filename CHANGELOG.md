@@ -4,6 +4,29 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v5.5.4] - 2026-11-01
+
+### 🌓 Minimalist Night & Day Atmosphere Engine
+- **Simplified 1-Tap Toggle**:
+  - Replaced the multi-theme accordion drawer in `Sidebar.jsx` with a sleek, one-tap Day & Night Mode toggle switch with Sun / Moon status.
+  - Replaced the atmosphere theme cycle pill in `Navbar.jsx` with a dedicated Day / Night button.
+  - Streamlined `themeCycle.js` engine to seamlessly toggle between `amoled` (Night) and `light` (Day).
+- **Restored Transparent Glassy Touch**:
+  - Re-introduced the signature luminous atmospheric gradients (`--atm-glow-1`, `--atm-glow-2`, `--atm-glow-3`) across `ytm-atmosphere` so translucent frosted glass squircle cards and panels beautifully refract ambient violet, ruby, and emerald glow.
+
+### 🎯 Billboard & Curated Playlist Instant Showcase
+- **Prioritized Curated Playlists**:
+  - Generalized playlist showcase: When a user clicks Billboard, chart stations, or any block with `browse_id`, `onSelectMatchedPlaylist` immediately loads the playlist tracks and highlights the green playlist pill from the get-go.
+  - Updated `directSearchStandalone`: Automatically showcases matched playlists when search queries indicate playlist/chart intent (`isPlaylistIntent`).
+  - Added query auto-simplification fallback so queries never return 0 tracks.
+
+### 🖼️ Pure Real Music Artwork & Rediscover Hotfix
+- **Eliminated Generic / Broken Covers**:
+  - Replaced all placeholder and stock photos with verified HTTP 200 album artwork (Sabrina Carpenter, Arijit Singh, Yoasobi, Karan Aujla, The Weeknd, Maroon 5, Billie Eilish, Dua Lipa, Post Malone).
+  - Fixed Rediscover block: Preloaded user favorites (`validUserTracks`) and simplified query tokens to eliminate the 0-track search bug and remove dark pixelated building artwork.
+
+---
+
 ## [v5.5.3] - 2026-11-01
 
 ### ☀️ Light Mode Surface & High-Contrast Collisions Hotfix

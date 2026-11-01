@@ -630,9 +630,31 @@ export async function directSearchStandalone(query, mode = 'auto') {
     ytmSearchRaw(qClean, true),
     ytmSearchRaw(qClean, false)
   ])
-  const youtubeResults = yt.videos.slice(0, 40)
-  const ytmSongs = parseYtmSongs(ytmSongsRaw)
-  const ytmPlaylists = parseYtmPlaylists(ytmAllRaw)
+  let youtubeResults = yt.videos.slice(0, 40)
+  let ytmSongs = parseYtmSongs(ytmSongsRaw)
+  let ytmPlaylists = parseYtmPlaylists(ytmAllRaw)
+
+  // Query Simplification Fallback: if over-constrained query yielded 0 tracks, retry with core keywords
+  if (youtubeResults.length === 0 && ytmSongs.length === 0) {
+    const strippedQuery = qClean
+      .replace(/\b(radio playlist|top charting rotation|latest hits|trending viral|essential mix|rotation|fresh picks 2026)\b/gi, '')
+      .trim()
+    const fallbackTokens = queryTokens(strippedQuery)
+    if (fallbackTokens.length > 0) {
+      const simplifiedQuery = fallbackTokens.slice(0, 3).join(' ')
+      if (simplifiedQuery && simplifiedQuery !== qClean.toLowerCase()) {
+        try {
+          const [ytFallback, ytmFallbackRaw] = await Promise.all([
+            ytWebSearch(simplifiedQuery, 2),
+            ytmSearchRaw(simplifiedQuery, true)
+          ])
+          if (ytFallback.videos?.length) youtubeResults = ytFallback.videos.slice(0, 40)
+          const parsedSongs = parseYtmSongs(ytmFallbackRaw)
+          if (parsedSongs.length) ytmSongs = parsedSongs
+        } catch {}
+      }
+    }
+  }
 
   const tokens = queryTokens(qClean)
   const seenTitles = new Set()
@@ -648,7 +670,13 @@ export async function directSearchStandalone(query, mode = 'auto') {
   matchedPlaylists.sort((a, b) => b.relevance - a.relevance) // stable: keeps YouTube order on ties
   matchedPlaylists.splice(6)
 
-  const wantsPlaylist = mode === 'playlists' || (mode === 'auto' && qClean.toLowerCase().includes('playlist'))
+  // Generalize playlist showcase: Auto-load matched playlist for explicit playlist mode,
+  // chart/billboard/curated intents, or when high-relevance playlist matches exist from the get-go.
+  const isPlaylistIntent =
+    mode === 'playlists' ||
+    (mode === 'auto' &&
+      (/\b(playlist|chart|billboard|top|hits|daily|trending|countdown|best of|essentials|soundtrack)\b/i.test(qClean) ||
+        (matchedPlaylists.length > 0 && matchedPlaylists[0].relevance >= 0.5)))
 
   let activeSource = 'youtube'
   let activeBrowseId = ''
@@ -656,11 +684,7 @@ export async function directSearchStandalone(query, mode = 'auto') {
   let playlistTitle = `"${qClean}"`
   let vibe = `YouTube results : ${youtubeResults.length} videos`
 
-  if (mode === 'songs' && ytmSongs.length) {
-    activeSource = 'songs'
-    tracks = ytmSongs
-    vibe = `YouTube results : ${ytmSongs.length} videos`
-  } else if (wantsPlaylist && matchedPlaylists.length) {
+  if (isPlaylistIntent && matchedPlaylists.length) {
     const top = matchedPlaylists[0]
     const plTracks = await browsePlaylistStandalone(top.browse_id, top.title, top.subtitle)
     if (plTracks.length) {
@@ -668,8 +692,12 @@ export async function directSearchStandalone(query, mode = 'auto') {
       activeSource = 'playlist'
       activeBrowseId = top.browse_id
       playlistTitle = top.title
-      vibe = `YouTube results : ${plTracks.length} videos`
+      vibe = `Curated playlist : ${plTracks.length} tracks`
     }
+  } else if (mode === 'songs' && ytmSongs.length) {
+    activeSource = 'songs'
+    tracks = ytmSongs
+    vibe = `YouTube results : ${ytmSongs.length} videos`
   }
 
   if (!tracks.length) {
@@ -1653,8 +1681,9 @@ export function getInitialDiscoveryBlocks() {
       title: 'US Top Daily Chart',
       subtitle: 'Billboard Hot 100 & US Top 50 Daily Hits',
       badge: 'US Chart',
-      query: 'Billboard Hot 100 US top daily chart hits',
-      thumbnail: 'https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg',
+      browse_id: 'VLPL4fGSI40qSUHnL3G30wzCvhLqLqBw8Fw_',
+      query: 'Billboard Hot 100 US top daily chart hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/eVli-tstM5E/hqdefault.jpg',
       color: 'from-blue-600/40 to-black'
     },
     {
@@ -1663,8 +1692,9 @@ export function getInitialDiscoveryBlocks() {
       title: 'India Top Daily Chart',
       subtitle: 'Top Charting Hits Across India Today',
       badge: 'India Chart',
-      query: 'Trending 20 India top daily chart hit songs',
-      thumbnail: 'https://i.ytimg.com/vi/14tCx65hmXQ/hqdefault.jpg',
+      browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
+      query: 'Trending 20 India top daily chart hit songs playlist',
+      thumbnail: 'https://i.ytimg.com/vi/BddP6PYo2gs/hqdefault.jpg',
       color: 'from-amber-600/40 to-black'
     },
     {
@@ -1673,8 +1703,9 @@ export function getInitialDiscoveryBlocks() {
       title: 'Japan Top Daily Chart',
       subtitle: 'J-Pop, Anime & Tokyo Hot 100 Daily Chart',
       badge: 'Japan Chart',
-      query: 'Tokyo Hot 100 J-Pop anime daily top chart hits',
-      thumbnail: 'https://i.ytimg.com/vi/qUFRPDHs1Q8/hqdefault.jpg',
+      browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
+      query: 'Tokyo Hot 100 J-Pop anime daily top chart hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/hqdefault.jpg',
       color: 'from-rose-600/40 to-black'
     },
     {
@@ -1683,40 +1714,41 @@ export function getInitialDiscoveryBlocks() {
       title: 'India Trendy Songs',
       subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
       badge: 'Trending Heat',
-      query: 'viral trending songs reels Bollywood Punjabi indie hits',
-      thumbnail: 'https://i.ytimg.com/vi/ElZfdU54Cp8/hqdefault.jpg',
+      browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
+      query: 'viral trending songs reels Bollywood Punjabi indie hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/LK7-_dgAVQE/hqdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     },
     {
       id: 'block_sonic_archetype',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Maroon 5 & Post Malone Mix',
-      subtitle: 'Featuring Maroon 5, Post Malone & chart-topping pop',
+      title: 'The Weeknd & Chart Pop Mix',
+      subtitle: 'Starboy, Blinding Lights & Synthpop Essentials',
       badge: 'Artist Mix',
-      query: 'Maroon 5 Post Malone best hit songs mix',
-      thumbnail: 'https://i.ytimg.com/vi/aJOTlE1K90k/hqdefault.jpg',
+      query: 'The Weeknd chart pop synthwave mix',
+      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg',
       color: 'from-rose-600/40 to-black'
     },
     {
       id: 'block_deep_cut',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Arctic Monkeys & Lukas Graham Mix',
-      subtitle: 'Indie Rock & Soulful Acoustic Anthems',
+      title: 'Maroon 5 & Pop Rock Mix',
+      subtitle: 'Sugar, Memories & Infectious Guitar Pop',
       badge: 'Artist Mix',
-      query: 'Arctic Monkeys Lukas Graham indie alternative rock mix',
-      thumbnail: 'https://i.ytimg.com/vi/qU9mHegkTc4/hqdefault.jpg',
+      query: 'Maroon 5 pop rock best hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg',
       color: 'from-indigo-600/40 to-black'
     },
     {
       id: 'block_recent_vibe',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Billie Eilish & Taylor Swift Mix',
-      subtitle: 'Introspective Pop & Melodic Atmosphere',
+      title: 'Billie Eilish & Atmospheric Pop',
+      subtitle: 'Birds of a Feather & Introspective Melodies',
       badge: 'Vibe Mix',
-      query: 'Billie Eilish Taylor Swift pop acoustic melody hits',
+      query: 'Billie Eilish pop acoustic melody hits',
       thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
       color: 'from-cyan-600/40 to-black'
     },
@@ -1724,12 +1756,12 @@ export function getInitialDiscoveryBlocks() {
       id: 'block_time_of_day',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Hiroyuki Sawano & Epic Soundtracks',
-      subtitle: 'Cinematic Orchestral Rock & Anime Climaxes',
-      badge: 'Epic OST',
-      query: 'Hiroyuki Sawano anime orchestral rock greatest hits',
-      thumbnail: 'https://i.ytimg.com/vi/bESGLojNYSo/hqdefault.jpg',
-      color: 'from-slate-700/40 to-black'
+      title: 'Dua Lipa & Nu-Disco Anthem Flow',
+      subtitle: 'Levitating, Dance-Pop & Upbeat Energy',
+      badge: 'Time Flow',
+      query: 'Dua Lipa dance pop upbeat hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg',
+      color: 'from-amber-500/40 to-black'
     },
     {
       id: 'block_rediscover',
@@ -1818,9 +1850,9 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       title: 'US Top Daily Chart',
       subtitle: 'Billboard Hot 100 & US Top 50 Daily Hits',
       badge: 'US Chart',
-      browse_id: 'VLPL4fGSI1pDJn5h1G_8a56m4_xS_hS1l',
-      query: `Billboard Hot 100 US top daily chart hits ${getRandomRotationTag()}`,
-      thumbnail: 'https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg',
+      browse_id: 'VLPL4fGSI40qSUHnL3G30wzCvhLqLqBw8Fw_',
+      query: 'Billboard Hot 100 US top daily chart hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/eVli-tstM5E/hqdefault.jpg',
       color: 'from-blue-600/40 to-black'
     },
     {
@@ -1830,8 +1862,8 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       subtitle: 'Top Charting Hits Across India Today',
       badge: 'India Chart',
       browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
-      query: `Trending 20 India top daily chart hit songs ${getRandomRotationTag()}`,
-      thumbnail: 'https://i.ytimg.com/vi/14tCx65hmXQ/hqdefault.jpg',
+      query: 'Trending 20 India top daily chart hit songs playlist',
+      thumbnail: 'https://i.ytimg.com/vi/BddP6PYo2gs/hqdefault.jpg',
       color: 'from-amber-600/40 to-black'
     },
     {
@@ -1841,8 +1873,8 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       subtitle: 'J-Pop, Anime & Tokyo Hot 100 Daily Chart',
       badge: 'Japan Chart',
       browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
-      query: `Tokyo Hot 100 J-Pop anime daily top chart hits ${getRandomRotationTag()}`,
-      thumbnail: 'https://i.ytimg.com/vi/qUFRPDHs1Q8/hqdefault.jpg',
+      query: 'Tokyo Hot 100 J-Pop anime daily top chart hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/hqdefault.jpg',
       color: 'from-rose-600/40 to-black'
     },
     {
@@ -1852,8 +1884,8 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
       badge: 'Trending Heat',
       browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
-      query: `viral trending songs reels Bollywood Punjabi indie hits ${getRandomRotationTag()}`,
-      thumbnail: 'https://i.ytimg.com/vi/ElZfdU54Cp8/hqdefault.jpg',
+      query: 'viral trending songs reels Bollywood Punjabi indie hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/LK7-_dgAVQE/hqdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     }
   ]
@@ -1866,32 +1898,32 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         id: 'block_sonic_archetype',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Maroon 5 & Post Malone Mix',
-        subtitle: 'Featuring Maroon 5, Post Malone & chart-topping pop',
+        title: 'The Weeknd & Chart Pop Mix',
+        subtitle: 'Starboy, Blinding Lights & Synthpop Essentials',
         badge: 'Artist Mix',
-        query: `Maroon 5 Post Malone best hit songs mix ${getRandomRotationTag()}`,
-        thumbnail: 'https://i.ytimg.com/vi/aJOTlE1K90k/hqdefault.jpg',
+        query: 'The Weeknd chart pop synthwave mix',
+        thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg',
         color: 'from-rose-600/40 to-black'
       },
       {
         id: 'block_deep_cut',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Arctic Monkeys & Lukas Graham Mix',
-        subtitle: 'Indie Rock & Soulful Acoustic Anthems',
+        title: 'Maroon 5 & Pop Rock Mix',
+        subtitle: 'Sugar, Memories & Infectious Guitar Pop',
         badge: 'Artist Mix',
-        query: `Arctic Monkeys Lukas Graham indie alternative rock mix ${getRandomRotationTag()}`,
-        thumbnail: 'https://i.ytimg.com/vi/qU9mHegkTc4/hqdefault.jpg',
+        query: 'Maroon 5 pop rock best hits playlist',
+        thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg',
         color: 'from-indigo-600/40 to-black'
       },
       {
         id: 'block_recent_vibe',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Billie Eilish & Taylor Swift Mix',
-        subtitle: 'Introspective Pop & Melodic Atmosphere',
+        title: 'Billie Eilish & Atmospheric Pop',
+        subtitle: 'Birds of a Feather & Introspective Melodies',
         badge: 'Vibe Mix',
-        query: `Billie Eilish Taylor Swift pop acoustic melody hits ${getRandomRotationTag()}`,
+        query: 'Billie Eilish pop acoustic melody hits',
         thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
         color: 'from-cyan-600/40 to-black'
       },
@@ -1899,12 +1931,12 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         id: 'block_time_of_day',
         tier: 2,
         isNewUserSeed: true,
-        title: 'Hiroyuki Sawano & Epic Soundtracks',
-        subtitle: 'Cinematic Orchestral Rock & Anime Climaxes',
-        badge: 'Epic OST',
-        query: `Hiroyuki Sawano anime orchestral rock greatest hits ${getRandomRotationTag()}`,
-        thumbnail: 'https://i.ytimg.com/vi/bESGLojNYSo/hqdefault.jpg',
-        color: 'from-slate-700/40 to-black'
+        title: 'Dua Lipa & Nu-Disco Anthem Flow',
+        subtitle: 'Levitating, Dance-Pop & Upbeat Energy',
+        badge: 'Time Flow',
+        query: 'Dua Lipa dance pop upbeat hits playlist',
+        thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg',
+        color: 'from-amber-500/40 to-black'
       },
       {
         id: 'block_rediscover',
@@ -1913,7 +1945,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         title: 'Rediscover Favorites Mix',
         subtitle: 'Sunflower, 7 Years & Essential Timeless Anthems',
         badge: 'Rediscover',
-        query: `Post Malone Sunflower Lukas Graham 7 Years radio playlist ${getRandomRotationTag()}`,
+        query: 'Post Malone Sunflower Lukas Graham 7 Years radio playlist',
         thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
         color: 'from-purple-600/40 to-black'
       }
@@ -1944,14 +1976,11 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
           return thumb
         }
       }
-      return preferredThumb || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
+      return 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg'
     }
 
     const topUserTrackThumb = validUserTracks[0]?.thumbnail ||
       (validUserTracks[0]?.video_id ? `https://i.ytimg.com/vi/${validUserTracks[0].video_id}/hqdefault.jpg` : a0.thumb)
-
-    const olderUserTrackThumb = validUserTracks[validUserTracks.length - 1]?.thumbnail ||
-      (validUserTracks[validUserTracks.length - 1]?.video_id ? `https://i.ytimg.com/vi/${validUserTracks[validUserTracks.length - 1].video_id}/hqdefault.jpg` : a1.thumb)
 
     tier2Blocks = [
       {
@@ -1960,7 +1989,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         title: `${a0.name} & ${a1.name} Mix`,
         subtitle: `Featuring ${a0.name}, ${a1.name} & similar hits`,
         badge: 'Artist Mix',
-        query: `${a0.name} ${a1.name} hits radio playlist ${getRandomRotationTag()}`,
+        query: `${a0.name} ${a1.name} best hit songs playlist`,
         thumbnail: pickUniqueCover(a0.thumb || topUserTrackThumb, a0),
         color: 'from-rose-600/40 to-black'
       },
@@ -1970,7 +1999,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         title: `${a2.name} & ${a3.name} Mix`,
         subtitle: `Curated mix inspired by your listening library`,
         badge: 'Artist Mix',
-        query: `${a2.name} ${a3.name} best songs mix ${getRandomRotationTag()}`,
+        query: `${a2.name} ${a3.name} top hits playlist`,
         thumbnail: pickUniqueCover(a2.thumb || a1.thumb, a2),
         color: 'from-indigo-600/40 to-black'
       },
@@ -1980,7 +2009,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         title: `${a4.name} & Friends Mix`,
         subtitle: `${archetype} • Matched with your sound taste`,
         badge: 'Vibe Mix',
-        query: `${a4.name} similar artists music playlist ${getRandomRotationTag()}`,
+        query: `${a4.name} radio playlist`,
         thumbnail: pickUniqueCover(a4.thumb, a4),
         color: 'from-cyan-600/40 to-black'
       },
@@ -1990,7 +2019,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         title: `${timeSlotTitle} Mix`,
         subtitle: `Synchronized with ${timeSlotSubtitle}`,
         badge: 'Time Flow',
-        query: `${timeSlotQuery} ${a0.name} ${getRandomRotationTag()}`,
+        query: `${timeSlotQuery} ${a0.name}`,
         thumbnail: pickUniqueCover(topUserTrackThumb, a0),
         color: timeSlotColor
       },
@@ -2000,8 +2029,9 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         title: 'Rediscover Favorites Mix',
         subtitle: `Rotated favorites from your library & harmonic matches`,
         badge: 'Rediscover',
-        query: `${artists.slice(0, 3).map((a) => a.name).join(' ')} radio playlist ${getRandomRotationTag()}`,
-        thumbnail: pickUniqueCover(olderUserTrackThumb, a1),
+        query: `${a0.name} ${a1.name} hits radio playlist`,
+        preloadedTracks: [...validUserTracks].sort(() => 0.5 - Math.random()).slice(0, 30),
+        thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
         color: 'from-purple-600/40 to-black'
       }
     ]

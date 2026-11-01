@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   RefreshCw, ExternalLink, X, Heart, RotateCcw, Sliders, DownloadCloud,
-  Home, Compass, Sparkles, Disc, Dna, ChevronDown, Palette
+  Home, Compass, Sparkles, Disc, Dna, ChevronDown, Palette, Sun, Moon
 } from 'lucide-react'
 
 export const PRESET_MODES = [
@@ -137,7 +137,6 @@ export default function Sidebar({
 }) {
   const activePreset = PRESET_MODES.find((p) => p.id === activePresetId)
   const isPresetCustomized = activePreset && energyLevel !== activePreset.energy
-  const [isThemeOpen, setIsThemeOpen] = useState(false)
 
   // 1. YouTube Music Slim Vertical Left Rail (Icon + Text Stack)
   const slimRail = (
@@ -268,80 +267,40 @@ export default function Sidebar({
 
       <div className="p-4 flex flex-col gap-4">
 
-        {/* Themes Drawer (Small Collapsible Slider) */}
-        <div className="rounded-2xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-xs overflow-hidden transition-all">
+        {/* Simple Day & Night Toggle Control */}
+        <div className="p-2.5 rounded-2xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-2 pl-1.5">
+            {themePreference === 'light' ? (
+              <Sun className="w-4 h-4 text-amber-500 shrink-0" />
+            ) : (
+              <Moon className="w-4 h-4 text-indigo-400 shrink-0" />
+            )}
+            <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">
+              {themePreference === 'light' ? 'Daylight Mode' : 'Night Mode'}
+            </span>
+          </div>
           <button
             type="button"
-            onClick={() => setIsThemeOpen((prev) => !prev)}
-            className="w-full p-3.5 flex items-center justify-between text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
+            onClick={() => {
+              if (onSelectThemePreference) {
+                onSelectThemePreference(themePreference === 'light' ? 'amoled' : 'light')
+              }
+            }}
+            className="px-3 py-1.5 rounded-xl bg-[var(--surface-hover)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-xs"
+            title="Toggle Day / Night Mode"
           >
-            <div className="flex items-center gap-2">
-              <Palette className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-              <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">Themes</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className="text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-all"
-                style={{
-                  backgroundColor: `${themeInfo?.color || '#ef4444'}15`,
-                  borderColor: `${themeInfo?.color || '#ef4444'}35`,
-                  color: themeInfo?.color || '#ef4444'
-                }}
-              >
-                {themePreference === 'auto'
-                  ? 'Auto'
-                  : themePreference === 'amoled'
-                  ? 'Dark'
-                  : themePreference === 'morning'
-                  ? 'Crimson Glow'
-                  : 'Light'}
-              </span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform duration-200 ${
-                  isThemeOpen ? 'rotate-180 text-[var(--text-primary)]' : ''
-                }`}
-              />
-            </div>
+            {themePreference === 'light' ? (
+              <>
+                <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Switch to Night</span>
+              </>
+            ) : (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span>Switch to Day</span>
+              </>
+            )}
           </button>
-
-          {/* 4 Options Slide Down (Violet removed per v5.5.1 request) */}
-          {isThemeOpen && (
-            <div className="px-2 pb-2.5 pt-0.5 flex flex-col gap-1 border-t border-[var(--border-subtle)] animate-in fade-in slide-in-from-top-1 duration-150">
-              {[
-                { id: 'auto', label: 'Auto', color: '#10b981' },
-                { id: 'amoled', label: 'Dark', color: '#71717a' },
-                { id: 'morning', label: 'Crimson Glow', color: '#ef4444' },
-                { id: 'light', label: 'Light', color: '#e11d48' }
-              ].map((th) => {
-                const isSelected = themePreference === th.id
-                return (
-                  <button
-                    key={th.id}
-                    type="button"
-                    onClick={() => {
-                      if (onSelectThemePreference) onSelectThemePreference(th.id)
-                    }}
-                    className={`w-full px-3 py-2 rounded-xl text-left transition-all cursor-pointer flex items-center justify-between active:scale-[0.99] ${
-                      isSelected
-                        ? 'bg-[var(--surface-hover)] text-[var(--text-primary)] font-bold border border-[var(--border-subtle)]'
-                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-transparent font-medium'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: th.color }}
-                      />
-                      <span className="text-xs tracking-tight">{th.label}</span>
-                    </div>
-                    {isSelected && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-primary)] shrink-0 shadow-xs" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          )}
         </div>
 
         {/* AI Curation Model Section (Argon priority) */}
@@ -524,7 +483,7 @@ export default function Sidebar({
         {/* App Info */}
         <div className="pt-2 text-xs font-semibold text-[var(--text-muted)] border-t border-[var(--border-subtle)] flex items-center justify-between">
           <span>UpBeat Music</span>
-          <span className="text-emerald-500 font-bold">v5.5.3</span>
+          <span className="text-emerald-500 font-bold">v5.5.4</span>
         </div>
       </div>
 

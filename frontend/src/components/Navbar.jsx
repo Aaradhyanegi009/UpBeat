@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
-  RefreshCw, Menu, Settings, Sparkles, ChevronDown, Search, Loader2, X, Check, Music, ArrowLeft, ExternalLink, Moon, Sliders, Heart
+  RefreshCw, Menu, Settings, Sparkles, ChevronDown, Search, Loader2, X, Check, Music, ArrowLeft, ExternalLink, Moon, Sun, Sliders, Heart
 } from 'lucide-react'
 import { getStoredApiKey, setStoredApiKey, getStoredServerUrl, setStoredServerUrl, hasBackend } from '../standaloneApi'
 import { GoogleIcon } from './GoogleAuthModal'
@@ -42,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v5.5.3')
+  const [otaVer, setOtaVer] = useState('v5.5.4')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -223,27 +223,25 @@ export default function Navbar({
                 <span className="hidden sm:inline font-bold text-[var(--text-primary)] text-lg tracking-tight">UpBeat</span>
               </div>
 
-              {/* Day / Night / Light Atmosphere Status Indicator */}
-              {themeInfo && (
-                <button
-                  type="button"
-                  onClick={onCycleTheme}
-                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold tracking-tight transition-all select-none cursor-pointer hover:scale-105 active:scale-95"
-                  style={{
-                    backgroundColor: `${themeInfo.color}15`,
-                    borderColor: `${themeInfo.color}35`,
-                    color: themeInfo.color
-                  }}
-                  title={`Atmosphere: ${themeInfo.label} (${themeInfo.timeSlot}) • Tap to switch theme`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: themeInfo.color }} />
-                  <span>
-                    {themePreference === 'auto'
-                      ? (themeInfo.type === 'morning' ? 'Crimson Glow' : themeInfo.type === 'afternoon' ? 'Dark' : themeInfo.type === 'light' ? 'Light' : 'Violet')
-                      : (themePreference === 'amoled' ? 'Dark' : themePreference === 'morning' ? 'Crimson Glow' : themePreference === 'night' ? 'Violet' : themePreference === 'light' ? 'Light' : themeInfo.label)}
-                  </span>
-                </button>
-              )}
+              {/* Simple Day / Night Toggle Button */}
+              <button
+                type="button"
+                onClick={onCycleTheme}
+                className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-all select-none cursor-pointer hover:scale-105 active:scale-95"
+                title={themePreference === 'light' ? 'Switch to Night Mode' : 'Switch to Day Mode'}
+              >
+                {themePreference === 'light' ? (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Day</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Night</span>
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Center: Desktop-only Spacious Search Bar */}

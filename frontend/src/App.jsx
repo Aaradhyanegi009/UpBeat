@@ -1807,9 +1807,10 @@ export default function App() {
                 onSelectYoutubeResults={handleSelectYoutubeResults}
                 onSelectDirectSongs={handleSelectDirectSongs}
                 onGenerateDefault={() => handleDirectSearch('Top 50 Global Daily Chart Hits', 'auto')}
-                onSelectStarter={(q) => {
+                onSelectStarter={(q, preferredMode) => {
                   setPrompt(q)
-                  handleDirectSearch(q, 'auto')
+                  const mode = preferredMode || (/\b(chart|billboard|playlist|top \d+|daily|hits)\b/i.test(q) ? 'playlists' : 'auto')
+                  handleDirectSearch(q, mode)
                 }}
                 needsSetup={!isConfigured()}
                 onOpenSettings={() => setShowKeyModal(true)}
