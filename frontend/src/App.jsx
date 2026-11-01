@@ -11,7 +11,7 @@ import QueueDrawer from './components/QueueDrawer'
 import GoogleAuthModal from './components/GoogleAuthModal'
 import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges } from './offlineStorage'
 import { initOtaUpdater } from './otaUpdater'
-import { getDayNightThemeInfo, getThemeInfo, getNextThemePreference } from './utils/themeCycle'
+import { getDayNightThemeInfo, getThemeInfo, getNextThemePreference, applyThemeToDocument } from './utils/themeCycle'
 import {
   getApiBase,
   curateStandalone,
@@ -23,7 +23,9 @@ import {
   isConfigured,
   getStoredApiKey,
   formatDurationSeconds,
-  openExternalUrl
+  openExternalUrl,
+  fisherYatesShuffle,
+  loadBlockTracks
 } from './standaloneApi'
 
 const DEFAULT_SEEDS = [
@@ -62,6 +64,10 @@ export default function App() {
   })
 
   useEffect(() => {
+    applyThemeToDocument(themePreference, themeInfo)
+  }, [themePreference, themeInfo])
+
+  useEffect(() => {
     const checkTheme = () => {
       if (themePreference === 'auto') {
         const info = getThemeInfo('auto')
@@ -79,6 +85,7 @@ export default function App() {
     } catch {}
     const info = getThemeInfo(pref)
     setThemeInfo(info)
+    applyThemeToDocument(pref, info)
     const label = pref === 'auto' ? `Auto Time Cycle (${info.label})` : info.label
     showNotify(`Atmosphere: ${label}`, 'info')
   }
@@ -183,6 +190,9 @@ export default function App() {
   const [offlineStats, setOfflineStats] = useState({ count: 0, totalBytes: 0, formattedSize: '0 B' })
   const [activePlaybackContext, setActivePlaybackContext] = useState(null)
   const [queue, setQueue] = useState(() => loadStorage('upbeat_playback_queue', []))
+  const [isShuffle, setIsShuffle] = useState(false)
+  const originalQueueRef = useRef(null)
+  const originalContextRef = useRef(null)
   const [isQueueOpen, setIsQueueOpen] = useState(false)
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -1349,6 +1359,95 @@ export default function App() {
     showNotify('Playback queue cleared', 'info')
   }
 
+  const handleToggleShuffle = () => {
+    setIsShuffle((prev) => {
+      const nextState = !prev
+      if (nextState) {
+        originalQueueRef.current = [...queue]
+        originalContextRef.current = activePlaybackContext ? [...activePlaybackContext] : null
+        if (queue.length > 0) {
+          setQueue(fisherYatesShuffle(queue))
+        }
+        if (activePlaybackContext && activePlaybackContext.length > 1) {
+          const remaining = activePlaybackContext.filter(
+            (t) => (t.video_id && currentTrack?.video_id ? t.video_id !== currentTrack.video_id : t.title !== currentTrack?.title)
+          )
+          const shuffled = fisherYatesShuffle(remaining)
+          const newContext = currentTrack ? [currentTrack, ...shuffled] : shuffled
+          setActivePlaybackContext(newContext)
+          setCurrentTrackIdx(0)
+        }
+        showNotify('Shuffle On (True Fisher-Yates)', 'info')
+      } else {
+        if (originalQueueRef.current) {
+          setQueue(originalQueueRef.current)
+          originalQueueRef.current = null
+        }
+        if (originalContextRef.current) {
+          setActivePlaybackContext(originalContextRef.current)
+          if (currentTrack) {
+            const idx = originalContextRef.current.findIndex(
+              (t) => (t.video_id && currentTrack.video_id ? t.video_id === currentTrack.video_id : t.title === currentTrack.title)
+            )
+            if (idx >= 0) setCurrentTrackIdx(idx)
+          }
+          originalContextRef.current = null
+        }
+        showNotify('Shuffle Off (Original Sequence Restored)', 'info')
+      }
+      return nextState
+    })
+  }
+
+  const handleShufflePlayBlock = async (block) => {
+    if (!block) return
+    showNotify(`Shuffling "${block.title}"...`, 'info')
+    try {
+      const rawTracks = await loadBlockTracks(block)
+      if (!rawTracks || rawTracks.length === 0) {
+        showNotify('Unable to load tracks for this station', 'error')
+        return
+      }
+      const shuffled = fisherYatesShuffle(rawTracks)
+      originalContextRef.current = [...rawTracks]
+      setActivePlaybackContext(shuffled)
+      setCurrentTrack(shuffled[0])
+      setCurrentTrackIdx(0)
+      setQueue(shuffled.slice(1))
+      setIsShuffle(true)
+      setIsPlaying(true)
+      const isMobileDevice = typeof window !== 'undefined' && (
+        Boolean(window.Capacitor?.isNativePlatform?.()) ||
+        window.innerWidth < 768
+      )
+      if (isMobileDevice) setIsNowPlayingOpen(true)
+      if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
+      showNotify(`Shuffle playing "${block.title}" (${shuffled.length} tracks)`, 'success')
+    } catch (e) {
+      showNotify('Error shuffling station: ' + (e?.message || 'Try again'), 'error')
+    }
+  }
+
+  const handleShufflePlayAll = (customTracks) => {
+    const target = customTracks || playlist?.tracks || []
+    if (!target || target.length === 0) return
+    const shuffled = fisherYatesShuffle(target)
+    originalContextRef.current = [...target]
+    setActivePlaybackContext(shuffled)
+    setCurrentTrack(shuffled[0])
+    setCurrentTrackIdx(0)
+    setQueue(shuffled.slice(1))
+    setIsShuffle(true)
+    setIsPlaying(true)
+    const isMobileDevice = typeof window !== 'undefined' && (
+      Boolean(window.Capacitor?.isNativePlatform?.()) ||
+      window.innerWidth < 768
+    )
+    if (isMobileDevice) setIsNowPlayingOpen(true)
+    if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
+    showNotify(`Shuffled ${shuffled.length} tracks`, 'success')
+  }
+
   const handleAddSeedTrack = (track) => {
     if (!track) return
     setExtractedTracks((prev) => {
@@ -1530,7 +1629,7 @@ export default function App() {
     : null
 
   return (
-    <div className={`h-[100dvh] w-screen ytm-atmosphere ${themeInfo?.id || 'theme-morning'} bg-black text-[#f4f4f5] flex flex-col overflow-hidden`}>
+    <div className={`h-[100dvh] w-screen ytm-atmosphere ${themeInfo?.id || 'theme-morning'} bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col overflow-hidden`}>
       {/* Subtle Antigravity Status Notification */}
       {notification && (
         <div className="fixed bottom-36 sm:bottom-20 left-4 right-4 sm:left-6 sm:right-auto z-50">
@@ -1668,6 +1767,9 @@ export default function App() {
                 extractedTracks={extractedTracks}
                 offlineTracks={offlineTracks}
                 tasteDna={tasteDna}
+                timeInfo={themeInfo}
+                onShufflePlayBlock={handleShufflePlayBlock}
+                onShufflePlayAll={handleShufflePlayAll}
               />
             </div>
           ) : activeTab === 'offline' ? (
@@ -1749,6 +1851,9 @@ export default function App() {
         setIsNowPlayingOpen={setIsNowPlayingOpen}
         crossfadeSec={crossfadeSec}
         setCrossfadeSec={setCrossfadeSec}
+        isShuffle={isShuffle}
+        setIsShuffle={setIsShuffle}
+        onToggleShuffle={handleToggleShuffle}
       />
 
       {/* Playback Queue Drawer */}

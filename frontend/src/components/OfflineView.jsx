@@ -124,21 +124,21 @@ export default function OfflineView({
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto overflow-x-hidden select-none gpu-scroll">
       {/* Sticky Header */}
-      <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20">
+      <div className="px-5 py-3 sm:px-6 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20 text-[var(--text-primary)]">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
                 <DownloadCloud className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               </div>
-              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight">
                 Downloads
               </h1>
               <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                 {stats.count}
               </span>
             </div>
-            <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 font-normal">
+            <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1.5 font-normal">
               <HardDrive className="w-3 h-3 text-zinc-500" />
               <span>{stats.count} {stats.count === 1 ? 'track' : 'tracks'} • {stats.formattedSize} stored locally</span>
             </p>
@@ -150,7 +150,7 @@ export default function OfflineView({
               <>
                 <button
                   onClick={handleShuffle}
-                  className="px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md shadow-white/10"
+                  className="px-4 py-2 rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md"
                   title="Shuffle offline songs"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
@@ -175,7 +175,7 @@ export default function OfflineView({
                 ) : (
                   <button
                     onClick={() => setConfirmClear(true)}
-                    className="p-2 rounded-full text-zinc-400 hover:text-rose-400 hover:bg-white/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer"
+                    className="p-2 rounded-full text-[var(--text-secondary)] hover:text-rose-400 hover:bg-[var(--surface-hover)] border border-transparent hover:border-rose-500/20 transition-all cursor-pointer"
                     title="Clear all offline storage"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -187,7 +187,7 @@ export default function OfflineView({
             {hasBackend() && (
               <button
                 onClick={handleOpenDownloadsFolder}
-                className="hidden sm:flex px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs text-zinc-300 hover:text-white items-center gap-1.5 transition-colors cursor-pointer font-medium"
+                className="hidden sm:flex px-3 py-1.5 rounded-full bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] items-center gap-1.5 transition-colors cursor-pointer font-medium"
                 title="Open UpBeat downloads folder in macOS Finder"
               >
                 <Folder className="w-3.5 h-3.5 text-sky-400" />
@@ -207,12 +207,12 @@ export default function OfflineView({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search downloaded songs by title, artist..."
-                className="w-full bg-white/[0.06] border border-white/10 focus:border-emerald-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-400 font-medium focus:outline-none transition-colors"
+                className="w-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] focus:border-emerald-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] font-medium focus:outline-none transition-colors"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-[var(--text-primary)]"
                 >
                   ✕
                 </button>
@@ -223,7 +223,7 @@ export default function OfflineView({
       </div>
 
       {/* Main Track List Content */}
-      <div className="p-4 sm:p-6 flex-1 min-h-0">
+      <div className="px-5 py-4 sm:px-6 sm:py-6 pb-[130px] flex-1 min-h-0">
         {tracks.length === 0 ? (
           /* Empty State */
           <div className="h-full min-h-[380px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-white/10 rounded-3xl bg-[#0c0c12]/40 backdrop-blur-md">

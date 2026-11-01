@@ -1,28 +1,19 @@
-// UpBeat Dynamic Day/Night Cycle Theme Engine
+// UpBeat Dynamic Day/Night Cycle & Studio Theme Engine
 // - Morning (4:00 AM - 11:59 AM): Crimson Sunrise (The signature red grid aesthetic)
 // - Afternoon / Sunset (12:00 PM - 7:59 PM): Dark AMOLED Black (Zero gradients, 100% black)
 // - Night (8:00 PM - 3:59 AM): Cosmic Midnight Violet & Neon Indigo
-
-// Ensure root is always dark and any legacy light mode storage is purged
-if (typeof window !== 'undefined') {
-  try {
-    localStorage.removeItem('upbeat_theme_mode')
-    if (document.documentElement) {
-      document.documentElement.classList.remove('theme-light')
-      document.documentElement.classList.add('dark')
-    }
-  } catch {}
-}
+// - Light (Daylight Studio): High-contrast clean alabaster studio aesthetic
 
 export const THEME_OPTIONS = [
   { id: 'auto', label: 'Auto' },
   { id: 'amoled', label: 'Dark' },
   { id: 'morning', label: 'Crimson Glow' },
-  { id: 'night', label: 'Violet' }
+  { id: 'night', label: 'Violet' },
+  { id: 'light', label: 'Light' }
 ]
 
 export function getNextThemePreference(current = 'auto') {
-  const order = ['auto', 'amoled', 'morning', 'night']
+  const order = ['auto', 'amoled', 'morning', 'night', 'light']
   const idx = order.indexOf(current)
   return order[(idx + 1) % order.length]
 }
@@ -61,6 +52,17 @@ export function getDayNightThemeInfo() {
 }
 
 export function getThemeInfo(preference = 'auto') {
+  if (preference === 'light') {
+    return {
+      id: 'theme-light',
+      label: 'Light',
+      timeSlot: 'Daylight Studio',
+      type: 'light',
+      color: '#e11d48',
+      accentColor: '#e11d48',
+      preference: 'light'
+    }
+  }
   if (preference === 'amoled') {
     return {
       id: 'theme-afternoon',
@@ -98,4 +100,30 @@ export function getThemeInfo(preference = 'auto') {
     ...getDayNightThemeInfo(),
     preference: 'auto'
   }
+}
+
+export function applyThemeToDocument(preference, themeInfo) {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  root.classList.remove('theme-morning', 'theme-afternoon', 'theme-night', 'theme-light', 'dark')
+  const activePref = preference || 'auto'
+  const info = themeInfo || getThemeInfo(activePref)
+
+  if (info.id === 'theme-light') {
+    root.classList.add('theme-light')
+    root.setAttribute('data-theme', 'light')
+    root.style.colorScheme = 'light'
+  } else {
+    root.classList.add('dark', info.id)
+    root.setAttribute('data-theme', 'dark')
+    root.style.colorScheme = 'dark'
+  }
+}
+
+// Immediate execution on load to prevent any theme flash
+if (typeof window !== 'undefined') {
+  try {
+    const saved = localStorage.getItem('upbeat_theme_preference') || 'auto'
+    applyThemeToDocument(saved, getThemeInfo(saved))
+  } catch {}
 }

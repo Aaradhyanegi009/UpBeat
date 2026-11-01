@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="5.4.4",
-    description="UpBeat v5.4.4 - Restricted song unblocked fallback resolution, Songs section fallback linking, and corrupted download purge"
+    version="5.5.0",
+    description="UpBeat v5.5.0 - Spatial Airy UI/UX revamp, Daylight Studio High-Contrast Light Mode, Dynamic 9-Block Listen Together Engine & Universal Shuffle"
 )
 
 app.add_middleware(

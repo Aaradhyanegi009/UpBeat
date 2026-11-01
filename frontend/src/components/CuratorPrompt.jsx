@@ -40,9 +40,9 @@ export default function CuratorPrompt({
   }
 
   return (
-    <div className="w-full bg-black/40 backdrop-blur-md border-b border-white/10 py-2.5 select-none flex-shrink-0 sticky top-0 z-20 overflow-hidden">
+    <div className="w-full bg-[var(--bg-glass)] backdrop-blur-xl border-b border-[var(--border-subtle)] py-2.5 select-none flex-shrink-0 sticky top-0 z-20 overflow-hidden transition-colors">
       {/* Horizontal Mood / Activity Chips Carousel - Full-Bleed Edge-to-Edge like YouTube */}
-      <div className="w-full flex items-center gap-2 overflow-x-auto no-scrollbar px-3.5 sm:px-6 py-1 scroll-smooth">
+      <div className="w-full flex items-center gap-2.5 overflow-x-auto no-scrollbar px-5 sm:px-6 py-1 scroll-smooth">
         {MOOD_CHIPS.map((chip) => {
           const isSelected = activeChip === chip.id
           return (
@@ -52,8 +52,8 @@ export default function CuratorPrompt({
               disabled={busy}
               className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 border ${
                 isSelected
-                  ? 'bg-white text-black font-bold border-white shadow-md shadow-white/10 scale-[1.02]'
-                  : 'bg-white/[0.06] hover:bg-white/[0.14] text-zinc-300 hover:text-white border-white/[0.08]'
+                  ? 'bg-[var(--text-primary)] text-[var(--bg-primary)] font-bold border-[var(--text-primary)] shadow-md shadow-black/10 scale-[1.02]'
+                  : 'bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border-subtle)]'
               }`}
             >
               {chip.label}
@@ -61,7 +61,7 @@ export default function CuratorPrompt({
           )
         })}
         {/* Trailing spacer for end margin when scrolled to the rightmost edge */}
-        <div className="w-2 shrink-0 pointer-events-none" />
+        <div className="w-3 shrink-0 pointer-events-none" />
       </div>
     </div>
   )

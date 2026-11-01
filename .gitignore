@@ -3,6 +3,7 @@
 !/gitignore
 !/.gitignore
 !/README.md
+!/CHANGELOG.md
 !/run.sh
 !/.github/
 !/android/

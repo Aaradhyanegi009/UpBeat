@@ -56,7 +56,10 @@ export default function PlayerBar({
   isNowPlayingOpen,
   setIsNowPlayingOpen,
   crossfadeSec: externalCrossfadeSec,
-  setCrossfadeSec: externalSetCrossfadeSec
+  setCrossfadeSec: externalSetCrossfadeSec,
+  isShuffle: externalIsShuffle,
+  setIsShuffle: externalSetIsShuffle,
+  onToggleShuffle: externalOnToggleShuffle
 }) {
   const [internalNowPlaying, setInternalNowPlaying] = useState(false)
   const nowPlayingOpen = typeof isNowPlayingOpen === 'boolean' ? isNowPlayingOpen : internalNowPlaying
@@ -83,7 +86,10 @@ export default function PlayerBar({
     } catch {}
   }, [externalSetCrossfadeSec])
 
-  const [isShuffle, setIsShuffle] = useState(false)
+  const [internalShuffle, setInternalShuffle] = useState(false)
+  const isShuffle = typeof externalIsShuffle === 'boolean' ? externalIsShuffle : internalShuffle
+  const setIsShuffle = externalSetIsShuffle || setInternalShuffle
+  const handleToggleShuffle = externalOnToggleShuffle || (() => setIsShuffle((prev) => !prev))
   const [repeatMode, setRepeatMode] = useState('off') // 'off', 'all', 'one'
   const [showVideo, setShowVideo] = useState(false)
   const [showLyrics, setShowLyrics] = useState(false)
@@ -1553,7 +1559,7 @@ export default function PlayerBar({
       </div>
 
       <footer
-        className="bg-black/60 backdrop-blur-xl border-t border-white/[0.08] px-3 sm:px-5 py-2 sm:py-0 sm:h-[70px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 select-none flex-shrink-0 z-30 relative"
+        className="bg-[var(--bg-glass-heavy)] backdrop-blur-[20px] border-t border-[var(--border-subtle)] text-[var(--text-primary)] px-5 sm:px-6 py-2.5 sm:py-0 sm:h-[74px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 select-none flex-shrink-0 z-30 relative transition-colors"
         style={{
           '--slider-thumb-color': albumColor.primary,
           '--slider-thumb-glow': albumColor.glow,
@@ -1573,26 +1579,26 @@ export default function PlayerBar({
         )}
 
         {/* Mobile Row 1 / Desktop Left+Center+Right */}
-        <div className="flex items-center justify-between gap-2.5 w-full sm:w-auto sm:flex-1">
+        <div className="flex items-center justify-between gap-3 w-full sm:w-auto sm:flex-1">
           {/* Track Artwork + Title + Artist (Click to expand Spotify/YT Music Now Playing screen) */}
           <div
             onClick={() => track && setNowPlayingOpen(true)}
-            className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 flex-nowrap sm:w-1/4 sm:min-w-[200px] sm:flex-initial cursor-pointer group select-none"
+            className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1 flex-nowrap sm:w-1/4 sm:min-w-[200px] sm:flex-initial cursor-pointer group select-none"
             title="Tap to expand Now Playing view"
           >
             {track ? (
               <>
                 <div
-                  className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#14141a] border overflow-hidden shrink-0 relative transition-all duration-300 group-hover:scale-105"
+                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-[14px] bg-[var(--surface-hover)] border overflow-hidden shrink-0 relative transition-all duration-300 group-hover:scale-105"
                   style={{
-                    borderColor: isPlaying ? albumColor.border : '#22222a',
+                    borderColor: isPlaying ? albumColor.border : 'var(--border-subtle)',
                     boxShadow: isPlaying ? `0 0 14px ${albumColor.subtle}` : 'none'
                   }}
                 >
                   {thumbUrl ? (
                     <img src={thumbUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#71717a]">
+                    <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)]">
                       <Music className="w-4 h-4" />
                     </div>
                   )}
@@ -1607,7 +1613,7 @@ export default function PlayerBar({
                         backgroundColor: isPlaying ? albumColor.primary : '#52525b'
                       }}
                     />
-                    <span className="text-xs sm:text-[13px] font-bold text-[#f4f4f5] tracking-tight truncate group-hover:text-white transition-colors flex-1 min-w-0">
+                    <span className="text-xs sm:text-[13px] font-bold text-[var(--text-primary)] tracking-tight truncate group-hover:text-rose-400 transition-colors flex-1 min-w-0">
                       {track.title}
                     </span>
                     {isPlayingOffline && (
@@ -1616,7 +1622,7 @@ export default function PlayerBar({
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] sm:text-xs text-[#8e8e96] font-medium truncate mt-0.5 pl-3 group-hover:text-zinc-300 transition-colors">
+                  <div className="text-[11px] sm:text-xs text-[var(--text-secondary)] font-medium truncate mt-0.5 pl-3 group-hover:text-[var(--text-primary)] transition-colors">
                     {track.artist}
                   </div>
                 </div>
@@ -2066,6 +2072,7 @@ export default function PlayerBar({
         setShowVideo={setShowVideo}
         isShuffle={isShuffle}
         setIsShuffle={setIsShuffle}
+        onToggleShuffle={handleToggleShuffle}
         repeatMode={repeatMode}
         setRepeatMode={setRepeatMode}
         volume={volume}

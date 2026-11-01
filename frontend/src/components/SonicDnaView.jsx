@@ -190,21 +190,21 @@ export default function SonicDnaView({
         onClick={() => setQueueMenuIdx(null)}
       >
         {/* Sticky Header (Exact match to Downloads section) */}
-        <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20">
+        <div className="px-5 py-3 sm:px-6 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-500 shrink-0">
                   <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
                 </div>
-                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+                <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
                   Favourites
                 </h1>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 shrink-0">
                   {favorites.length}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 font-normal truncate">
+              <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1.5 font-normal truncate">
                 <Heart className="w-3 h-3 text-rose-400 shrink-0" />
                 <span className="truncate">
                   {favorites.length} {favorites.length === 1 ? 'track' : 'tracks'} • Saved in your profile
@@ -218,9 +218,9 @@ export default function SonicDnaView({
                 <button
                   onClick={onCurateFromFavorites}
                   title="Generate a fresh playlist inspired by your hearted songs"
-                  className="px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md shadow-white/10"
+                  className="px-4 py-2 rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-rose-600 fill-rose-600 shrink-0" />
+                  <Sparkles className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
                   <span>Curate Mix</span>
                 </button>
               )}
@@ -237,12 +237,12 @@ export default function SonicDnaView({
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   placeholder="Search favourite songs by title, artist, style..."
-                  className="w-full bg-white/[0.06] border border-white/10 focus:border-rose-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-400 font-medium focus:outline-none transition-colors"
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] focus:border-rose-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] font-medium focus:outline-none transition-colors"
                 />
                 {filter && (
                   <button
                     onClick={() => setFilter('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white cursor-pointer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-[var(--text-primary)] cursor-pointer"
                   >
                     ✕
                   </button>
@@ -253,7 +253,7 @@ export default function SonicDnaView({
         </div>
 
         {/* Main Track List Content */}
-        <div className="p-4 sm:p-6 flex-1 min-h-0">
+        <div className="px-5 py-4 sm:px-6 sm:py-6 pb-[130px] flex-1 min-h-0">
           {favorites.length === 0 ? (
             <div className="h-full min-h-[340px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-white/10 rounded-3xl bg-[#0c0c12]/40 backdrop-blur-md">
               <div className="w-16 h-16 rounded-3xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500 mb-4 shadow-xl">
@@ -583,21 +583,21 @@ export default function SonicDnaView({
         onClick={() => setQueueMenuIdx(null)}
       >
         {/* Sticky Header (Exact match to Downloads section) */}
-        <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20">
+        <div className="px-5 py-3 sm:px-6 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
                   <Disc className="w-4 h-4 text-sky-400" />
                 </div>
-                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+                <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
                   Seeds & Library
                 </h1>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
                   {extractedTracks.length}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 font-normal truncate">
+              <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1.5 font-normal truncate">
                 <Disc className="w-3 h-3 text-sky-400 shrink-0" />
                 <span className="truncate">
                   {extractedTracks.length} {extractedTracks.length === 1 ? 'track' : 'tracks'} • Seed tracks powering your mixes
@@ -612,9 +612,9 @@ export default function SonicDnaView({
                   onClick={onSyncFavorites}
                   disabled={isSyncing}
                   title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-                  className="px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md shadow-white/10 disabled:opacity-50"
+                  className="px-4 py-2 rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md disabled:opacity-50"
                 >
-                  <Heart className={`w-3.5 h-3.5 fill-rose-600 text-rose-600 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
                   <span>{isSyncing ? 'Syncing...' : 'Sync Liked'}</span>
                 </button>
               )}
@@ -623,7 +623,7 @@ export default function SonicDnaView({
                 <button
                   onClick={onClearSeeds}
                   title="Clear all seed tracks from your Library"
-                  className="p-2 rounded-full text-zinc-400 hover:text-rose-400 hover:bg-white/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer"
+                  className="p-2 rounded-full text-[var(--text-muted)] hover:text-rose-400 hover:bg-[var(--surface-hover)] border border-transparent hover:border-rose-500/20 transition-all cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -641,12 +641,12 @@ export default function SonicDnaView({
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   placeholder="Search library songs by title, artist..."
-                  className="w-full bg-white/[0.06] border border-white/10 focus:border-sky-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-400 font-medium focus:outline-none transition-colors"
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] focus:border-sky-500/50 rounded-full pl-9 pr-8 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] font-medium focus:outline-none transition-colors"
                 />
                 {filter && (
                   <button
                     onClick={() => setFilter('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white cursor-pointer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-[var(--text-primary)] cursor-pointer"
                   >
                     ✕
                   </button>
@@ -657,7 +657,7 @@ export default function SonicDnaView({
         </div>
 
         {/* Main Track List Content */}
-        <div className="p-4 sm:p-6 flex-1 min-h-0">
+        <div className="px-5 py-4 sm:px-6 sm:py-6 pb-[130px] flex-1 min-h-0">
           {extractedTracks.length === 0 ? (
             <div className="h-full min-h-[340px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-white/10 rounded-3xl bg-[#0c0c12]/40 backdrop-blur-md">
               <div className="w-16 h-16 rounded-3xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500 mb-4 shadow-xl">
@@ -982,12 +982,12 @@ export default function SonicDnaView({
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden bg-transparent select-none gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
       {/* Sticky Translucent Top Header (Matches Downloads Section) */}
-      <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between gap-3">
+      <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20 flex items-center justify-between gap-3 text-[var(--text-primary)]">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
             <Activity className="w-4 h-4" />
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
+          <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
             Taste Profile
           </h1>
           <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">
@@ -1022,7 +1022,7 @@ export default function SonicDnaView({
             <button
               onClick={onResetTasteDna}
               title="Reset Taste DNA profile"
-              className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer active:scale-95 shrink-0"
+              className="w-8 h-8 rounded-full bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer active:scale-95 shrink-0"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -1030,15 +1030,15 @@ export default function SonicDnaView({
         </div>
       </div>
 
-      <div className="p-3.5 sm:p-6 max-w-4xl w-full mx-auto flex flex-col gap-4 sm:gap-6">
+      <div className="px-5 py-4 sm:px-8 sm:py-6 pb-[130px] max-w-4xl w-full mx-auto flex flex-col gap-6 sm:gap-8">
         {/* Main Archetype Hero Card */}
-        <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl p-5 sm:p-7 shadow-xl">
+        <div className="relative overflow-hidden rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-xl p-5 sm:p-7 shadow-xl">
           {/* Archetype Title & Summary */}
           <div>
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-tight">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-[var(--text-primary)] leading-tight">
               {googleUser?.name ? `${googleUser.name} • ${derivedArchetype}` : derivedArchetype}
             </h2>
-            <p className="text-xs sm:text-sm text-zinc-300/90 mt-2.5 leading-relaxed font-normal max-w-2xl">
+            <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-2.5 leading-relaxed font-normal max-w-2xl">
               {derivedSummary}
             </p>
           </div>

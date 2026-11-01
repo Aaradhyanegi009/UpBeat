@@ -49,6 +49,7 @@ export default function NowPlayingView({
   setShowVideo,
   isShuffle,
   setIsShuffle,
+  onToggleShuffle,
   repeatMode,
   setRepeatMode,
   volume,
@@ -1065,7 +1066,7 @@ export default function NowPlayingView({
       {/* Playback Transport Controls */}
       <div className="px-6 sm:px-10 py-2 sm:py-4 shrink-0 flex items-center justify-between max-w-lg mx-auto w-full z-10">
         <button
-          onClick={() => setIsShuffle && setIsShuffle((prev) => !prev)}
+          onClick={() => (onToggleShuffle ? onToggleShuffle() : setIsShuffle && setIsShuffle((prev) => !prev))}
           className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
             isShuffle ? 'text-white bg-white/15' : 'text-zinc-500 hover:text-zinc-300'
           }`}

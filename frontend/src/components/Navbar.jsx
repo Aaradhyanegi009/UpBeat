@@ -42,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v5.4.4')
+  const [otaVer, setOtaVer] = useState('v5.5')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -102,15 +102,15 @@ export default function Navbar({
 
   return (
     <>
-      <header className="pt-safe-top bg-black/40 backdrop-blur-md border-b border-white/10 select-none flex-shrink-0 z-30 sticky top-0 transition-colors">
+      <header className="pt-safe-top bg-[var(--bg-glass)] backdrop-blur-xl border-b border-[var(--border-subtle)] text-[var(--text-primary)] select-none flex-shrink-0 z-30 sticky top-0 transition-colors">
         {/* Mobile Full-Width Search Header (when search is open on mobile) */}
         {isMobileSearchOpen ? (
           <div className="sm:hidden flex flex-col">
-            <div className="h-11 sm:h-14 px-3 flex items-center gap-2.5 w-full">
+            <div className="h-12 px-5 flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => setIsMobileSearchOpen(false)}
-                className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white shrink-0 cursor-pointer"
+                className="p-2 rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] shrink-0 cursor-pointer"
                 title="Back to navigation"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -118,12 +118,12 @@ export default function Navbar({
 
               <form
                 onSubmit={handleSearchSubmit}
-                className="flex-1 h-10 rounded-full bg-white/[0.08] border border-white/20 flex items-center gap-2 px-3.5 min-w-0"
+                className="flex-1 h-10 rounded-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] flex items-center gap-2.5 px-4 min-w-0"
               >
                 <button
                   type="submit"
                   disabled={busy}
-                  className="text-zinc-400 hover:text-white shrink-0 cursor-pointer"
+                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] shrink-0 cursor-pointer"
                   title="Search"
                 >
                   {busy ? (
@@ -143,14 +143,14 @@ export default function Navbar({
                       ? 'Describe vibe, mood, anime...'
                       : 'Search songs, artists...'
                   }
-                  className="w-full bg-transparent text-xs text-white placeholder:text-zinc-400 focus:outline-none min-w-0"
+                  className="w-full bg-transparent text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none min-w-0"
                 />
 
                 {Boolean(prompt) && !busy && (
                   <button
                     type="button"
                     onClick={() => setPrompt && setPrompt('')}
-                    className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer"
+                    className="p-1 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] shrink-0 cursor-pointer"
                     title="Clear text"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -164,11 +164,11 @@ export default function Navbar({
                     className={`flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border transition-all shrink-0 cursor-pointer ${
                       isAiMode
                         ? 'bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-sm'
-                        : 'bg-white/[0.06] text-zinc-400 hover:text-white border-white/[0.08]'
+                        : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border-subtle)]'
                     }`}
                     title={isAiMode ? 'Switch to Regular Search' : 'Enable Gemini AI Curator'}
                   >
-                    <Sparkles className={`w-3 h-3 ${isAiMode ? 'text-purple-300' : 'text-zinc-400'}`} />
+                    <Sparkles className={`w-3 h-3 ${isAiMode ? 'text-purple-300' : 'text-[var(--text-muted)]'}`} />
                     <span>AI</span>
                   </button>
                 )}
@@ -177,8 +177,8 @@ export default function Navbar({
 
             {/* AI Model Sub-Bar on Mobile (Only when AI curate is on) */}
             {isAiMode && models.length > 0 && (
-              <div className="px-4 py-1.5 bg-black/60 backdrop-blur-md border-t border-white/[0.06] flex items-center justify-between text-xs animate-in fade-in duration-100">
-                <div className="flex items-center gap-1.5 text-purple-300 text-[11px] font-mono">
+              <div className="px-5 py-2 bg-[var(--bg-glass-heavy)] backdrop-blur-md border-t border-[var(--border-subtle)] flex items-center justify-between text-xs animate-in fade-in duration-100">
+                <div className="flex items-center gap-1.5 text-purple-400 text-[11px] font-mono">
                   <Sparkles className="w-3 h-3" />
                   <span>Curator Model:</span>
                 </div>
@@ -201,16 +201,16 @@ export default function Navbar({
           </div>
         ) : (
           /* Standard Navbar (Desktop full + Mobile clean icon bar) */
-          <div className="h-11 sm:h-14 px-3 sm:px-6 flex items-center justify-between gap-3 sm:gap-4">
+          <div className="h-12 sm:h-14 px-5 sm:px-6 flex items-center justify-between gap-3.5 sm:gap-4">
             {/* Left: Clean Brand (On mobile, ONLY music note logo; on desktop, logo + UpBeat) */}
             <div className="flex items-center gap-3 shrink-0">
               <button
                 onClick={onToggleSidebar}
-                className="p-2 rounded-full hover:bg-white/[0.08] active:bg-white/[0.12] text-zinc-300 hover:text-white transition-all cursor-pointer"
+                className="p-2 rounded-full hover:bg-[var(--surface-hover)] active:bg-[var(--surface-hover)] text-[var(--text-primary)] transition-all cursor-pointer"
                 title="Taste Controls"
                 aria-label="Taste Controls"
               >
-                <Sliders className="w-5 h-5 text-white" />
+                <Sliders className="w-5 h-5 text-[var(--text-primary)]" />
               </button>
 
               <div
@@ -218,12 +218,12 @@ export default function Navbar({
                 className="flex items-center gap-2 cursor-pointer group"
                 title="UpBeat"
               >
-                <Music className="w-5 h-5 text-white" />
+                <Music className="w-5 h-5 text-[var(--text-primary)]" />
                 {/* Text is hidden on mobile screens, shown on desktop */}
-                <span className="hidden sm:inline font-bold text-white text-lg tracking-tight">UpBeat</span>
+                <span className="hidden sm:inline font-bold text-[var(--text-primary)] text-lg tracking-tight">UpBeat</span>
               </div>
 
-              {/* Day / Night Atmosphere Status Indicator */}
+              {/* Day / Night / Light Atmosphere Status Indicator */}
               {themeInfo && (
                 <button
                   type="button"
@@ -239,8 +239,8 @@ export default function Navbar({
                   <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: themeInfo.color }} />
                   <span>
                     {themePreference === 'auto'
-                      ? (themeInfo.type === 'morning' ? 'Crimson Glow' : themeInfo.type === 'afternoon' ? 'Dark' : 'Violet')
-                      : (themePreference === 'amoled' ? 'Dark' : themePreference === 'morning' ? 'Crimson Glow' : themePreference === 'night' ? 'Violet' : themeInfo.label)}
+                      ? (themeInfo.type === 'morning' ? 'Crimson Glow' : themeInfo.type === 'afternoon' ? 'Dark' : themeInfo.type === 'light' ? 'Light' : 'Violet')
+                      : (themePreference === 'amoled' ? 'Dark' : themePreference === 'morning' ? 'Crimson Glow' : themePreference === 'night' ? 'Violet' : themePreference === 'light' ? 'Light' : themeInfo.label)}
                   </span>
                 </button>
               )}
@@ -252,14 +252,14 @@ export default function Navbar({
                 onSubmit={handleSearchSubmit}
                 className={`w-full h-10 sm:h-11 rounded-full flex items-center gap-2.5 px-3.5 sm:px-4 transition-all ${
                   isSearchFocused
-                    ? 'bg-[#18181b] border border-white/30 shadow-lg shadow-black/50 ring-1 ring-white/20'
-                    : 'bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.08]'
+                    ? 'bg-[var(--bg-elevated)] border border-[var(--border-strong)] shadow-lg ring-1 ring-[var(--border-subtle)]'
+                    : 'bg-[var(--surface-hover)] border border-[var(--border-subtle)]'
                 }`}
               >
                 <button
                   type="submit"
                   disabled={busy}
-                  className="text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
                   title="Search"
                 >
                   {busy ? (
@@ -280,7 +280,7 @@ export default function Navbar({
                       ? 'Describe mood, anime, soundtrack, or vibe for Gemini...'
                       : 'Search songs, albums, artists, podcasts...'
                   }
-                  className="w-full bg-transparent text-xs sm:text-sm text-white placeholder:text-zinc-400 focus:outline-none min-w-0"
+                  className="w-full bg-transparent text-xs sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none min-w-0"
                 />
 
                 {/* Clear button if text present */}
@@ -288,7 +288,7 @@ export default function Navbar({
                   <button
                     type="button"
                     onClick={() => setPrompt && setPrompt('')}
-                    className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                    className="p-1 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shrink-0"
                     title="Clear search"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -303,11 +303,11 @@ export default function Navbar({
                     className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-all shrink-0 cursor-pointer ${
                       isAiMode
                         ? 'bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-sm'
-                        : 'bg-white/[0.06] text-zinc-400 hover:text-white border-white/[0.08] hover:border-white/20'
+                        : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border-subtle)]'
                     }`}
                     title={isAiMode ? 'Switch to Regular Search' : 'Enable Gemini AI Curator'}
                   >
-                    <Sparkles className={`w-3.5 h-3.5 ${isAiMode ? 'text-purple-300' : 'text-zinc-400'}`} />
+                    <Sparkles className={`w-3.5 h-3.5 ${isAiMode ? 'text-purple-300' : 'text-[var(--text-muted)]'}`} />
                     <span>AI Curate</span>
                   </button>
                 )}
@@ -371,7 +371,7 @@ export default function Navbar({
                 className={`p-2 rounded-full border text-xs flex items-center justify-center transition-colors cursor-pointer ${
                   !hasKeyOrServer
                     ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse'
-                    : 'bg-white/[0.06] hover:bg-white/[0.12] border-white/[0.08] text-zinc-400 hover:text-white'
+                    : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <Settings className="w-4 h-4" />

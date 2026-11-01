@@ -10,50 +10,23 @@
   --sab: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
   --sal: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --sar: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
-}
 
-/* Squircle & Luxury Pill UI System (Inspired by Modern Mobile Design) */
-.squircle-card {
-  border-radius: 26px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.squircle-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
-}
+  /* Default Dark Tokens */
+  --bg-primary: #000000;
+  --bg-elevated: #111116;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-glass: rgba(0, 0, 0, 0.78);
+  --bg-glass-heavy: rgba(10, 10, 14, 0.94);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #e11d48;
+  --text-on-accent: #ffffff;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 
-.squircle-icon {
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.floating-dock {
-  background: rgba(0, 0, 0, 0.88);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 1px 1px rgba(255, 255, 255, 0.08);
-}
-
-html, body, #root {
-  height: 100%;
-  background: #000000;
-  color: #f4f4f5;
-  overscroll-behavior: none;
-}
-
-/* Dynamic Day/Night Cycle Cyber Atmosphere Themes */
-/* Dynamic Day/Night Cycle Atmosphere Themes */
-:root {
   --atm-glow-1: transparent;
   --atm-glow-2: transparent;
   --atm-glow-3: transparent;
@@ -63,6 +36,21 @@ html, body, #root {
 
 /* Morning (4:00 AM - 11:59 AM) - Crimson Sunrise Gradient */
 .theme-morning, :root.theme-morning {
+  --bg-primary: #050203;
+  --bg-elevated: #15090b;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-glass: rgba(10, 3, 5, 0.82);
+  --bg-glass-heavy: rgba(15, 5, 8, 0.94);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent-primary: #e11d48;
+  --text-on-accent: #ffffff;
+  --border-subtle: rgba(239, 68, 68, 0.14);
+  --border-strong: rgba(239, 68, 68, 0.28);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+
   --atm-glow-1: rgba(239, 68, 68, 0.26);
   --atm-glow-2: rgba(244, 63, 94, 0.14);
   --atm-glow-3: rgba(251, 146, 60, 0.05);
@@ -72,6 +60,21 @@ html, body, #root {
 
 /* Afternoon (12:00 PM - 7:59 PM) - 100% Pure Dark AMOLED Black (Zero Gradients) */
 .theme-afternoon, :root.theme-afternoon {
+  --bg-primary: #000000;
+  --bg-elevated: #0f0f13;
+  --bg-card: rgba(255, 255, 255, 0.035);
+  --bg-glass: rgba(0, 0, 0, 0.88);
+  --bg-glass-heavy: rgba(10, 10, 12, 0.95);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #f43f5e;
+  --text-on-accent: #ffffff;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --surface-hover: rgba(255, 255, 255, 0.05);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+
   --atm-glow-1: transparent;
   --atm-glow-2: transparent;
   --atm-glow-3: transparent;
@@ -81,6 +84,21 @@ html, body, #root {
 
 /* Night (8:00 PM - 3:59 AM) - Cosmic Midnight Violet & Neon Indigo Gradient */
 .theme-night, :root.theme-night {
+  --bg-primary: #040209;
+  --bg-elevated: #110d1f;
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-glass: rgba(8, 4, 18, 0.82);
+  --bg-glass-heavy: rgba(12, 6, 24, 0.94);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent-primary: #8b5cf6;
+  --text-on-accent: #ffffff;
+  --border-subtle: rgba(139, 92, 246, 0.14);
+  --border-strong: rgba(139, 92, 246, 0.28);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+
   --atm-glow-1: rgba(139, 92, 246, 0.24);
   --atm-glow-2: rgba(99, 102, 241, 0.13);
   --atm-glow-3: rgba(236, 72, 153, 0.05);
@@ -88,9 +106,75 @@ html, body, #root {
   --atm-grid: rgba(139, 92, 246, 0.04);
 }
 
+/* Light Mode — Daylight Studio (Exact specs from Pillar 2) */
+.theme-light, :root.theme-light, html.theme-light {
+  color-scheme: light;
+  --bg-primary: #F7F7FA;
+  --bg-elevated: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-glass: rgba(255, 255, 255, 0.82);
+  --bg-glass-heavy: rgba(255, 255, 255, 0.94);
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+  --accent-primary: #E11D48;
+  --text-on-accent: #FFFFFF;
+  --border-subtle: rgba(15, 23, 42, 0.09);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --surface-hover: rgba(15, 23, 42, 0.05);
+  --card-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+
+  --atm-glow-1: rgba(225, 29, 72, 0.06);
+  --atm-glow-2: rgba(109, 40, 217, 0.04);
+  --atm-glow-3: rgba(251, 146, 60, 0.03);
+  --atm-accent: rgba(225, 29, 72, 0.03);
+  --atm-grid: rgba(15, 23, 42, 0.025);
+}
+
+/* Squircle & Luxury Pill UI System (Signature squircle aesthetic) */
+.squircle-card {
+  border-radius: 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--card-shadow);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.squircle-card:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.squircle-icon {
+  border-radius: 14px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.floating-dock {
+  background: var(--bg-glass-heavy);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 0 1px 1px var(--border-subtle);
+}
+
+html, body, #root {
+  height: 100%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overscroll-behavior: none;
+}
+
 /* Broadened Cyber Atmosphere with Dynamic Morning & Night Gradients over AMOLED Black */
 .ytm-atmosphere {
-  background-color: #000000;
+  background-color: var(--bg-primary);
   background-image: 
     radial-gradient(ellipse 130% 650px at 50% 0px, var(--atm-glow-1) 0%, var(--atm-glow-2) 38%, var(--atm-glow-3) 75%, transparent 100%),
     radial-gradient(ellipse 95% 650px at 85% 35%, var(--atm-accent) 0%, var(--atm-glow-2) 40%, transparent 70%),
@@ -99,7 +183,7 @@ html, body, #root {
     linear-gradient(to bottom, var(--atm-grid) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px;
   background-attachment: fixed;
-  transition: background-image 1.2s ease-in-out;
+  transition: background-image 0.8s ease-in-out, background-color 0.4s ease-in-out;
 }
 
 /* Afternoon enforces 100% Pure Dark AMOLED Black with Zero Gradients */
@@ -109,6 +193,20 @@ html, body, #root {
 :root.theme-afternoon {
   background-color: #000000 !important;
   background-image: none !important;
+}
+
+/* Light mode Daylight Studio atmosphere */
+.theme-light.ytm-atmosphere,
+.theme-light .ytm-atmosphere,
+:root.theme-light .ytm-atmosphere,
+:root.theme-light {
+  background-color: #F7F7FA !important;
+  color: #0F172A !important;
+  background-image: 
+    radial-gradient(ellipse 130% 650px at 50% 0px, rgba(225, 29, 72, 0.04) 0%, rgba(109, 40, 217, 0.03) 38%, transparent 75%),
+    radial-gradient(ellipse 95% 650px at 85% 35%, rgba(225, 29, 72, 0.025) 0%, transparent 60%),
+    linear-gradient(to right, rgba(15, 23, 42, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.02) 1px, transparent 1px);
 }
 
 .ytm-grid-overlay {
@@ -128,7 +226,7 @@ html, body, #root {
 
 .fast-row {
   content-visibility: auto;
-  contain-intrinsic-size: 0 54px;
+  contain-intrinsic-size: 0 68px;
   contain: layout style paint;
 }
 
@@ -138,8 +236,7 @@ html, body, #root {
 }
 
 html, body {
-  background-color: #000000 !important;
-  color-scheme: dark;
+  background-color: var(--bg-primary);
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
 }
@@ -168,18 +265,18 @@ code, pre, .font-mono {
 }
 
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2e2e32;
-  border-radius: 2px;
+  background: var(--border-strong);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b4b52;
+  background: var(--text-muted);
 }
 
 input[type="range"].argon-slider {

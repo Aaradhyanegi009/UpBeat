@@ -294,7 +294,9 @@ export default function Sidebar({
                   ? 'Dark'
                   : themePreference === 'morning'
                   ? 'Crimson Glow'
-                  : 'Violet'}
+                  : themePreference === 'night'
+                  ? 'Violet'
+                  : 'Light'}
               </span>
               <ChevronDown
                 className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
@@ -304,14 +306,15 @@ export default function Sidebar({
             </div>
           </button>
 
-          {/* 4 Options Slide Down */}
+          {/* 5 Options Slide Down */}
           {isThemeOpen && (
             <div className="px-2 pb-2.5 pt-0.5 flex flex-col gap-1 border-t border-white/[0.06] animate-in fade-in slide-in-from-top-1 duration-150">
               {[
                 { id: 'auto', label: 'Auto', color: '#10b981' },
                 { id: 'amoled', label: 'Dark', color: '#71717a' },
                 { id: 'morning', label: 'Crimson Glow', color: '#ef4444' },
-                { id: 'night', label: 'Violet', color: '#8b5cf6' }
+                { id: 'night', label: 'Violet', color: '#8b5cf6' },
+                { id: 'light', label: 'Light', color: '#e11d48' }
               ].map((th) => {
                 const isSelected = themePreference === th.id
                 return (
@@ -524,7 +527,7 @@ export default function Sidebar({
         {/* App Info */}
         <div className="pt-2 text-xs font-semibold text-zinc-400 border-t border-white/10 flex items-center justify-between">
           <span className="text-zinc-400">UpBeat Music</span>
-          <span className="text-emerald-400/80">v5.4.4</span>
+          <span className="text-emerald-400/80">v5.5</span>
         </div>
       </div>
 

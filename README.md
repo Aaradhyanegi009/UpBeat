@@ -15,7 +15,31 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
   -  **Crimson Glow** (4:00 AM – 11:59 AM)
   -  **Dark (AMOLED)** (12:00 PM – 7:59 PM): 100% pure black for afternoon glare reduction and OLED battery savings
   -  **Violet** (8:00 PM – 3:59 AM)
-- **Quick Slide-Down Theme Drawer**: Tap **Themes** in Taste Controls to expand a clean 4-option slider (**Auto**, **Dark**, **Crimson Glow**, **Violet**) to lock in your preferred aesthetic anytime.
+- **Daylight Studio (High-Contrast Light Mode)**: Soft Alabaster background (`#F7F7FA`) with deep slate ink typography (`#0F172A`), zero-glare ambient elevations, and 100% contrast compliance across all screens, drawers, and player bars.
+- **Quick Slide-Down Theme Drawer**: Tap **Themes** in Taste Controls to expand a 5-option slider (**Auto**, **Dark**, **Crimson Glow**, **Violet**, **Light**) to lock in your preferred aesthetic anytime.
+
+###  Spatial UI/UX & Mobile "Airy" Layout (v5.5)
+- **Breathing Room & Hierarchy**: Overhauled mobile spacing with `20px` edge margins, `32px–40px` shelf gaps, and `130px` bottom scroll clearance so floating controls never collide with content.
+- **Generous Touch Targets**: Track rows expanded to `64px–72px` touch targets with `48px x 48px` squircle album art (`rounded-[12px]`) and uncluttered typography.
+- **Horizontal Discovery Carousels**: Smooth snap-scrolling cards (`156px–168px` width) with responsive layout across mobile, tablet, and desktop viewports.
+
+###  Dynamic 9-Block Listen Together & Discovery Engine (v5.5)
+- **Tier 1 (Regional & Viral Live Charts)**:
+  - *US Top Daily Chart*: Live Billboard / US Top 50 hits.
+  - *India Top Daily Chart*: Top trending hits across India today.
+  - *Japan Top Daily Chart*: J-Pop, Anime, & Tokyo Hot 100 daily chart.
+  - *India Trendy Songs*: Viral reels, indie anthems, and Bollywood/Punjabi chartbusters.
+- **Tier 2 (Personalized Sonic DNA Blocks)**:
+  - *Sonic Archetype Mix*: Adaptive to user's listener archetype & BPM range.
+  - *Deep Cut Discovery*: Unheard tracks matching user's top genre affinities.
+  - *Recent Vibe Continuation*: Seeded from recently hearted & played tracks.
+  - *Late Night / Time-of-Day Personal Mix*: Harmonized with active theme time windows.
+  - *Rediscover & Forgotten Gems*: Resurfaced older synced likes and harmonic pairings.
+- **Session-Aware Anti-Static Cache**: Dynamic modifier rotation tags with instant **"Refresh Feed"** action to keep discovery fresh on every session.
+
+###  Universal Shuffle & Randomize Controls (v5.5)
+- **True Fisher-Yates Queue Shuffle**: Unbiased queue randomization that anchors currently playing track at index `0` and restores original sequence seamlessly when untoggled.
+- **Per-Block Shuffle Play & Reroll**: Instant 1-tap shuffle play or dynamic track re-roll on any discovery shelf.
 
 ### Android Auto (Car Display Mode)
 - **In-Car Browse & Playback**: Full native Android Auto dashboard support (`AutomotiveApp` via `MediaBrowserServiceCompat`).
