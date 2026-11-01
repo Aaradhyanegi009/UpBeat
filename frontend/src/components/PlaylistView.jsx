@@ -8,6 +8,7 @@ import {
 import {
   getTrackDownloadUrl,
   getAudioSource,
+  getInitialDiscoveryBlocks,
   fetchListenTogetherFeed,
   rerollDiscoveryBlock,
   loadBlockTracks,
@@ -57,8 +58,8 @@ export default function PlaylistView({
   const [downloadedSet, setDownloadedSet] = useState(new Set())
   const [activeMenuIdx, setActiveMenuIdx] = useState(null)
 
-  // Dynamic 8-9 Listen Together Discovery Blocks
-  const [discoveryBlocks, setDiscoveryBlocks] = useState([])
+  // Dynamic 8-9 Listen Together Discovery Blocks (initialized with instant fallback so shelf never stays empty)
+  const [discoveryBlocks, setDiscoveryBlocks] = useState(() => getInitialDiscoveryBlocks())
   const [isRefreshingFeed, setIsRefreshingFeed] = useState(false)
   const [rerollingBlockId, setRerollingBlockId] = useState(null)
 
@@ -151,12 +152,12 @@ export default function PlaylistView({
 
   const handleSelectBlock = (block) => {
     if (!block) return
-    if (block.browse_id && onSelectMatchedPlaylist) {
-      onSelectMatchedPlaylist(block)
+    if (onSelectStarter && block.query) {
+      onSelectStarter(block.query)
       return
     }
-    if (block.query && onSelectStarter) {
-      onSelectStarter(block.query)
+    if (block.browse_id && onSelectMatchedPlaylist) {
+      onSelectMatchedPlaylist(block)
     }
   }
 
@@ -723,9 +724,16 @@ export default function PlaylistView({
                         >
                           <Shuffle className="w-3.5 h-3.5" />
                         </button>
-                        <div className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md group-hover:scale-105">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSelectBlock(block)
+                          }}
+                          title="Play Station"
+                          className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
+                        >
                           <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
-                        </div>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -829,9 +837,16 @@ export default function PlaylistView({
                         >
                           <Shuffle className="w-3.5 h-3.5" />
                         </button>
-                        <div className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md group-hover:scale-105">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSelectBlock(block)
+                          }}
+                          title="Play Station"
+                          className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
+                        >
                           <Play className="w-3.5 h-3.5 fill-black ml-0.5" />
-                        </div>
+                        </button>
                       </div>
                     </div>
                   </div>

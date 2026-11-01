@@ -1599,6 +1599,106 @@ function getRandomRotationTag() {
   return DYNAMIC_ROTATION_TAGS[Math.floor(Math.random() * DYNAMIC_ROTATION_TAGS.length)]
 }
 
+export function getInitialDiscoveryBlocks() {
+  return [
+    {
+      id: 'block_us_top_daily',
+      tier: 1,
+      title: 'US Top Daily Chart',
+      subtitle: 'Billboard Hot 100 & US Top 50 Daily Hits',
+      badge: 'US Chart',
+      query: 'Billboard Hot 100 US top daily chart hits',
+      thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+      color: 'from-blue-600/40 to-black'
+    },
+    {
+      id: 'block_india_top_daily',
+      tier: 1,
+      title: 'India Top Daily Chart',
+      subtitle: 'Top Charting Hits Across India Today',
+      badge: 'India Chart',
+      query: 'Trending 20 India top daily chart hit songs',
+      thumbnail: 'https://yt3.googleusercontent.com/WI2UEaJBjl5bvSz12by1__hO_EZNyuyTChu9LfuQ9J__PtSx17FT5p8kDV4BKBmCnEb2pkkmhS0=s576',
+      color: 'from-amber-600/40 to-black'
+    },
+    {
+      id: 'block_japan_top_daily',
+      tier: 1,
+      title: 'Japan Top Daily Chart',
+      subtitle: 'J-Pop, Anime & Tokyo Hot 100 Daily Chart',
+      badge: 'Japan Chart',
+      query: 'Tokyo Hot 100 J-Pop anime daily top chart hits',
+      thumbnail: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80',
+      color: 'from-rose-600/40 to-black'
+    },
+    {
+      id: 'block_india_trendy',
+      tier: 1,
+      title: 'India Trendy Songs',
+      subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
+      badge: 'Trending Heat',
+      query: 'viral trending songs reels Bollywood Punjabi indie hits',
+      thumbnail: 'https://yt3.googleusercontent.com/1n6BXDFo06jkTV1M-PIKTVzWnJ0G2bO1dEULK8hd696MNPmKbCufOLTJKyNn_vw1CZp5A7-y5A=s576',
+      color: 'from-emerald-600/40 to-black'
+    },
+    {
+      id: 'block_sonic_archetype',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Hiroyuki Sawano & Epic OST',
+      subtitle: 'Orchestral Rock • Anime Anthems & Climaxes',
+      badge: 'Epic OST',
+      query: 'Hiroyuki Sawano epic orchestral anime soundtrack best mix',
+      thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+      color: 'from-red-600/40 to-black'
+    },
+    {
+      id: 'block_deep_cut',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Neo-Electronic & Synthwave Flow',
+      subtitle: 'Driving Dark Synth & Cybernetic Beats',
+      badge: 'Cyber Flow',
+      query: 'dark synthwave cyberpunk electronic driving rhythm',
+      thumbnail: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
+      color: 'from-indigo-600/40 to-black'
+    },
+    {
+      id: 'block_recent_vibe',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Global Indie & Bedroom Pop',
+      subtitle: 'Melodic Guitars • Crisp Indie Vibrations',
+      badge: 'Indie Gems',
+      query: 'modern indie rock bedroom pop guitar melodic hits',
+      thumbnail: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80',
+      color: 'from-cyan-600/40 to-black'
+    },
+    {
+      id: 'block_time_of_day',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Daylight Focus & Terminal',
+      subtitle: 'Minimal Synth, Intricate Rhythm & Work Flow',
+      badge: 'Time Cycle',
+      query: 'minimal synth focus electronic programming beats',
+      thumbnail: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
+      color: 'from-slate-700/40 to-black'
+    },
+    {
+      id: 'block_rediscover',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Acoustic Warmth & Soul Gems',
+      subtitle: 'Unplugged Melodies & Timeless Hits',
+      badge: 'Rediscover',
+      query: 'acoustic warmth acoustic soul timeless unplugged classics',
+      thumbnail: 'https://images.unsplash.com/photo-1485579149621-3123dd979885?w=600&auto=format&fit=crop&q=80',
+      color: 'from-rose-600/40 to-black'
+    }
+  ]
+}
+
 export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null, forceRefresh = false, timeInfo = null } = {}) {
   if (!forceRefresh && _discoveryFeedMemoryCache && Date.now() - _discoveryFeedMemoryCache.ts < 30 * 60 * 1000) {
     return _discoveryFeedMemoryCache.blocks
@@ -1840,15 +1940,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
     ]
   }
 
-  // Dynamic live top track artwork enhancement for Tier 1 charts
-  const liveArts = await Promise.all(
-    tier1Blocks.map(async (b) => (b.browse_id ? fetchChartTopArtwork(b.browse_id) : ''))
-  )
-  const finalTier1 = tier1Blocks.map((b, i) =>
-    liveArts[i] ? { ...b, thumbnail: liveArts[i] } : b
-  )
-
-  const allBlocks = [...finalTier1, ...tier2Blocks]
+  const allBlocks = [...tier1Blocks, ...tier2Blocks]
   _discoveryFeedMemoryCache = { blocks: allBlocks, isNewUser, ts: Date.now() }
   try {
     sessionStorage.setItem(DISCOVERY_FEED_CACHE_KEY, JSON.stringify(_discoveryFeedMemoryCache))
@@ -1891,17 +1983,19 @@ export async function loadBlockTracks(block) {
     return block.preloadedTracks
   }
 
-  if (block.browse_id) {
-    try {
-      const plTracks = await browsePlaylistStandalone(block.browse_id, block.title, block.subtitle)
-      if (plTracks && plTracks.length > 0) return plTracks
-    } catch {}
-  }
-
+  // 1. Direct search (fastest, most reliable across all environments)
   if (block.query) {
     try {
       const res = await directSearchStandalone(block.query, 'songs')
       if (res?.tracks?.length > 0) return res.tracks
+    } catch {}
+  }
+
+  // 2. Playlist browse fallback
+  if (block.browse_id) {
+    try {
+      const plTracks = await browsePlaylistStandalone(block.browse_id, block.title, block.subtitle)
+      if (plTracks && plTracks.length > 0) return plTracks
     } catch {}
   }
 

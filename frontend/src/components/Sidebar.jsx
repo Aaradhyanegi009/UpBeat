@@ -141,15 +141,15 @@ export default function Sidebar({
 
   // 1. YouTube Music Slim Vertical Left Rail (Icon + Text Stack)
   const slimRail = (
-    <nav className="w-18 bg-black/40 backdrop-blur-md border-r border-white/10 flex flex-col items-center py-3 select-none h-full shrink-0">
+    <nav className="w-18 bg-[var(--bg-glass)] backdrop-blur-md border-r border-[var(--border-subtle)] flex flex-col items-center py-3 select-none h-full shrink-0">
       <div className="flex flex-col items-center gap-2 w-full px-2">
         {/* Home / Curator */}
         <button
           onClick={() => setActiveTab && setActiveTab('curator')}
           className={`w-full py-2.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
             activeTab === 'curator'
-              ? 'bg-white/15 text-white font-bold shadow-md shadow-white/5'
-              : 'text-zinc-400 hover:text-white hover:bg-white/[0.08]'
+              ? 'bg-[var(--surface-hover)] text-[var(--text-primary)] font-bold shadow-xs'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
           title="Home / Quick picks"
         >
@@ -165,15 +165,15 @@ export default function Sidebar({
           }}
           className={`w-full py-2.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer relative ${
             activeTab === 'favorites'
-              ? 'bg-rose-500/20 text-rose-300 font-bold shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-white/[0.08]'
+              ? 'bg-rose-500/20 text-rose-500 dark:text-rose-300 font-bold shadow-md'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
           title="Liked Songs"
         >
           <div className="relative">
             <Heart className={`w-5 h-5 ${favoritesCount > 0 ? 'fill-rose-500/40 text-rose-400' : ''}`} />
             {favoritesCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold px-1 rounded-full bg-rose-500/30 text-rose-300 border border-rose-500/40">
+              <span className="absolute -top-1.5 -right-2 text-[9px] font-bold px-1 rounded-full bg-rose-500/20 text-slate-900 dark:text-rose-200 border border-rose-500/30">
                 {favoritesCount}
               </span>
             )}
@@ -189,15 +189,15 @@ export default function Sidebar({
           }}
           className={`w-full py-2.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer relative ${
             activeTab === 'offline'
-              ? 'bg-emerald-500/20 text-emerald-300 font-bold shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-white/[0.08]'
+              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-bold shadow-md'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
           title="Offline Downloads"
         >
           <div className="relative">
-            <DownloadCloud className={`w-5 h-5 ${offlineCount > 0 ? 'text-emerald-400' : ''}`} />
+            <DownloadCloud className={`w-5 h-5 ${offlineCount > 0 ? 'text-emerald-500' : ''}`} />
             {offlineCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold px-1 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/40">
+              <span className="absolute -top-1.5 -right-2 text-[9px] font-semibold px-1 rounded-full bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40">
                 {offlineCount}
               </span>
             )}
@@ -210,8 +210,8 @@ export default function Sidebar({
           onClick={() => setActiveTab && setActiveTab('library')}
           className={`w-full py-2.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer relative ${
             activeTab === 'library'
-              ? 'bg-sky-500/20 text-sky-300 font-bold shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-white/[0.08]'
+              ? 'bg-sky-500/20 text-sky-600 dark:text-sky-300 font-bold shadow-md'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
           title="Seed Library"
         >
@@ -224,8 +224,8 @@ export default function Sidebar({
           onClick={() => setActiveTab && setActiveTab('dna')}
           className={`w-full py-2.5 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer relative ${
             activeTab === 'dna'
-              ? 'bg-emerald-500/20 text-emerald-300 font-bold shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-white/[0.08]'
+              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-bold shadow-md'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
           }`}
           title="Sonic Taste Profile"
         >
@@ -236,7 +236,7 @@ export default function Sidebar({
         {/* Controls Drawer Toggle */}
         <button
           onClick={onToggleSidebar}
-          className="w-full py-3 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer text-zinc-400 hover:text-white hover:bg-white/[0.08] mt-auto"
+          className="w-full py-3 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] mt-auto"
           title="Toggle Taste Controls"
         >
           <Sliders className="w-5 h-5" />
@@ -248,18 +248,18 @@ export default function Sidebar({
 
   // 2. Full Expanded Drawer with Preset Sliders & Diagnostics
   const sidebarContent = (
-    <aside className="w-80 bg-black/75 backdrop-blur-2xl border-r border-white/10 flex-shrink-0 flex flex-col justify-between overflow-y-auto select-none h-full relative">
+    <aside className="w-80 bg-[var(--bg-glass-heavy)] backdrop-blur-2xl border-r border-[var(--border-subtle)] text-[var(--text-primary)] flex-shrink-0 flex flex-col justify-between overflow-y-auto select-none h-full relative">
       {/* Sticky Translucent Header */}
-      <div className="px-4 py-3 border-b border-white/10 bg-black/40 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+          <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-500">
             <Sliders className="w-3.5 h-3.5" />
           </div>
-          <span className="text-xs font-bold text-white tracking-tight">Taste Controls</span>
+          <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">Taste Controls</span>
         </div>
         <button
           onClick={isOpenMobile ? onCloseMobile : onToggleSidebar}
-          className="p-1.5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          className="p-1.5 rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
           title="Collapse Sidebar"
         >
           <X className="w-4 h-4" />
@@ -269,15 +269,15 @@ export default function Sidebar({
       <div className="p-4 flex flex-col gap-4">
 
         {/* Themes Drawer (Small Collapsible Slider) */}
-        <div className="rounded-2xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-sm overflow-hidden transition-all">
+        <div className="rounded-2xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-xs overflow-hidden transition-all">
           <button
             type="button"
             onClick={() => setIsThemeOpen((prev) => !prev)}
-            className="w-full p-3.5 flex items-center justify-between text-left transition-colors hover:bg-white/[0.04] cursor-pointer"
+            className="w-full p-3.5 flex items-center justify-between text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
           >
             <div className="flex items-center gap-2">
-              <Palette className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span className="text-xs font-bold text-white tracking-tight">Themes</span>
+              <Palette className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">Themes</span>
             </div>
             <div className="flex items-center gap-2">
               <span
@@ -294,26 +294,23 @@ export default function Sidebar({
                   ? 'Dark'
                   : themePreference === 'morning'
                   ? 'Crimson Glow'
-                  : themePreference === 'night'
-                  ? 'Violet'
                   : 'Light'}
               </span>
               <ChevronDown
-                className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
-                  isThemeOpen ? 'rotate-180 text-white' : ''
+                className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform duration-200 ${
+                  isThemeOpen ? 'rotate-180 text-[var(--text-primary)]' : ''
                 }`}
               />
             </div>
           </button>
 
-          {/* 5 Options Slide Down */}
+          {/* 4 Options Slide Down (Violet removed per v5.5.1 request) */}
           {isThemeOpen && (
-            <div className="px-2 pb-2.5 pt-0.5 flex flex-col gap-1 border-t border-white/[0.06] animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="px-2 pb-2.5 pt-0.5 flex flex-col gap-1 border-t border-[var(--border-subtle)] animate-in fade-in slide-in-from-top-1 duration-150">
               {[
                 { id: 'auto', label: 'Auto', color: '#10b981' },
                 { id: 'amoled', label: 'Dark', color: '#71717a' },
                 { id: 'morning', label: 'Crimson Glow', color: '#ef4444' },
-                { id: 'night', label: 'Violet', color: '#8b5cf6' },
                 { id: 'light', label: 'Light', color: '#e11d48' }
               ].map((th) => {
                 const isSelected = themePreference === th.id
@@ -326,8 +323,8 @@ export default function Sidebar({
                     }}
                     className={`w-full px-3 py-2 rounded-xl text-left transition-all cursor-pointer flex items-center justify-between active:scale-[0.99] ${
                       isSelected
-                        ? 'bg-white/10 text-white font-bold border border-white/15'
-                        : 'text-zinc-300 hover:text-white hover:bg-white/[0.05] border border-transparent font-medium'
+                        ? 'bg-[var(--surface-hover)] text-[var(--text-primary)] font-bold border border-[var(--border-subtle)]'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-transparent font-medium'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -338,7 +335,7 @@ export default function Sidebar({
                       <span className="text-xs tracking-tight">{th.label}</span>
                     </div>
                     {isSelected && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0 shadow-xs" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-primary)] shrink-0 shadow-xs" />
                     )}
                   </button>
                 )
@@ -349,13 +346,13 @@ export default function Sidebar({
 
         {/* AI Curation Model Section (Argon priority) */}
         {models && models.length > 0 && (
-          <div className="p-4 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-sm relative overflow-hidden flex flex-col gap-2.5">
+          <div className="p-4 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-xs relative overflow-hidden flex flex-col gap-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
                 <span>AI Curation Model</span>
               </span>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30">
                 Argon Priority
               </span>
             </div>
@@ -364,37 +361,37 @@ export default function Sidebar({
               <select
                 value={selectedModel}
                 onChange={(e) => onSelectModel && onSelectModel(e.target.value)}
-                className="w-full py-2.5 px-3 bg-white/[0.05] hover:bg-white/[0.08] border border-white/10 hover:border-purple-500/40 rounded-2xl text-xs text-purple-200 font-medium transition-all cursor-pointer appearance-none focus:outline-none focus:border-purple-400 pr-8"
+                className="w-full py-2.5 px-3 bg-[var(--surface-hover)] hover:bg-[var(--surface-hover)] border border-[var(--border-subtle)] hover:border-purple-500/40 rounded-2xl text-xs text-[var(--text-primary)] font-medium transition-all cursor-pointer appearance-none focus:outline-none focus:border-purple-400 pr-8"
               >
                 {models.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-[#121216] text-white">
+                  <option key={m.id} value={m.id} className="bg-[var(--bg-elevated)] text-[var(--text-primary)]">
                     {m.name || m.id}
                   </option>
                 ))}
               </select>
-              <ChevronDown className="w-4 h-4 text-purple-400 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
+              <ChevronDown className="w-4 h-4 text-purple-500 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" />
             </div>
           </div>
         )}
 
         {/* Taste Memory Section */}
-        <div className="p-4 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-sm relative overflow-hidden flex flex-col gap-3">
+        <div className="p-4 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-xs relative overflow-hidden flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-              <Heart className="w-3.5 h-3.5 text-rose-400" />
+            <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-1.5">
+              <Heart className="w-3.5 h-3.5 text-rose-500" />
               <span>Taste Memory</span>
             </span>
             <div className="flex items-center gap-2 text-xs font-semibold">
               <button
                 onClick={onOpenFavoritesTab}
                 title="View your hearted Favorites memory"
-                className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1 cursor-pointer font-semibold"
+                className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-slate-900 dark:text-rose-200 border border-rose-500/30 flex items-center gap-1 cursor-pointer font-bold"
               >
-                <Heart className="w-2.5 h-2.5 fill-rose-400 text-rose-400" />
+                <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" />
                 <span>{favoritesCount}</span>
               </button>
-              <span className="text-zinc-600">•</span>
-              <span className="px-2.5 py-0.5 rounded-full bg-white/[0.06] text-zinc-300 border border-white/10 font-semibold" title="Tracks extracted from Safari">
+              <span className="text-[var(--text-muted)]">•</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-[var(--surface-hover)] text-[var(--text-secondary)] border border-[var(--border-subtle)] font-semibold" title="Tracks extracted from Safari">
                 {extractedCount} seeds
               </span>
             </div>
@@ -404,7 +401,7 @@ export default function Sidebar({
             onClick={onSyncFavorites}
             disabled={isSyncing}
             title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-            className="w-full py-2.5 px-3 bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-rose-500/40 rounded-full text-xs text-white font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+            className="w-full py-2.5 px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-full text-xs text-slate-900 dark:text-white font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 active:scale-98 shadow-xs"
           >
             <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 ${isSyncing ? 'animate-pulse' : ''}`} />
             <span>{isSyncing ? 'Analyzing & Curating...' : 'Sync Liked Songs'}</span>
@@ -412,13 +409,13 @@ export default function Sidebar({
         </div>
 
         {/* Offline Storage Section */}
-        <div className="p-4 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] shadow-sm relative overflow-hidden flex flex-col gap-3">
+        <div className="p-4 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-xs relative overflow-hidden flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-              <DownloadCloud className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-1.5">
+              <DownloadCloud className="w-3.5 h-3.5 text-emerald-500" />
               <span>Offline Storage</span>
             </span>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
               {offlineCount} {offlineCount === 1 ? 'song' : 'songs'}
             </span>
           </div>
@@ -429,24 +426,24 @@ export default function Sidebar({
               if (isOpenMobile && onCloseMobile) onCloseMobile()
             }}
             title="Open Offline Downloads library"
-            className="w-full py-2.5 px-3.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-emerald-500/30 rounded-2xl text-xs text-white font-semibold flex items-center justify-between transition-all cursor-pointer group shadow-sm active:scale-98"
+            className="w-full py-2.5 px-3.5 bg-[var(--surface-hover)] hover:bg-[var(--surface-hover)] border border-[var(--border-subtle)] hover:border-emerald-500/30 rounded-2xl text-xs text-[var(--text-primary)] font-semibold flex items-center justify-between transition-all cursor-pointer group shadow-xs active:scale-98"
           >
             <div className="flex items-center gap-2">
-              <DownloadCloud className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <DownloadCloud className="w-3.5 h-3.5 text-emerald-500 group-hover:scale-110 transition-transform" />
               <span>Offline Library</span>
             </div>
-            <span className="text-xs text-emerald-300 font-bold">{offlineStorageSize}</span>
+            <span className="text-xs text-emerald-600 dark:text-emerald-300 font-bold">{offlineStorageSize}</span>
           </button>
         </div>
 
         {/* Global Controls: Track Count & Energy Slider */}
-        <div className="p-4 rounded-3xl bg-[#0c0c12]/75 backdrop-blur-xl border border-white/[0.08] flex flex-col gap-3.5">
+        <div className="p-4 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] flex flex-col gap-3.5 shadow-xs">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-white tracking-tight">
+              <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">
                 Curated Track Count
               </span>
-              <span className="text-xs font-bold text-white">{trackCount} songs</span>
+              <span className="text-xs font-bold text-[var(--text-primary)]">{trackCount} songs</span>
             </div>
             <div className="flex items-center gap-1.5">
               {[4, 8, 12, 16, 24].map((count) => (
@@ -455,8 +452,8 @@ export default function Sidebar({
                   onClick={() => setTrackCount(count)}
                   className={`flex-1 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border ${
                     trackCount === count
-                      ? 'bg-white text-black border-white shadow-md shadow-white/10'
-                      : 'bg-white/[0.04] border-white/10 text-zinc-400 hover:text-white hover:bg-white/[0.08]'
+                      ? 'bg-[var(--text-primary)] text-[var(--bg-primary)] border-[var(--text-primary)] shadow-md'
+                      : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   {count}
@@ -465,25 +462,25 @@ export default function Sidebar({
             </div>
           </div>
 
-          <div className="h-[1px] bg-white/10" />
+          <div className="h-[1px] bg-[var(--border-subtle)]" />
 
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-white tracking-tight">
+                <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">
                   Energy Bias
                 </span>
                 {energyLevel !== (activePreset ? activePreset.energy : 70) && (
                   <button
                     onClick={() => setEnergyLevel(activePreset ? activePreset.energy : 70)}
                     title="Reset energy to default"
-                    className="text-zinc-500 hover:text-emerald-400 transition-colors cursor-pointer"
+                    className="text-[var(--text-muted)] hover:text-emerald-500 transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-2.5 h-2.5" />
                   </button>
                 )}
               </div>
-              <span className="text-xs font-bold text-emerald-400">
+              <span className="text-xs font-bold text-emerald-500">
                 {energyLevel}%
               </span>
             </div>
@@ -493,20 +490,20 @@ export default function Sidebar({
               max="100"
               value={energyLevel}
               onChange={(e) => setEnergyLevel(parseInt(e.target.value, 10))}
-              className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-white/10 rounded-full appearance-none"
+              className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-[var(--border-subtle)] rounded-full appearance-none"
             />
           </div>
 
           {typeof setCrossfadeSec === 'function' && (
             <>
-              <div className="h-[1px] bg-white/10" />
+              <div className="h-[1px] bg-[var(--border-subtle)]" />
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-white tracking-tight">
+                  <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">
                     Crossfade
                   </span>
-                  <span className="text-xs font-bold text-emerald-400">
+                  <span className="text-xs font-bold text-emerald-500">
                     {crossfadeSec > 0 ? `${crossfadeSec}s` : 'Off'}
                   </span>
                 </div>
@@ -517,7 +514,7 @@ export default function Sidebar({
                   step="1"
                   value={crossfadeSec}
                   onChange={(e) => setCrossfadeSec(parseInt(e.target.value, 10))}
-                  className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-white/10 rounded-full appearance-none"
+                  className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-[var(--border-subtle)] rounded-full appearance-none"
                 />
               </div>
             </>
@@ -525,32 +522,32 @@ export default function Sidebar({
         </div>
 
         {/* App Info */}
-        <div className="pt-2 text-xs font-semibold text-zinc-400 border-t border-white/10 flex items-center justify-between">
-          <span className="text-zinc-400">UpBeat Music</span>
-          <span className="text-emerald-400/80">v5.5</span>
+        <div className="pt-2 text-xs font-semibold text-[var(--text-muted)] border-t border-[var(--border-subtle)] flex items-center justify-between">
+          <span>UpBeat Music</span>
+          <span className="text-emerald-500 font-bold">v5.5.1</span>
         </div>
       </div>
 
       {/* Bottom Profile Snapshot */}
       {tasteDna && (
-        <div className="p-4 border-t border-white/10 bg-black/40 backdrop-blur-md">
+        <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-md">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-1.5">
               <Dna className="w-3.5 h-3.5" />
               <span>Profile Snapshot</span>
             </span>
-            <span className="text-[11px] font-semibold text-zinc-400 px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/10">
+            <span className="text-[11px] font-semibold text-[var(--text-secondary)] px-2 py-0.5 rounded-full bg-[var(--surface-hover)] border border-[var(--border-subtle)]">
               {tasteDna.sonic_attributes?.tempo || '120-140 BPM'}
             </span>
           </div>
-          <div className="text-xs font-bold text-white truncate tracking-tight">
+          <div className="text-xs font-bold text-[var(--text-primary)] truncate tracking-tight">
             {tasteDna.archetype || 'Listener Profile'}
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {(tasteDna.primary_genres || []).slice(0, 3).map((g, i) => (
               <span
                 key={i}
-                className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 font-medium"
+                className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/25 font-medium"
               >
                 {g}
               </span>

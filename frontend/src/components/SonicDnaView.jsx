@@ -273,10 +273,10 @@ export default function SonicDnaView({
           ) : (
             <>
               {/* Desktop Table View */}
-              <div className="hidden md:block overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl shadow-xl">
+              <div className="hidden md:block overflow-hidden rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-xl shadow-xs">
                 <table className="w-full text-left border-collapse table-auto">
                   <thead>
-                    <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
+                    <tr className="border-b border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-hover)]">
                       <th className="py-2.5 px-4 w-12 text-center">#</th>
                       <th className="py-2.5 px-4 min-w-[200px]">Track</th>
                       <th className="py-2.5 px-4 min-w-[130px]">Artist</th>
@@ -284,7 +284,7 @@ export default function SonicDnaView({
                       <th className="py-2.5 px-4 w-40 text-right pr-6 whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/[0.04] text-xs">
+                  <tbody className="divide-y divide-[var(--border-subtle)] text-xs">
                     {filteredFavs.map((t, idx) => {
                       const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
                       const isCur = currentTrack && currentTrack.video_id && currentTrack.video_id === t.video_id
@@ -295,11 +295,11 @@ export default function SonicDnaView({
                         <tr
                           key={t.video_id || idx}
                           onClick={() => onPlayTrack(t, idx, filteredFavs)}
-                          className={`group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row ${
+                          className={`group hover:bg-[var(--surface-hover)] transition-colors cursor-pointer fast-row ${
                             isCur ? 'bg-rose-500/10' : ''
                           }`}
                         >
-                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500 whitespace-nowrap">
+                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-[var(--text-muted)] whitespace-nowrap">
                             {isCurPlaying ? (
                               <div className="flex items-end justify-center gap-0.5 h-3.5 w-3.5 mx-auto">
                                 <span className="w-1 bg-rose-400 rounded-full animate-[bounce_0.8s_infinite_100ms] h-full" />
@@ -309,11 +309,11 @@ export default function SonicDnaView({
                             ) : (
                               <span className="group-hover:hidden">{(idx + 1).toString().padStart(2, '0')}</span>
                             )}
-                            <Play className={`w-3.5 h-3.5 text-white fill-current mx-auto hidden ${!isCurPlaying ? 'group-hover:block' : ''}`} />
+                            <Play className={`w-3.5 h-3.5 text-[var(--text-primary)] fill-current mx-auto hidden ${!isCurPlaying ? 'group-hover:block' : ''}`} />
                           </td>
                           <td className="py-2.5 px-4 max-w-md">
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 shadow-xs">
+                              <div className="w-10 h-10 rounded-2xl bg-[var(--surface-hover)] border border-[var(--border-subtle)] overflow-hidden shrink-0 shadow-xs">
                                 {thumb ? (
                                   <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                                 ) : (
@@ -321,17 +321,17 @@ export default function SonicDnaView({
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className={`font-bold text-xs sm:text-sm truncate tracking-tight transition-colors ${isCur ? 'text-rose-300' : 'text-white group-hover:text-rose-300'}`}>
+                                <div className={`font-bold text-xs sm:text-sm truncate tracking-tight transition-colors ${isCur ? 'text-rose-500 dark:text-rose-300' : 'text-[var(--text-primary)] group-hover:text-rose-500'}`}>
                                   {t.title}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-2.5 px-4 text-zinc-400 truncate max-w-[200px] font-medium">
+                          <td className="py-2.5 px-4 text-[var(--text-secondary)] truncate max-w-[200px] font-medium">
                             {t.artist}
                           </td>
                           <td className="py-2.5 px-4 whitespace-nowrap">
-                            <span className="inline-flex items-center text-xs font-semibold px-3 py-1 rounded-full bg-white/[0.05] text-zinc-300 border border-white/10 whitespace-nowrap leading-none select-none">
+                            <span className="inline-flex items-center text-xs font-semibold px-3 py-1 rounded-full bg-[var(--surface-hover)] text-[var(--text-secondary)] border border-[var(--border-subtle)] whitespace-nowrap leading-none select-none">
                               {t.vibe || 'Favorite'}
                             </span>
                           </td>
@@ -356,7 +356,7 @@ export default function SonicDnaView({
                                 {queueMenuIdx === `fav-d-${idx}` && (
                                   <div
                                     onClick={(e) => e.stopPropagation()}
-                                    className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[#14141c] border border-white/10 rounded-2xl shadow-2xl z-40 text-xs font-semibold text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-xl"
+                                    className="absolute right-0 bottom-full mb-1 w-36 py-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl z-40 text-xs font-semibold text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-xl"
                                   >
                                     <button
                                       onClick={(e) => {
@@ -364,9 +364,9 @@ export default function SonicDnaView({
                                         onPlayNext && onPlayNext(t)
                                         setQueueMenuIdx(null)
                                       }}
-                                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-white flex items-center gap-2 cursor-pointer"
+                                      className="w-full text-left px-3 py-1.5 hover:bg-[var(--surface-hover)] text-[var(--text-primary)] flex items-center gap-2 cursor-pointer"
                                     >
-                                      <span className="text-sky-400 font-bold">⚡</span>
+                                      <span className="text-sky-500 font-bold">⚡</span>
                                       <span>Play Next</span>
                                     </button>
                                     <button
@@ -375,9 +375,9 @@ export default function SonicDnaView({
                                         onAddToQueue && onAddToQueue(t)
                                         setQueueMenuIdx(null)
                                       }}
-                                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-zinc-300 hover:text-white flex items-center gap-2 cursor-pointer"
+                                      className="w-full text-left px-3 py-1.5 hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-2 cursor-pointer"
                                     >
-                                      <span className="text-emerald-400 font-bold">+</span>
+                                      <span className="text-emerald-500 font-bold">+</span>
                                       <span>Add to Queue</span>
                                     </button>
                                   </div>
@@ -386,7 +386,7 @@ export default function SonicDnaView({
                               <button
                                 onClick={() => onToggleFavorite && onToggleFavorite(t)}
                                 title="Remove from Favorites memory"
-                                className="p-1.5 rounded-full hover:bg-white/10 text-rose-400 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-full hover:bg-[var(--surface-hover)] text-rose-500 transition-colors cursor-pointer"
                               >
                                 <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                               </button>
@@ -394,9 +394,9 @@ export default function SonicDnaView({
                                 <button
                                   onClick={() => onCurateSimilar(t)}
                                   title="Curate a playlist around this song"
-                                  className="px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                                  className="px-2.5 py-1 rounded-full bg-[var(--surface-hover)] hover:bg-[var(--surface-hover)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)] transition-colors cursor-pointer flex items-center gap-1 shrink-0"
                                 >
-                                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
                                   <span>Curate</span>
                                 </button>
                               )}
@@ -404,14 +404,14 @@ export default function SonicDnaView({
                                 onClick={(e) => handleDownloadTrack(t, e)}
                                 disabled={downloadingVid === t.video_id}
                                 title={downloadingVid === t.video_id ? 'Downloading...' : isDl ? 'Downloaded (Offline ready)' : 'Download Track'}
-                                className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer ${
-                                  isDl ? 'text-emerald-400' : 'text-zinc-400 hover:text-white'
+                                className={`p-1.5 rounded-full hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ${
+                                  isDl ? 'text-emerald-500' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                                 }`}
                               >
                                 {downloadingVid === t.video_id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
                                 ) : isDl ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  <Check className="w-3.5 h-3.5 text-emerald-500" />
                                 ) : (
                                   <Download className="w-3.5 h-3.5" />
                                 )}
@@ -420,7 +420,7 @@ export default function SonicDnaView({
                                 <button
                                   onClick={() => onPushToSafari(t)}
                                   title="Open in Safari"
-                                  className="p-1.5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-full hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />
                                 </button>
@@ -449,11 +449,11 @@ export default function SonicDnaView({
                       className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 fast-row ${
                         isCur
                           ? 'bg-rose-500/15 border-rose-500/40 shadow-lg shadow-rose-950/20 backdrop-blur-xl'
-                          : 'bg-[#0c0c12]/75 border-white/[0.08] hover:bg-white/[0.07] backdrop-blur-md'
+                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] shadow-xs'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="relative w-12 h-12 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10 shadow-xs">
+                        <div className="relative w-12 h-12 rounded-2xl bg-[var(--surface-hover)] overflow-hidden shrink-0 border border-[var(--border-subtle)] shadow-xs">
                           {thumb ? (
                             <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
                           ) : (
@@ -469,16 +469,16 @@ export default function SonicDnaView({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <div className={`text-sm font-bold tracking-tight truncate ${isCur ? 'text-rose-300' : 'text-white'}`}>
+                          <div className={`text-sm font-bold tracking-tight truncate ${isCur ? 'text-rose-500 dark:text-rose-300' : 'text-[var(--text-primary)]'}`}>
                             {t.title}
                           </div>
-                          <div className="text-xs text-zinc-400 truncate mt-0.5 font-normal">
+                          <div className="text-xs text-[var(--text-secondary)] truncate mt-0.5 font-normal">
                             {t.artist}
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-zinc-400 mt-1 font-medium truncate">
+                          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] mt-1 font-medium truncate">
                             <span>{t.duration_text || 'Saved'}</span>
                             <span>•</span>
-                            <span className="text-rose-400 font-bold truncate">{t.vibe || 'Favourite'}</span>
+                            <span className="text-rose-500 font-bold truncate">{t.vibe || 'Favourite'}</span>
                           </div>
                         </div>
                       </div>
@@ -677,17 +677,17 @@ export default function SonicDnaView({
           ) : (
             <>
               {/* Desktop Table View */}
-              <div className="hidden md:block overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0c0c12]/75 backdrop-blur-xl shadow-xl">
+              <div className="hidden md:block overflow-hidden rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-xl shadow-xs">
                 <table className="w-full text-left border-collapse table-auto">
                   <thead>
-                    <tr className="border-b border-white/[0.08] text-xs font-semibold text-zinc-400 bg-[#0c0c12]/80 backdrop-blur-md">
+                    <tr className="border-b border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-hover)]">
                       <th className="py-2.5 px-4 w-12 text-center">#</th>
                       <th className="py-2.5 px-4 min-w-[200px]">Track</th>
                       <th className="py-2.5 px-4 min-w-[150px]">Channel / Artist</th>
                       <th className="py-2.5 px-4 w-40 text-right pr-6 whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/[0.04] text-xs">
+                  <tbody className="divide-y divide-[var(--border-subtle)] text-xs">
                     {filteredTracks.map((t, idx) => {
                       const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
                       const isFav = isTrackFavorite ? isTrackFavorite(t) : false
@@ -699,11 +699,11 @@ export default function SonicDnaView({
                         <tr
                           key={t.video_id || idx}
                           onClick={() => onPlayTrack(t, idx, filteredTracks)}
-                          className={`group hover:bg-white/[0.04] transition-colors cursor-pointer fast-row ${
+                          className={`group hover:bg-[var(--surface-hover)] transition-colors cursor-pointer fast-row ${
                             isCur ? 'bg-sky-500/10' : ''
                           }`}
                         >
-                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-zinc-500 whitespace-nowrap">
+                          <td className="py-2.5 px-4 text-center text-xs font-semibold text-[var(--text-muted)] whitespace-nowrap">
                             {isCurPlaying ? (
                               <div className="flex items-end justify-center gap-0.5 h-3.5 w-3.5 mx-auto">
                                 <span className="w-1 bg-sky-400 rounded-full animate-[bounce_0.8s_infinite_100ms] h-full" />
@@ -713,11 +713,11 @@ export default function SonicDnaView({
                             ) : (
                               <span className="group-hover:hidden">{(idx + 1).toString().padStart(2, '0')}</span>
                             )}
-                            <Play className={`w-3.5 h-3.5 text-white fill-current mx-auto hidden ${!isCurPlaying ? 'group-hover:block' : ''}`} />
+                            <Play className={`w-3.5 h-3.5 text-[var(--text-primary)] fill-current mx-auto hidden ${!isCurPlaying ? 'group-hover:block' : ''}`} />
                           </td>
                           <td className="py-2.5 px-4 max-w-md">
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-10 h-10 rounded-2xl bg-zinc-900 border border-white/10 overflow-hidden shrink-0 shadow-xs">
+                              <div className="w-10 h-10 rounded-2xl bg-[var(--surface-hover)] border border-[var(--border-subtle)] overflow-hidden shrink-0 shadow-xs">
                                 {thumb ? (
                                   <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
                                 ) : (
@@ -725,13 +725,13 @@ export default function SonicDnaView({
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <div className={`font-bold text-xs sm:text-sm truncate tracking-tight transition-colors ${isCur ? 'text-sky-300' : 'text-white group-hover:text-sky-300'}`}>
+                                <div className={`font-bold text-xs sm:text-sm truncate tracking-tight transition-colors ${isCur ? 'text-sky-500 dark:text-sky-300' : 'text-[var(--text-primary)] group-hover:text-sky-500'}`}>
                                   {t.title}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-2.5 px-4 text-zinc-400 truncate max-w-[200px] font-medium">
+                          <td className="py-2.5 px-4 text-[var(--text-secondary)] truncate max-w-[200px] font-medium">
                             {t.artist}
                           </td>
                           <td
@@ -851,11 +851,11 @@ export default function SonicDnaView({
                       className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 fast-row ${
                         isCur
                           ? 'bg-sky-500/15 border-sky-500/40 shadow-lg shadow-sky-950/20 backdrop-blur-xl'
-                          : 'bg-[#0c0c12]/75 border-white/[0.08] hover:bg-white/[0.07] backdrop-blur-md'
+                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] shadow-xs'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="relative w-12 h-12 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10 shadow-xs">
+                        <div className="relative w-12 h-12 rounded-2xl bg-[var(--surface-hover)] overflow-hidden shrink-0 border border-[var(--border-subtle)] shadow-xs">
                           {thumb ? (
                             <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
                           ) : (
@@ -871,10 +871,10 @@ export default function SonicDnaView({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <div className={`text-sm font-bold tracking-tight truncate ${isCur ? 'text-sky-300' : 'text-white'}`}>
+                          <div className={`text-sm font-bold tracking-tight truncate ${isCur ? 'text-sky-500 dark:text-sky-300' : 'text-[var(--text-primary)]'}`}>
                             {t.title}
                           </div>
-                          <div className="text-xs text-zinc-400 truncate mt-0.5 font-normal">
+                          <div className="text-xs text-[var(--text-secondary)] truncate mt-0.5 font-normal">
                             {t.artist}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-zinc-400 mt-1 font-medium truncate">
@@ -1001,9 +1001,9 @@ export default function SonicDnaView({
               onClick={onSyncFavorites}
               disabled={isSyncing}
               title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-              className="px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs text-rose-200 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0"
+              className="px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs text-slate-900 dark:text-rose-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0"
             >
-              <Heart className={`w-3.5 h-3.5 fill-rose-400 text-rose-400 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
+              <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
               <span className="hidden xs:inline">{isSyncing ? 'Syncing...' : 'Sync Liked'}</span>
             </button>
           )}
@@ -1012,9 +1012,9 @@ export default function SonicDnaView({
             onClick={() => onAnalyzeTaste && onAnalyzeTaste()}
             disabled={isSyncing}
             title="Re-run deep musical taste analysis with Gemini"
-            className="px-3 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs text-emerald-200 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0"
+            className="px-3 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs text-slate-900 dark:text-emerald-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0"
           >
-            <Sparkles className={`w-3.5 h-3.5 text-emerald-400 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-3.5 h-3.5 text-emerald-500 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>Analyze</span>
           </button>
 

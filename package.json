@@ -1,6 +1,6 @@
 {
   "name": "upbeat-web",
-  "version": "5.5.0",
+  "version": "5.5.1",
   "type": "module",
   "private": true,
   "description": "UpBeat — Minimalist AI Music Curator & Player",

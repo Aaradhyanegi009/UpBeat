@@ -4,6 +4,28 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v5.5.1] - 2026-11-01
+
+### 🛠️ Polish & Refinements
+
+- **Listen Together Engine Fix**:
+  - Resolved empty carousel issue by initializing with `getInitialDiscoveryBlocks()`, providing instant rendering on initial frame with zero network wait.
+  - Eliminated blocking `browse` Innertube network requests for live chart artwork that triggered 400 errors.
+  - Wired direct search queries for all regional daily charts (US Top Daily, India Top Daily, Japan Top Daily, India Trendy) ensuring 20 rich, playable tracks on click or shuffle.
+  - Upgraded card Play buttons with explicit click handlers for immediate playback.
+- **Taste Controls Light Mode Color Scheme Overhaul**:
+  - Replaced hardcoded black `#0c0c12` / `bg-black/75` drawer surfaces in `Sidebar.jsx` with light-compliant semantic tokens (`var(--bg-glass-heavy)`, `var(--bg-card)`, and `var(--border-subtle)`).
+  - Softened all nested wells and controls to slight gray in light mode, eliminating harsh pitch-black contrast blocks.
+- **Synced Liked Button High Contrast Text**:
+  - Fixed white-on-pink contrast bug on "Sync Liked" pills in `SonicDnaView.jsx`, `Navbar.jsx`, and `Sidebar.jsx` by enforcing crisp black/dark slate typography (`text-slate-900 font-bold`).
+- **Sonic DNA & Library Light Mode Polish**:
+  - Transformed desktop tables and mobile track cards in Favorites and Seeds Library from dark `#0c0c12` slabs to clean, soft gray/white surfaces (`var(--bg-card)` and `var(--surface-hover)`).
+  - Added global light-mode CSS fallback rule to convert legacy dark classes to card surfaces automatically.
+- **Removed Violet Mode**:
+  - Completely purged Violet theme from `themeCycle.js`, `Sidebar.jsx` drawer, and day/night time schedules, streamlining theme selection to **Auto**, **Dark**, **Crimson Glow**, and **Light**.
+
+---
+
 ## [v5.5.0] - 2026-11-01
 
 ### 🌟 Architectural & UI/UX Master Upgrade

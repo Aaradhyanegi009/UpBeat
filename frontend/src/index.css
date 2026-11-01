@@ -131,6 +131,29 @@
   --atm-grid: rgba(15, 23, 42, 0.025);
 }
 
+/* Light mode overrides for legacy dark container classes to maintain soft slight-gray/white contrast */
+.theme-light .bg-black\/40,
+.theme-light .bg-black\/60,
+.theme-light .bg-black\/75,
+.theme-light .bg-\[\#0c0c12\]\/75,
+.theme-light .bg-\[\#0c0c12\]\/80,
+.theme-light .bg-\[\#0c0c12\]\/40,
+.theme-light .bg-\[\#121214\],
+.theme-light .bg-\[\#14141c\],
+.theme-light .bg-\[\#18181b\] {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+}
+
+.theme-light .border-white\/10,
+.theme-light .border-white\/\[0\.08\],
+.theme-light .border-white\/\[0\.06\],
+.theme-light .border-white\/\[0\.04\],
+.theme-light .divide-white\/\[0\.04\] {
+  border-color: var(--border-subtle) !important;
+}
+
 /* Squircle & Luxury Pill UI System (Signature squircle aesthetic) */
 .squircle-card {
   border-radius: 18px;

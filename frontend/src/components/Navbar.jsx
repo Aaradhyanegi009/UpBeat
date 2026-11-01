@@ -42,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v5.5')
+  const [otaVer, setOtaVer] = useState('v5.5.1')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -353,9 +353,9 @@ export default function Navbar({
                   onClick={onSyncFavorites}
                   disabled={isSyncing}
                   title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-xs text-rose-200 font-bold transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs"
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-xs text-slate-900 dark:text-rose-200 font-bold transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs"
                 >
-                  <Heart className={`w-3.5 h-3.5 fill-rose-400 text-rose-400 ${isSyncing ? 'animate-pulse' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 ${isSyncing ? 'animate-pulse' : ''}`} />
                   <span>{isSyncing ? 'Curating...' : 'Sync Liked'}</span>
                 </button>
               )}

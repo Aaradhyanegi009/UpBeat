@@ -13,10 +13,9 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 ###  Atmosphere Themes & Day/Night Engine
 - **Dynamic Time-Based Cycling**: Automatically shifts ambient lighting and gradient reflections based on your local time:
   -  **Crimson Glow** (4:00 AM – 11:59 AM)
-  -  **Dark (AMOLED)** (12:00 PM – 7:59 PM): 100% pure black for afternoon glare reduction and OLED battery savings
-  -  **Violet** (8:00 PM – 3:59 AM)
+  -  **Dark (AMOLED)** (12:00 PM – 3:59 AM): 100% pure black for afternoon glare reduction and OLED battery savings
 - **Daylight Studio (High-Contrast Light Mode)**: Soft Alabaster background (`#F7F7FA`) with deep slate ink typography (`#0F172A`), zero-glare ambient elevations, and 100% contrast compliance across all screens, drawers, and player bars.
-- **Quick Slide-Down Theme Drawer**: Tap **Themes** in Taste Controls to expand a 5-option slider (**Auto**, **Dark**, **Crimson Glow**, **Violet**, **Light**) to lock in your preferred aesthetic anytime.
+- **Quick Slide-Down Theme Drawer**: Tap **Themes** in Taste Controls to expand a 4-option slider (**Auto**, **Dark**, **Crimson Glow**, **Light**) to lock in your preferred aesthetic anytime.
 
 ###  Spatial UI/UX & Mobile "Airy" Layout (v5.5)
 - **Breathing Room & Hierarchy**: Overhauled mobile spacing with `20px` edge margins, `32px–40px` shelf gaps, and `130px` bottom scroll clearance so floating controls never collide with content.
