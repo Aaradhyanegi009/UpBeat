@@ -611,10 +611,10 @@ export default function SonicDnaView({
                 <button
                   onClick={onSyncFavorites}
                   disabled={isSyncing}
-                  title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-                  className="px-4 py-2 rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md disabled:opacity-50"
+                  title="Sync Liked Songs"
+                  className="px-4 py-2 rounded-full bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-md disabled:opacity-50 btn-sync-liked"
                 >
-                  <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 stroke-none shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
                   <span>{isSyncing ? 'Syncing...' : 'Sync Liked'}</span>
                 </button>
               )}
@@ -1000,10 +1000,10 @@ export default function SonicDnaView({
             <button
               onClick={onSyncFavorites}
               disabled={isSyncing}
-              title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-              className="px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs text-slate-900 dark:text-rose-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0 btn-sync-liked"
+              title="Sync Liked Songs"
+              className="px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs text-rose-600 dark:text-rose-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0 btn-sync-liked"
             >
-              <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
+              <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 stroke-none shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
               <span className="hidden xs:inline">{isSyncing ? 'Syncing...' : 'Sync Liked'}</span>
             </button>
           )}

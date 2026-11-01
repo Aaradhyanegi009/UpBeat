@@ -267,7 +267,7 @@ export default function Sidebar({
 
       <div className="p-4 flex flex-col gap-4">
 
-        {/* Simple Day & Night Toggle Control */}
+        {/* Simple Dark & Light Toggle Control */}
         <div className="p-2.5 rounded-2xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-xs flex items-center justify-between">
           <div className="flex items-center gap-2 pl-1.5">
             {themePreference === 'light' ? (
@@ -276,28 +276,28 @@ export default function Sidebar({
               <Moon className="w-4 h-4 text-indigo-400 shrink-0" />
             )}
             <span className="text-xs font-bold text-[var(--text-primary)] tracking-tight">
-              {themePreference === 'light' ? 'Daylight Mode' : 'Night Mode'}
+              {themePreference === 'light' ? 'Light Theme' : 'Dark AMOLED'}
             </span>
           </div>
           <button
             type="button"
             onClick={() => {
               if (onSelectThemePreference) {
-                onSelectThemePreference(themePreference === 'light' ? 'amoled' : 'light')
+                onSelectThemePreference(themePreference === 'light' ? 'dark' : 'light')
               }
             }}
             className="px-3 py-1.5 rounded-xl bg-[var(--surface-hover)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-xs"
-            title="Toggle Day / Night Mode"
+            title={themePreference === 'light' ? 'Switch to Dark' : 'Switch to Light'}
           >
             {themePreference === 'light' ? (
               <>
                 <Moon className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Switch to Night</span>
+                <span>Dark</span>
               </>
             ) : (
               <>
                 <Sun className="w-3.5 h-3.5 text-amber-400" />
-                <span>Switch to Day</span>
+                <span>Light</span>
               </>
             )}
           </button>
@@ -359,10 +359,10 @@ export default function Sidebar({
           <button
             onClick={onSyncFavorites}
             disabled={isSyncing}
-            title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-            className="w-full py-2.5 px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-full text-xs text-slate-900 dark:text-white font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 active:scale-98 shadow-xs"
+            title="Sync Liked Songs"
+            className="w-full py-2.5 px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 rounded-full text-xs text-rose-600 dark:text-rose-200 font-bold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 active:scale-98 shadow-xs btn-sync-liked"
           >
-            <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 ${isSyncing ? 'animate-pulse' : ''}`} />
+            <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 stroke-none ${isSyncing ? 'animate-pulse' : ''}`} />
             <span>{isSyncing ? 'Analyzing & Curating...' : 'Sync Liked Songs'}</span>
           </button>
         </div>
@@ -483,7 +483,7 @@ export default function Sidebar({
         {/* App Info */}
         <div className="pt-2 text-xs font-semibold text-[var(--text-muted)] border-t border-[var(--border-subtle)] flex items-center justify-between">
           <span>UpBeat Music</span>
-          <span className="text-emerald-500 font-bold">v5.5.4</span>
+          <span className="text-emerald-500 font-bold">v6.0</span>
         </div>
       </div>
 

@@ -11,100 +11,45 @@
   --sal: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --sar: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
 
-  /* Default Dark / Night Mode Tokens (AMOLED Black with Luminous Glass Atmosphere) */
-  --bg-primary: #050508;
-  --bg-elevated: rgba(18, 18, 24, 0.75);
-  --bg-card: rgba(255, 255, 255, 0.045);
-  --bg-glass: rgba(10, 10, 14, 0.72);
-  --bg-glass-heavy: rgba(14, 14, 18, 0.85);
+  /* Pure Dark AMOLED Tokens (100% Obsidian Black) */
+  --bg-primary: #000000;
+  --bg-elevated: rgba(18, 18, 22, 0.72);
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-glass: rgba(0, 0, 0, 0.75);
+  --bg-glass-heavy: rgba(10, 10, 12, 0.85);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --accent-primary: #e11d48;
   --text-on-accent: #ffffff;
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --surface-hover: rgba(255, 255, 255, 0.07);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --surface-hover: rgba(255, 255, 255, 0.06);
   --slider-track: #202028;
-  --card-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --card-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
 
-  --atm-glow-1: rgba(225, 29, 72, 0.22);
-  --atm-glow-2: rgba(99, 102, 241, 0.14);
-  --atm-glow-3: rgba(16, 185, 129, 0.06);
-  --atm-accent: rgba(225, 29, 72, 0.12);
-  --atm-grid: rgba(255, 255, 255, 0.025);
+  /* Subtle Dynamic Playing-Song Glow Variables */
+  --song-glow-1: transparent;
+  --song-glow-2: transparent;
+  --song-glow-3: transparent;
+  --song-primary: #e11d48;
 }
 
-/* Morning (4:00 AM - 11:59 AM) - Crimson Sunrise Gradient */
-.theme-morning, :root.theme-morning {
-  --bg-primary: #050203;
-  --bg-elevated: #15090b;
+/* Dark AMOLED Theme Explicit Definitions */
+.dark, .theme-dark, .theme-afternoon, :root.dark {
+  --bg-primary: #000000;
+  --bg-elevated: rgba(18, 18, 22, 0.72);
   --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-glass: rgba(10, 3, 5, 0.82);
-  --bg-glass-heavy: rgba(15, 5, 8, 0.94);
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --accent-primary: #e11d48;
-  --text-on-accent: #ffffff;
-  --border-subtle: rgba(239, 68, 68, 0.14);
-  --border-strong: rgba(239, 68, 68, 0.28);
-  --surface-hover: rgba(255, 255, 255, 0.06);
-  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-
-  --atm-glow-1: rgba(239, 68, 68, 0.26);
-  --atm-glow-2: rgba(244, 63, 94, 0.14);
-  --atm-glow-3: rgba(251, 146, 60, 0.05);
-  --atm-accent: rgba(225, 29, 72, 0.10);
-  --atm-grid: rgba(239, 68, 68, 0.04);
-}
-
-/* Night Mode — AMOLED Black with Frosted Glass & Atmospheric Aurora */
-.theme-afternoon, :root.theme-afternoon {
-  --bg-primary: #050508;
-  --bg-elevated: rgba(18, 18, 24, 0.75);
-  --bg-card: rgba(255, 255, 255, 0.045);
-  --bg-glass: rgba(10, 10, 14, 0.72);
-  --bg-glass-heavy: rgba(14, 14, 18, 0.85);
+  --bg-glass: rgba(0, 0, 0, 0.75);
+  --bg-glass-heavy: rgba(10, 10, 12, 0.85);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  --accent-primary: #f43f5e;
-  --text-on-accent: #ffffff;
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --surface-hover: rgba(255, 255, 255, 0.07);
-  --card-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-
-  --atm-glow-1: rgba(225, 29, 72, 0.22);
-  --atm-glow-2: rgba(99, 102, 241, 0.14);
-  --atm-glow-3: rgba(16, 185, 129, 0.06);
-  --atm-accent: rgba(225, 29, 72, 0.12);
-  --atm-grid: rgba(255, 255, 255, 0.025);
-}
-
-/* Night (8:00 PM - 3:59 AM) - Cosmic Midnight Violet & Neon Indigo Gradient */
-.theme-night, :root.theme-night {
-  --bg-primary: #040209;
-  --bg-elevated: #110d1f;
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-glass: rgba(8, 4, 18, 0.82);
-  --bg-glass-heavy: rgba(12, 6, 24, 0.94);
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --accent-primary: #8b5cf6;
-  --text-on-accent: #ffffff;
-  --border-subtle: rgba(139, 92, 246, 0.14);
-  --border-strong: rgba(139, 92, 246, 0.28);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
   --surface-hover: rgba(255, 255, 255, 0.06);
-  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-
-  --atm-glow-1: rgba(139, 92, 246, 0.24);
-  --atm-glow-2: rgba(99, 102, 241, 0.13);
-  --atm-glow-3: rgba(236, 72, 153, 0.05);
-  --atm-accent: rgba(124, 58, 237, 0.10);
-  --atm-grid: rgba(139, 92, 246, 0.04);
+  --slider-track: #202028;
+  --card-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
 }
 
 /* Light Mode — Daylight Studio (Exact specs from Pillar 2) */
@@ -220,31 +165,38 @@
   stroke: #FFFFFF !important;
 }
 
-/* Deep jewel-tone text and icons on tinted pills in Light Mode */
-.theme-light .btn-sync-liked,
-.theme-light button[title*="Sync Liked"] {
+/* Sync Liked & Taste Memory Pill - Clean, borderless Heart */
+.btn-sync-liked {
+  font-weight: 600 !important;
+}
+.btn-sync-liked svg,
+.btn-sync-liked svg.lucide-heart,
+.btn-sync-liked path,
+.theme-light .btn-sync-liked svg,
+.theme-light .btn-sync-liked path {
+  stroke: none !important;
+  stroke-width: 0 !important;
+}
+.theme-light .btn-sync-liked {
   background-color: #FFE4E6 !important;
   border-color: #FECDD3 !important;
   color: #BE123C !important;
-  font-weight: 600 !important;
 }
-.theme-light .btn-sync-liked svg,
-.theme-light button[title*="Sync Liked"] svg {
+.theme-light .btn-sync-liked svg {
   color: #BE123C !important;
   fill: #BE123C !important;
+  stroke: none !important;
 }
 
-.theme-light .btn-analyze-taste,
-.theme-light button[title*="Analyze"] {
+/* Analyze Taste Pill */
+.theme-light .btn-analyze-taste {
   background-color: #D1FAE5 !important;
   border-color: #A7F3D0 !important;
   color: #047857 !important;
   font-weight: 600 !important;
 }
-.theme-light .btn-analyze-taste svg,
-.theme-light button[title*="Analyze"] svg {
+.theme-light .btn-analyze-taste svg {
   color: #047857 !important;
-  stroke: #047857 !important;
 }
 
 /* High-contrast colors for pills and active badges on light backgrounds */
@@ -308,32 +260,27 @@ html, body, #root {
   overscroll-behavior: none;
 }
 
-/* Broadened Cyber Atmosphere with Dynamic Morning & Night Gradients over AMOLED Black */
+/* Dark AMOLED Atmosphere with Subtle Dynamic Playing-Song Aura */
 .ytm-atmosphere {
-  background-color: var(--bg-primary);
+  background-color: var(--bg-primary, #000000);
   background-image: 
-    radial-gradient(ellipse 130% 650px at 50% 0px, var(--atm-glow-1) 0%, var(--atm-glow-2) 38%, var(--atm-glow-3) 75%, transparent 100%),
-    radial-gradient(ellipse 95% 650px at 85% 35%, var(--atm-accent) 0%, var(--atm-glow-2) 40%, transparent 70%),
-    radial-gradient(ellipse 100% 550px at 45% 100%, var(--atm-glow-3) 0%, var(--atm-accent) 40%, transparent 75%),
-    linear-gradient(to right, var(--atm-grid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--atm-grid) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    radial-gradient(ellipse 110% 620px at 50% -70px, var(--song-glow-1, transparent) 0%, var(--song-glow-2, transparent) 45%, transparent 75%),
+    radial-gradient(ellipse 85% 500px at 85% 35%, var(--song-glow-3, transparent) 0%, transparent 60%);
+  background-size: 100% 100%;
   background-attachment: fixed;
   transition: background-image 0.8s ease-in-out, background-color 0.4s ease-in-out;
 }
 
-/* Light mode Daylight Studio atmosphere */
+/* Light Mode Studio Atmosphere */
 .theme-light.ytm-atmosphere,
 .theme-light .ytm-atmosphere,
 :root.theme-light .ytm-atmosphere,
 :root.theme-light {
-  background-color: #F7F7FA !important;
+  background-color: #F8F9FC !important;
   color: #0F172A !important;
   background-image: 
-    radial-gradient(ellipse 130% 650px at 50% 0px, rgba(225, 29, 72, 0.04) 0%, rgba(109, 40, 217, 0.03) 38%, transparent 75%),
-    radial-gradient(ellipse 95% 650px at 85% 35%, rgba(225, 29, 72, 0.025) 0%, transparent 60%),
-    linear-gradient(to right, rgba(15, 23, 42, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(15, 23, 42, 0.02) 1px, transparent 1px);
+    radial-gradient(ellipse 120% 600px at 50% -60px, var(--song-glow-1, rgba(225, 29, 72, 0.04)) 0%, transparent 70%),
+    radial-gradient(ellipse 85% 500px at 85% 35%, var(--song-glow-3, transparent) 0%, transparent 60%);
 }
 
 .ytm-grid-overlay {

@@ -4,6 +4,26 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v6.0.0] - 2026-11-02
+
+### 🖤 Pure Dark AMOLED & Dynamic Playing Song Aura
+- **100% Obsidian AMOLED Base**:
+  - Removed static red/violet background gradients. The dark theme is now pure, deep AMOLED black (`#000000`).
+  - Added dynamic, subtle playing song ambient glow: Whenever a song plays, a gentle radial aura (`--song-glow-1`, `--song-glow-2`, `--song-glow-3`) derived from the song's album artwork subtly illuminates the background without clouding the AMOLED black.
+  - Preserved the crystalline glassy aesthetic with frosted translucent surfaces (`backdrop-filter: blur(20px)`), allowing the subtle dynamic aura to refract through squircle cards and player bars.
+
+### 💖 Fixed Heart Icon Outline
+- **Clean Borderless Heart**:
+  - Eliminated conflicting title-based stroke overrides that gave the heart icon an ugly dark green/black outline.
+  - Enforced `stroke: none !important; stroke-width: 0 !important;` on `.btn-sync-liked svg` and `<Heart className="... stroke-none" />` across Navbar, Sidebar, and Sonic DNA view.
+
+### 🌓 Strictly Dark & Light
+- **Terminology & Mode Cleanup**:
+  - Strictly normalized all theme labels to **Dark** and **Light** (removed all "Day/Night" references).
+  - Cleaned up one-tap toggles in both Navbar and Sidebar.
+
+---
+
 ## [v5.5.4] - 2026-11-01
 
 ### 🌓 Minimalist Night & Day Atmosphere Engine

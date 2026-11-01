@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="5.5.4",
-    description="UpBeat v5.5.4 - Night & Day Studio Toggle, Glass Atmosphere & Verified Real Music Artwork"
+    version="6.0.0",
+    description="UpBeat v6.0 - Pure Dark AMOLED, Dynamic Playing Song Ambient Aura & High Contrast Light Mode"
 )
 
 app.add_middleware(

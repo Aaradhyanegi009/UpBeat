@@ -50,34 +50,25 @@ function loadStorage(key, fallback) {
 export default function App() {
   const [themePreference, setThemePreference] = useState(() => {
     try {
-      return localStorage.getItem('upbeat_theme_preference') || 'auto'
+      const saved = localStorage.getItem('upbeat_theme_preference')
+      return saved === 'light' ? 'light' : 'dark'
     } catch {
-      return 'auto'
+      return 'dark'
     }
   })
   const [themeInfo, setThemeInfo] = useState(() => {
     try {
-      const saved = localStorage.getItem('upbeat_theme_preference') || 'auto'
-      return getThemeInfo(saved)
+      const saved = localStorage.getItem('upbeat_theme_preference')
+      const pref = saved === 'light' ? 'light' : 'dark'
+      return getThemeInfo(pref)
     } catch {
-      return getThemeInfo('auto')
+      return getThemeInfo('dark')
     }
   })
 
   useEffect(() => {
     applyThemeToDocument(themePreference, themeInfo)
   }, [themePreference, themeInfo])
-
-  useEffect(() => {
-    const checkTheme = () => {
-      if (themePreference === 'auto') {
-        const info = getThemeInfo('auto')
-        setThemeInfo((prev) => (prev.id !== info.id ? info : prev))
-      }
-    }
-    const interval = setInterval(checkTheme, 60000)
-    return () => clearInterval(interval)
-  }, [themePreference])
 
   // Boot music sanitizer: Purge non-music videos (gameplay, vlogs, tutorial) from localStorage
   useEffect(() => {
@@ -130,15 +121,15 @@ export default function App() {
   }, [])
 
   const handleSelectThemePreference = (pref) => {
-    setThemePreference(pref)
+    const cleanPref = pref === 'light' ? 'light' : 'dark'
+    setThemePreference(cleanPref)
     try {
-      localStorage.setItem('upbeat_theme_preference', pref)
+      localStorage.setItem('upbeat_theme_preference', cleanPref)
     } catch {}
-    const info = getThemeInfo(pref)
+    const info = getThemeInfo(cleanPref)
     setThemeInfo(info)
-    applyThemeToDocument(pref, info)
-    const label = pref === 'auto' ? `Auto Time Cycle (${info.label})` : info.label
-    showNotify(`Atmosphere: ${label}`, 'info')
+    applyThemeToDocument(cleanPref, info)
+    showNotify(`Theme: ${info.label}`, 'info')
   }
 
   const handleCycleTheme = () => {
@@ -1680,7 +1671,7 @@ export default function App() {
     : null
 
   return (
-    <div className={`h-[100dvh] w-screen ytm-atmosphere ${themeInfo?.id || 'theme-morning'} bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col overflow-hidden`}>
+    <div className={`h-[100dvh] w-screen ytm-atmosphere ${themeInfo?.id || 'theme-dark'} bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col overflow-hidden`}>
       {/* Subtle Antigravity Status Notification */}
       {notification && (
         <div className="fixed bottom-36 sm:bottom-20 left-4 right-4 sm:left-6 sm:right-auto z-50">

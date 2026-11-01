@@ -42,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v5.5.4')
+  const [otaVer, setOtaVer] = useState('v6.0.0')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -223,22 +223,22 @@ export default function Navbar({
                 <span className="hidden sm:inline font-bold text-[var(--text-primary)] text-lg tracking-tight">UpBeat</span>
               </div>
 
-              {/* Simple Day / Night Toggle Button */}
+              {/* Simple Dark / Light Toggle Button */}
               <button
                 type="button"
                 onClick={onCycleTheme}
                 className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-all select-none cursor-pointer hover:scale-105 active:scale-95"
-                title={themePreference === 'light' ? 'Switch to Night Mode' : 'Switch to Day Mode'}
+                title={themePreference === 'light' ? 'Switch to Dark' : 'Switch to Light'}
               >
                 {themePreference === 'light' ? (
                   <>
                     <Sun className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Day</span>
+                    <span>Light</span>
                   </>
                 ) : (
                   <>
                     <Moon className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Night</span>
+                    <span>Dark</span>
                   </>
                 )}
               </button>
@@ -350,10 +350,10 @@ export default function Navbar({
                   type="button"
                   onClick={onSyncFavorites}
                   disabled={isSyncing}
-                  title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-100 dark:bg-rose-500/15 hover:bg-rose-200 dark:hover:bg-rose-500/25 border border-rose-300 dark:border-rose-500/35 text-xs text-[#BE123C] dark:text-rose-200 font-bold transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs btn-sync-liked"
+                  title="Sync Liked Songs"
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/10 dark:bg-rose-500/15 hover:bg-rose-500/20 dark:hover:bg-rose-500/25 border border-rose-300/60 dark:border-rose-500/30 text-xs text-[#BE123C] dark:text-rose-200 font-bold transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs btn-sync-liked"
                 >
-                  <Heart className={`w-3.5 h-3.5 fill-[#BE123C] text-[#BE123C] dark:fill-rose-500 dark:text-rose-500 ${isSyncing ? 'animate-pulse' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 fill-[#BE123C] text-[#BE123C] dark:fill-rose-500 dark:text-rose-500 stroke-none ${isSyncing ? 'animate-pulse' : ''}`} />
                   <span>{isSyncing ? 'Curating...' : 'Sync Liked'}</span>
                 </button>
               )}

@@ -275,6 +275,23 @@ export default function PlayerBar({
           : parseDurationText(track?.duration_text))
   const thumbUrl = track?.thumbnail || (resolvedVid ? `https://i.ytimg.com/vi/${resolvedVid}/hqdefault.jpg` : '')
   const albumColor = useAlbumColor(thumbUrl)
+
+  // Dynamic Subtle Playing-Song Ambient Aura across the App
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    if (track && albumColor && albumColor.rgb) {
+      root.style.setProperty('--song-glow-1', `rgba(${albumColor.rgb}, 0.12)`)
+      root.style.setProperty('--song-glow-2', `rgba(${albumColor.rgb}, 0.04)`)
+      root.style.setProperty('--song-glow-3', `rgba(${albumColor.rgb}, 0.06)`)
+      root.style.setProperty('--song-primary', albumColor.primary)
+    } else {
+      root.style.setProperty('--song-glow-1', 'transparent')
+      root.style.setProperty('--song-glow-2', 'transparent')
+      root.style.setProperty('--song-glow-3', 'transparent')
+      root.style.setProperty('--song-primary', '#e11d48')
+    }
+  }, [track, albumColor])
   const displayTime = Math.min(
     isScrubbing ? scrubTime : currentTime,
     effectiveDuration > 0 ? effectiveDuration : Infinity
