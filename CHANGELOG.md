@@ -4,6 +4,40 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v5.5.3] - 2026-11-01
+
+### ☀️ Light Mode Surface & High-Contrast Collisions Hotfix
+- **Modals Complete Light Mode Makeover**:
+  - Overhauled "Studio Settings" modal (`Navbar.jsx`), `GoogleAuthModal.jsx`, and `YouTubeTasteSyncModal.jsx` in Light Mode to use pure white glass surfaces (`bg-white dark:bg-[#101015]/95`), slate borders, deep slate headings (`#0F172A`), and clear input styling (`#F1F5F9`, slate-900 text, placeholder slate-400).
+  - High-contrast action buttons: "Save Changes" (`#E11D48` crimson with white text), "Check for Live Update" (`#6D28D9` deep violet with white text), secondary buttons (`#F1F5F9` with slate-600/900 text).
+- **Jewel-Tone Tinted Pill Buttons**:
+  - Styled "Sync Liked" pills in Light Mode with deep crimson (`#BE123C`) text and icons over soft rose surfaces (`#FFE4E6`, border `#FECDD3`).
+  - Styled "Analyze" taste pills in Light Mode with deep emerald (`#047857`) text and icons over soft mint surfaces (`#D1FAE5`, border `#A7F3D0`).
+- **PlayerBar Visual Polish in Light Mode**:
+  - Replaced harsh black seek bar and volume track lines with soft slate tracks (`var(--slider-track, #202028)` -> `#E2E8F0` in Light Mode).
+  - Cleaned up the app native / web engine toggle pill with light gray backdrop (`var(--surface-hover)`), slate icons, and crisp white active segment with emerald icon.
+- **Card Circular Buttons Contrast**:
+  - Enforced dark slate icons (`#0F172A`) inside circular white `Play` buttons across all squircle cards in both Light and Dark themes.
+  - Enforced `rgba(0,0,0,0.65)` dark translucent backgrounds with crisp white (`#FFFFFF`) icons on `Shuffle` and `Reroll` buttons.
+
+### 📐 Layout Hierarchy Optimization
+- **Songs / Videos Grid Back to the Top**:
+  - Reordered `PlaylistView.jsx`: Songs / Videos tracklist, direct search subtabs, and the 4-row multi-column grid / detailed table now render at the **top** of the screen.
+  - Positioned the curated "Listen together" discovery section (Daily Top Charts & Made For You mixes) directly **below** the song grid.
+
+### 🛡️ Strict Music-Only Filtering & Valid Album Art Resolution
+- **Pure Music Track Validation (`isValidMusicTrack`)**:
+  - Added strict regex filtering out non-music keywords (`minecraft`, `gameplay`, `walkthrough`, `let's play`, `tutorial`, `episode`, `stream`, `shorts`, `podcast`, `review`, `unboxing`, `reaction`, `vlog`, `mod`, `pvp`, `bedwars`, `skyblock`, `portal`, `survival`, `speedrun`) and rejecting tracks with duration <65s or >720s.
+  - Integrated filter into YouTube search, YouTube Music song parser, playlist importer, and discovery feeds.
+- **LocalStorage Boot Sanitizer**:
+  - Automatically filters `argon_favs_v2`, `argon_seeds_v2`, and `argon_playlist_v2` on app mount to immediately purge any previously stored gaming or non-music videos.
+- **Verified Cover Artwork & Deduplication**:
+  - Replaced broken 404 thumbnail URLs with verified 200 HTTP URLs (`ElZfdU54Cp8` for India Trendy, `V1Pl8CzNzCw` for Billie Eilish, `bESGLojNYSo` for Hiroyuki Sawano).
+  - Added `onLoad` dimension checks (`naturalWidth <= 120`) and `onError` fallbacks to cards so low-res YouTube placeholders gracefully fall back to high-res music art.
+  - Implemented `usedCoverUrls = new Set()` in `fetchListenTogetherFeed()` to guarantee 100% unique cover artwork across all 9 discovery cards.
+
+---
+
 ## [v5.5.2] - 2026-11-01
 
 ### 🎨 Light Mode Global Contrast Audit & Clean Typography

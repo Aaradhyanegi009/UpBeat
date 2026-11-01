@@ -12,6 +12,43 @@ const MODEL_ALIASES = {
 const LOW_THINKING_MODELS = new Set(['gemini-3.8-flash', 'gemini-3.7-flash'])
 const ZERO_BUDGET_MODELS = new Set(['gemini-2.5-flash', 'gemini-robotics-er-2-preview'])
 
+export const NON_MUSIC_REGEX = /\b(minecraft|gameplay|walkthrough|let's play|tutorial|episode|stream|shorts|podcast|review|unboxing|reaction|vlog|mod|pvp|bedwars|skyblock|portal|survival|speedrun)\b/i
+
+/**
+ * Pillar 3 Strict Music Filter:
+ * Rejects non-music titles/channels and videos shorter than 65s (shorts) or longer than 720s (12 mins).
+ */
+export function isValidMusicTrack(track) {
+  if (!track || typeof track !== 'object') return false
+  const title = (track.title || '').trim()
+  const artist = (track.artist || '').trim()
+  if (!title || !artist) return false
+
+  const textToScan = `${title} ${artist}`
+  if (NON_MUSIC_REGEX.test(textToScan)) return false
+
+  let sec = 0
+  if (typeof track.duration === 'number' && track.duration > 0) {
+    sec = track.duration
+  } else if (typeof track.duration_seconds === 'number' && track.duration_seconds > 0) {
+    sec = track.duration_seconds
+  } else if (track.duration_text && typeof track.duration_text === 'string') {
+    const parts = track.duration_text.split(':').map((p) => parseInt(p, 10))
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      sec = parts[0] * 60 + parts[1]
+    } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      sec = parts[0] * 3600 + parts[1] * 60 + parts[2]
+    }
+  }
+
+  // Reject duration <65s or >720s (12m) when duration is known
+  if (sec > 0 && (sec < 65 || sec > 720)) {
+    return false
+  }
+
+  return true
+}
+
 // ---------------------------------------------------------------------------
 // Platform + settings
 // ---------------------------------------------------------------------------
@@ -425,7 +462,7 @@ async function ytWebSearch(query, pages = 2) {
       const views = runsText(v.shortViewCountText) || runsText(v.viewCountText)
       const published = runsText(v.publishedTimeText)
       const meta = [views, published].filter(Boolean).join(' • ') || 'YouTube search result'
-      videos.push({
+      const trackObj = {
         title: runsText(v.title),
         artist: runsText(v.ownerText) || runsText(v.longBylineText) || 'YouTube',
         video_id: vid,
@@ -438,7 +475,9 @@ async function ytWebSearch(query, pages = 2) {
         reason: meta,
         why_it_fits: meta,
         vibe: 'YouTube'
-      })
+      }
+      if (!isValidMusicTrack(trackObj)) continue
+      videos.push(trackObj)
     }
 
     for (const lk of findNodes(data, 'lockupViewModel')) {
@@ -507,8 +546,7 @@ function parseYtmSongs(data) {
     if (album && album.toLowerCase() !== cols[0].toLowerCase()) bits.push(`Album: ${album}`)
     if (plays) bits.push(plays)
     const reason = bits.length ? bits.join(' • ') : 'YouTube Music song'
-    seen.add(vid)
-    out.push({
+    const trackObj = {
       title: cols[0],
       artist: parts[0] || 'Unknown Artist',
       video_id: vid,
@@ -521,7 +559,10 @@ function parseYtmSongs(data) {
       reason,
       why_it_fits: reason,
       vibe: 'YT Music'
-    })
+    }
+    if (!isValidMusicTrack(trackObj)) continue
+    seen.add(vid)
+    out.push(trackObj)
     if (out.length >= 25) break
   }
 
@@ -1016,14 +1057,14 @@ export async function importYouTubePlaylistStandalone(urlOrQuery) {
     if (browseId) {
       const res = await browsePlaylistStandalone(browseId)
       if (res && res.tracks && res.tracks.length) {
-        return res.tracks
+        return res.tracks.filter(isValidMusicTrack)
       }
     }
 
     // Fallback: direct search for the query / title
     const searchRes = await directSearchStandalone(urlOrQuery, 'songs')
     if (searchRes && searchRes.tracks && searchRes.tracks.length) {
-      return searchRes.tracks
+      return searchRes.tracks.filter(isValidMusicTrack)
     }
     return []
   } catch (err) {
@@ -1643,7 +1684,7 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
       badge: 'Trending Heat',
       query: 'viral trending songs reels Bollywood Punjabi indie hits',
-      thumbnail: 'https://i.ytimg.com/vi/IltsZZ_PZNs/hqdefault.jpg',
+      thumbnail: 'https://i.ytimg.com/vi/ElZfdU54Cp8/hqdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     },
     {
@@ -1676,7 +1717,7 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'Introspective Pop & Melodic Atmosphere',
       badge: 'Vibe Mix',
       query: 'Billie Eilish Taylor Swift pop acoustic melody hits',
-      thumbnail: 'https://i.ytimg.com/vi/d5gxZ5y9vF4/hqdefault.jpg',
+      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
       color: 'from-cyan-600/40 to-black'
     },
     {
@@ -1687,7 +1728,7 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'Cinematic Orchestral Rock & Anime Climaxes',
       badge: 'Epic OST',
       query: 'Hiroyuki Sawano anime orchestral rock greatest hits',
-      thumbnail: 'https://i.ytimg.com/vi/V8nwtq_Vn8E/hqdefault.jpg',
+      thumbnail: 'https://i.ytimg.com/vi/bESGLojNYSo/hqdefault.jpg',
       color: 'from-slate-700/40 to-black'
     },
     {
@@ -1724,7 +1765,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
 
   // 1. Determine User Profile Readiness
   const validUserTracks = (userTracks || []).filter(
-    (t) => t?.title && t?.artist && !DEFAULT_SEED_IDS.has(t?.video_id)
+    (t) => t?.title && t?.artist && !DEFAULT_SEED_IDS.has(t?.video_id) && isValidMusicTrack(t)
   )
 
   // Map each unique clean artist to their tracks and artwork
@@ -1812,7 +1853,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       badge: 'Trending Heat',
       browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
       query: `viral trending songs reels Bollywood Punjabi indie hits ${getRandomRotationTag()}`,
-      thumbnail: 'https://i.ytimg.com/vi/IltsZZ_PZNs/hqdefault.jpg',
+      thumbnail: 'https://i.ytimg.com/vi/ElZfdU54Cp8/hqdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     }
   ]
@@ -1851,7 +1892,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         subtitle: 'Introspective Pop & Melodic Atmosphere',
         badge: 'Vibe Mix',
         query: `Billie Eilish Taylor Swift pop acoustic melody hits ${getRandomRotationTag()}`,
-        thumbnail: 'https://i.ytimg.com/vi/d5gxZ5y9vF4/hqdefault.jpg',
+        thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
         color: 'from-cyan-600/40 to-black'
       },
       {
@@ -1862,7 +1903,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         subtitle: 'Cinematic Orchestral Rock & Anime Climaxes',
         badge: 'Epic OST',
         query: `Hiroyuki Sawano anime orchestral rock greatest hits ${getRandomRotationTag()}`,
-        thumbnail: 'https://i.ytimg.com/vi/V8nwtq_Vn8E/hqdefault.jpg',
+        thumbnail: 'https://i.ytimg.com/vi/bESGLojNYSo/hqdefault.jpg',
         color: 'from-slate-700/40 to-black'
       },
       {
@@ -1885,6 +1926,27 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
     const a3 = artists[3] || a1
     const a4 = artists[4] || a2
 
+    const usedCoverUrls = new Set(tier1Blocks.map((b) => b.thumbnail))
+
+    const pickUniqueCover = (preferredThumb, fallbackArtist) => {
+      if (preferredThumb && !usedCoverUrls.has(preferredThumb)) {
+        usedCoverUrls.add(preferredThumb)
+        return preferredThumb
+      }
+      if (fallbackArtist?.thumb && !usedCoverUrls.has(fallbackArtist.thumb)) {
+        usedCoverUrls.add(fallbackArtist.thumb)
+        return fallbackArtist.thumb
+      }
+      for (const t of validUserTracks) {
+        const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+        if (thumb && !usedCoverUrls.has(thumb)) {
+          usedCoverUrls.add(thumb)
+          return thumb
+        }
+      }
+      return preferredThumb || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
+    }
+
     const topUserTrackThumb = validUserTracks[0]?.thumbnail ||
       (validUserTracks[0]?.video_id ? `https://i.ytimg.com/vi/${validUserTracks[0].video_id}/hqdefault.jpg` : a0.thumb)
 
@@ -1899,7 +1961,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         subtitle: `Featuring ${a0.name}, ${a1.name} & similar hits`,
         badge: 'Artist Mix',
         query: `${a0.name} ${a1.name} hits radio playlist ${getRandomRotationTag()}`,
-        thumbnail: a0.thumb || topUserTrackThumb,
+        thumbnail: pickUniqueCover(a0.thumb || topUserTrackThumb, a0),
         color: 'from-rose-600/40 to-black'
       },
       {
@@ -1909,7 +1971,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         subtitle: `Curated mix inspired by your listening library`,
         badge: 'Artist Mix',
         query: `${a2.name} ${a3.name} best songs mix ${getRandomRotationTag()}`,
-        thumbnail: a2.thumb || a1.thumb || topUserTrackThumb,
+        thumbnail: pickUniqueCover(a2.thumb || a1.thumb, a2),
         color: 'from-indigo-600/40 to-black'
       },
       {
@@ -1919,7 +1981,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         subtitle: `${archetype} • Matched with your sound taste`,
         badge: 'Vibe Mix',
         query: `${a4.name} similar artists music playlist ${getRandomRotationTag()}`,
-        thumbnail: a4.thumb || a0.thumb || topUserTrackThumb,
+        thumbnail: pickUniqueCover(a4.thumb, a4),
         color: 'from-cyan-600/40 to-black'
       },
       {
@@ -1929,7 +1991,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         subtitle: `Synchronized with ${timeSlotSubtitle}`,
         badge: 'Time Flow',
         query: `${timeSlotQuery} ${a0.name} ${getRandomRotationTag()}`,
-        thumbnail: topUserTrackThumb,
+        thumbnail: pickUniqueCover(topUserTrackThumb, a0),
         color: timeSlotColor
       },
       {
@@ -1939,7 +2001,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         subtitle: `Rotated favorites from your library & harmonic matches`,
         badge: 'Rediscover',
         query: `${artists.slice(0, 3).map((a) => a.name).join(' ')} radio playlist ${getRandomRotationTag()}`,
-        thumbnail: olderUserTrackThumb,
+        thumbnail: pickUniqueCover(olderUserTrackThumb, a1),
         color: 'from-purple-600/40 to-black'
       }
     ]

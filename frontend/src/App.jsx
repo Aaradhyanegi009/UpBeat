@@ -25,7 +25,8 @@ import {
   formatDurationSeconds,
   openExternalUrl,
   fisherYatesShuffle,
-  loadBlockTracks
+  loadBlockTracks,
+  isValidMusicTrack
 } from './standaloneApi'
 
 const DEFAULT_SEEDS = [
@@ -77,6 +78,56 @@ export default function App() {
     const interval = setInterval(checkTheme, 60000)
     return () => clearInterval(interval)
   }, [themePreference])
+
+  // Boot music sanitizer: Purge non-music videos (gameplay, vlogs, tutorial) from localStorage
+  useEffect(() => {
+    try {
+      const favKeys = ['argon_favs_v2', 'argon_favorites_v2']
+      for (const k of favKeys) {
+        const raw = localStorage.getItem(k)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            const clean = parsed.filter(isValidMusicTrack)
+            if (clean.length !== parsed.length) {
+              localStorage.setItem(k, JSON.stringify(clean))
+              if (k === 'argon_favs_v2') setFavorites(clean)
+            }
+          }
+        }
+      }
+
+      const seedKeys = ['argon_seeds_v2', 'argon_extracted_v2']
+      for (const k of seedKeys) {
+        const raw = localStorage.getItem(k)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            const clean = parsed.filter(isValidMusicTrack)
+            if (clean.length !== parsed.length) {
+              localStorage.setItem(k, JSON.stringify(clean))
+              if (k === 'argon_seeds_v2') setExtractedTracks(clean)
+            }
+          }
+        }
+      }
+
+      const rawPl = localStorage.getItem('argon_playlist_v2')
+      if (rawPl) {
+        const parsedPl = JSON.parse(rawPl)
+        if (parsedPl?.tracks && Array.isArray(parsedPl.tracks)) {
+          const cleanTracks = parsedPl.tracks.filter(isValidMusicTrack)
+          if (cleanTracks.length !== parsedPl.tracks.length) {
+            parsedPl.tracks = cleanTracks
+            localStorage.setItem('argon_playlist_v2', JSON.stringify(parsedPl))
+            setPlaylist(parsedPl)
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Boot music sanitizer error:', e)
+    }
+  }, [])
 
   const handleSelectThemePreference = (pref) => {
     setThemePreference(pref)

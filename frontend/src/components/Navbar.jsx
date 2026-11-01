@@ -42,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v5.5.2')
+  const [otaVer, setOtaVer] = useState('v5.5.3')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -353,9 +353,9 @@ export default function Navbar({
                   onClick={onSyncFavorites}
                   disabled={isSyncing}
                   title="Analyze your Liked songs in Favorites and curate a fresh playlist"
-                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/35 text-xs text-slate-900 dark:text-rose-200 font-bold transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs"
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-100 dark:bg-rose-500/15 hover:bg-rose-200 dark:hover:bg-rose-500/25 border border-rose-300 dark:border-rose-500/35 text-xs text-[#BE123C] dark:text-rose-200 font-bold transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs btn-sync-liked"
                 >
-                  <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 ${isSyncing ? 'animate-pulse' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 fill-[#BE123C] text-[#BE123C] dark:fill-rose-500 dark:text-rose-500 ${isSyncing ? 'animate-pulse' : ''}`} />
                   <span>{isSyncing ? 'Curating...' : 'Sync Liked'}</span>
                 </button>
               )}
@@ -424,20 +424,20 @@ export default function Navbar({
 
       {/* Settings Modal */}
       {showKeyModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#101015]/95 border border-white/10 rounded-3xl p-6 shadow-2xl backdrop-blur-2xl">
+        <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#101015]/95 border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl backdrop-blur-2xl">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-400">
+                <div className="w-9 h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-500">
                   <Settings className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white tracking-tight">Studio Settings</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Studio Settings</h3>
                 </div>
               </div>
               <button
                 onClick={() => setShowKeyModal(false)}
-                className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/10 cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -445,7 +445,7 @@ export default function Navbar({
 
             <form onSubmit={handleSaveSettings} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                   Gemini API Key
                 </label>
                 <input
@@ -453,12 +453,12 @@ export default function Navbar({
                   value={apiKeyInput}
                   onChange={(e) => setApiKeyInput(e.target.value)}
                   placeholder="AIzaSy..."
-                  className="w-full bg-white/[0.04] border border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition-colors"
+                  className="w-full bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                   Mac Backend Server URL (Optional)
                 </label>
                 <input
@@ -466,18 +466,18 @@ export default function Navbar({
                   value={serverUrlInput}
                   onChange={(e) => setServerUrlInput(e.target.value)}
                   placeholder="http://192.168.1.4:8000"
-                  className="w-full bg-white/[0.04] border border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition-colors"
+                  className="w-full bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none transition-colors"
                 />
               </div>
 
               {/* Over-The-Air (OTA) Live Updates */}
-              <div className="pt-3 border-t border-white/10">
+              <div className="pt-3 border-t border-slate-200 dark:border-white/10">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                    <span className="text-xs font-bold text-white tracking-tight">Live Over-The-Air Updates</span>
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                    <span className="text-xs font-bold text-purple-700 dark:text-purple-300 tracking-tight">Live Over-The-Air Updates</span>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                     {otaVer}
                   </span>
                 </div>
@@ -486,12 +486,12 @@ export default function Navbar({
                     type="button"
                     onClick={handleManualOtaCheck}
                     disabled={isCheckingOta}
-                    className="flex-1 py-2.5 px-3 rounded-2xl bg-purple-600/25 hover:bg-purple-600/35 border border-purple-500/40 text-purple-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                    className="flex-1 py-2.5 px-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50"
                   >
                     {isCheckingOta ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
                     ) : (
-                      <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+                      <RefreshCw className="w-3.5 h-3.5 text-white" />
                     )}
                     <span>{isCheckingOta ? 'Checking GitHub...' : 'Check for Live Update'}</span>
                   </button>
@@ -500,14 +500,14 @@ export default function Navbar({
                     href="https://github.com/AaradhyaNegi009/UpBeat/releases"
                     target="_blank"
                     rel="noreferrer"
-                    className="py-2.5 px-3.5 rounded-2xl bg-white/[0.05] hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1"
+                    className="py-2.5 px-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.05] dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 hover:text-slate-900 dark:text-zinc-300 dark:hover:text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1"
                   >
                     <span>Releases</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
                 {otaStatusMsg && (
-                  <p className="text-xs text-purple-300 mt-2 font-medium bg-purple-950/40 border border-purple-500/30 rounded-xl px-3 py-1.5">
+                  <p className="text-xs text-purple-700 dark:text-purple-300 mt-2 font-medium bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-500/30 rounded-xl px-3 py-1.5">
                     {otaStatusMsg}
                   </p>
                 )}
@@ -517,13 +517,13 @@ export default function Navbar({
                 <button
                   type="button"
                   onClick={() => setShowKeyModal(false)}
-                  className="px-4 py-2 rounded-full text-xs font-semibold text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                  className="px-4 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/10 cursor-pointer transition-colors"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg shadow-white/10 transition-all"
+                  className="px-5 py-2 rounded-full bg-rose-600 text-white hover:bg-rose-700 active:scale-95 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-lg shadow-rose-600/20 transition-all"
                 >
                   {savedBanner ? <Check className="w-3.5 h-3.5" /> : null}
                   <span>{savedBanner ? 'Saved' : 'Save Changes'}</span>

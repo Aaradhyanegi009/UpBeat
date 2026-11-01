@@ -269,20 +269,20 @@ export default function GoogleAuthModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 select-none">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal Dialog */}
-      <div className="relative w-full max-w-md bg-[#0e0e13]/95 border border-white/10 rounded-3xl shadow-2xl flex flex-col z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] backdrop-blur-2xl">
+      <div className="relative w-full max-w-md bg-white dark:bg-[#0e0e13]/95 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-3xl shadow-2xl flex flex-col z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] backdrop-blur-2xl">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.03] shrink-0">
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-white/[0.08] flex items-center justify-between bg-slate-50/60 dark:bg-white/[0.03] shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shadow-xs">
+            <div className="w-9 h-9 rounded-2xl bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/15 flex items-center justify-center shadow-xs">
               <GoogleIcon className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white tracking-tight">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
                 {googleUser ? 'Google Account & YouTube Taste' : 'Connect Google & YouTube'}
               </h3>
             </div>
@@ -290,7 +290,7 @@ export default function GoogleAuthModal({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -299,8 +299,8 @@ export default function GoogleAuthModal({
         {/* Content Body */}
         <div className="p-5 space-y-4 overflow-y-auto gpu-scroll">
           {errorMsg && (
-            <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+            <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
               <div className="flex-1 leading-relaxed">{errorMsg}</div>
             </div>
           )}
@@ -308,7 +308,7 @@ export default function GoogleAuthModal({
           {googleUser ? (
             /* Logged-in State with Verified Profile */
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-[#0c0c12]/75 backdrop-blur-xl border border-emerald-500/30 flex items-center gap-3.5">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#0c0c12]/75 backdrop-blur-xl border border-emerald-500/30 flex items-center gap-3.5">
                 {googleUser.picture ? (
                   <img
                     src={googleUser.picture}
@@ -323,15 +323,15 @@ export default function GoogleAuthModal({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold text-white tracking-tight truncate">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate">
                       {googleUser.name || (googleUser.email ? googleUser.email.split('@')[0] : 'Google User')}
                     </span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Connected" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Connected" />
                   </div>
-                  <div className="text-xs text-zinc-400 truncate mt-0.5 font-medium">
+                  <div className="text-xs text-slate-500 dark:text-zinc-400 truncate mt-0.5 font-medium">
                     {googleUser.email || 'Connected'}
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-emerald-400 font-semibold mt-1">
+                  <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>
                       {googleUser.provider === 'google_oauth'
@@ -364,12 +364,12 @@ export default function GoogleAuthModal({
 
               {/* Avatar Editor Drawer */}
               {showEditPic && (
-                <div className="p-3 rounded-xl bg-[#121218] border border-white/10 space-y-2.5 animate-in fade-in duration-100">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#121218] border border-slate-200 dark:border-white/10 space-y-2.5 animate-in fade-in duration-100">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-white">Profile Photo Controls</span>
+                    <span className="text-xs font-semibold text-slate-900 dark:text-white">Profile Photo Controls</span>
                     <button
                       onClick={handleUseLetterAvatar}
-                      className="text-[11px] font-mono text-zinc-400 hover:text-rose-300 cursor-pointer"
+                      className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 hover:text-rose-500 dark:hover:text-rose-300 cursor-pointer"
                     >
                       Use Letter Avatar ("{userInitial}")
                     </button>
@@ -380,7 +380,7 @@ export default function GoogleAuthModal({
                       value={customPicUrl}
                       onChange={(e) => setCustomPicUrl(e.target.value)}
                       placeholder="Paste image URL (e.g. https://...)"
-                      className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500 font-mono"
+                      className="flex-1 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 font-mono"
                     />
                     <button
                       type="submit"
@@ -398,12 +398,12 @@ export default function GoogleAuthModal({
                 <button
                   onClick={() => onSyncYouTubeLikes()}
                   disabled={isSyncingLikes}
-                  className="w-full py-2.5 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  className="w-full py-2.5 px-4 rounded-xl bg-rose-100 dark:bg-rose-500/15 hover:bg-rose-200 dark:hover:bg-rose-500/25 border border-rose-300 dark:border-rose-500/40 text-[#BE123C] dark:text-rose-200 text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50 btn-sync-liked"
                 >
                   {isSyncingLikes ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                    <Loader2 className="w-4 h-4 animate-spin text-[#BE123C] dark:text-rose-400" />
                   ) : (
-                    <Youtube className="w-4 h-4 text-rose-400" />
+                    <Youtube className="w-4 h-4 text-[#BE123C] dark:text-rose-400" />
                   )}
                   <span>{isSyncingLikes ? 'Syncing Liked Songs & Recalculating DNA...' : 'Re-sync YouTube Likes & Refresh Seeds'}</span>
                 </button>
@@ -413,7 +413,7 @@ export default function GoogleAuthModal({
                     onLogout()
                     onClose()
                   }}
-                  className="w-full py-2 px-4 rounded-xl bg-[#16161f] hover:bg-rose-500/10 border border-[#242432] hover:border-rose-500/30 text-[#a1a1aa] hover:text-rose-300 text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  className="w-full py-2 px-4 rounded-xl bg-slate-100 dark:bg-[#16161f] hover:bg-rose-50 dark:hover:bg-rose-500/10 border border-slate-200 dark:border-[#242432] hover:border-rose-300 dark:hover:border-rose-500/30 text-slate-700 dark:text-[#a1a1aa] hover:text-rose-600 dark:hover:text-rose-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Disconnect Account</span>
@@ -424,17 +424,17 @@ export default function GoogleAuthModal({
             /* Sign-In State */
             <div className="space-y-4">
               {/* Tab Selector: Instant Connect vs Google Cloud OAuth */}
-              <div className="grid grid-cols-2 p-1 bg-white/[0.04] border border-white/10 rounded-2xl text-xs font-medium">
+              <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-2xl text-xs font-medium">
                 <button
                   type="button"
                   onClick={() => setAuthMode('instant')}
                   className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     authMode === 'instant'
-                      ? 'bg-gradient-to-r from-rose-500/20 to-purple-500/20 text-white border border-rose-500/30 shadow-xs font-semibold'
-                      : 'text-zinc-400 hover:text-white'
+                      ? 'bg-white dark:bg-gradient-to-r dark:from-rose-500/20 dark:to-purple-500/20 text-slate-900 dark:text-white border border-slate-200 dark:border-rose-500/30 shadow-xs font-bold'
+                      : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
                   <span>1-Click Instant Sync</span>
                 </button>
                 <button
@@ -442,8 +442,8 @@ export default function GoogleAuthModal({
                   onClick={() => setAuthMode('oauth')}
                   className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                     authMode === 'oauth'
-                      ? 'bg-white/10 text-white shadow-xs font-semibold'
-                      : 'text-zinc-400 hover:text-white'
+                      ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs font-bold border border-slate-200 dark:border-white/10'
+                      : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   <GoogleIcon className="w-3.5 h-3.5" />
@@ -456,7 +456,7 @@ export default function GoogleAuthModal({
                 <form onSubmit={handleInstantConnect} className="space-y-3.5">
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                         Display Name
                       </label>
                       <input
@@ -464,11 +464,11 @@ export default function GoogleAuthModal({
                         value={customName}
                         onChange={(e) => setCustomName(e.target.value)}
                         placeholder="Divyansh Negi"
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 transition-colors"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                         Google / YT Email
                       </label>
                       <input
@@ -476,13 +476,13 @@ export default function GoogleAuthModal({
                         value={customEmail}
                         onChange={(e) => setCustomEmail(e.target.value)}
                         placeholder="divyanshnegi009@gmail.com"
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white focus:outline-none focus:border-rose-500 transition-colors"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
                       YouTube Playlist Link or Liked Songs URL (Optional)
                     </label>
                     <input
@@ -490,7 +490,7 @@ export default function GoogleAuthModal({
                       value={playlistUrl}
                       onChange={(e) => setPlaylistUrl(e.target.value)}
                       placeholder="https://music.youtube.com/playlist?list=..."
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
                     />
                   </div>
 
@@ -513,13 +513,13 @@ export default function GoogleAuthModal({
                   {/* Client ID Configuration Field */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-zinc-300">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                         Google Cloud Web Client ID
                       </label>
                       <button
                         type="button"
                         onClick={() => setShowOAuthGuide((p) => !p)}
-                        className="text-xs text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1 cursor-pointer"
+                        className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-medium flex items-center gap-1 cursor-pointer"
                       >
                         <HelpCircle className="w-3.5 h-3.5" />
                         <span>{showOAuthGuide ? 'Hide Instructions' : 'How to get ID'}</span>
@@ -534,32 +534,32 @@ export default function GoogleAuthModal({
                         try { localStorage.setItem('upbeat_google_client_id', e.target.value.trim()) } catch {}
                       }}
                       placeholder="...apps.googleusercontent.com"
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/10 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-sky-500 transition-colors"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-sky-500 transition-colors"
                     />
                   </div>
 
                   {/* OAuth Guide Accordion */}
                   {showOAuthGuide && (
-                    <div className="p-3 rounded-xl bg-[#14141d] border border-white/10 text-[11px] text-[#a1a1aa] space-y-2 animate-in fade-in font-sans">
-                      <div className="font-semibold text-white flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#14141d] border border-slate-200 dark:border-white/10 text-[11px] text-slate-600 dark:text-[#a1a1aa] space-y-2 animate-in fade-in font-sans">
+                      <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-sky-500" />
                         <span>Quick 2-minute Google Cloud Setup:</span>
                       </div>
-                      <ol className="list-decimal list-inside space-y-1 text-[#8e8e96] font-mono text-[10px] pl-1">
+                      <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-[#8e8e96] font-mono text-[10px] pl-1">
                         <li>
                           Open{' '}
                           <a
                             href="https://console.cloud.google.com/apis/credentials"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sky-400 hover:underline inline-flex items-center gap-0.5"
+                            className="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-0.5"
                           >
                             Google Cloud Credentials <ExternalLink className="w-2.5 h-2.5" />
                           </a>
                         </li>
                         <li>Click <strong>Create Credentials</strong> &rarr; <strong>OAuth client ID</strong></li>
                         <li>Select <strong>Application type: Web application</strong></li>
-                        <li>Under <strong>Authorized JavaScript origins</strong>, add: <code className="text-white bg-black/50 px-1 py-0.5 rounded">http://localhost</code> and <code className="text-white bg-black/50 px-1 py-0.5 rounded">capacitor://localhost</code></li>
+                        <li>Under <strong>Authorized JavaScript origins</strong>, add: <code className="text-slate-900 dark:text-white bg-slate-200 dark:bg-black/50 px-1 py-0.5 rounded">http://localhost</code> and <code className="text-slate-900 dark:text-white bg-slate-200 dark:bg-black/50 px-1 py-0.5 rounded">capacitor://localhost</code></li>
                         <li>Under <strong>Enabled APIs & Services</strong>, enable <strong>YouTube Data API v3</strong></li>
                         <li>Copy and paste your Client ID above.</li>
                       </ol>
@@ -571,7 +571,7 @@ export default function GoogleAuthModal({
                     type="button"
                     onClick={handleGoogleOAuthSignIn}
                     disabled={isLoggingIn}
-                    className="w-full py-2.5 px-4 rounded-2xl bg-white hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50 text-black text-xs font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md"
+                    className="w-full py-2.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50 text-white dark:text-black text-xs font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md"
                   >
                     {isLoggingIn ? (
                       <Loader2 className="w-4 h-4 animate-spin text-[#4285F4]" />
@@ -582,8 +582,8 @@ export default function GoogleAuthModal({
                   </button>
 
                   {/* Alternative: Direct Access Token */}
-                  <div className="pt-2 border-t border-white/10 space-y-2">
-                    <label className="block text-xs font-semibold text-zinc-300">
+                  <div className="pt-2 border-t border-slate-200 dark:border-white/10 space-y-2">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300">
                       Or Paste OAuth Access Token Directly
                     </label>
                     <div className="flex gap-2">
@@ -592,7 +592,7 @@ export default function GoogleAuthModal({
                         value={customAccessToken}
                         onChange={(e) => setCustomAccessToken(e.target.value)}
                         placeholder="ya29...."
-                        className="flex-1 px-3 py-2 rounded-2xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-sky-500"
+                        className="flex-1 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 text-xs focus:outline-none focus:border-sky-500"
                       />
                       <button
                         type="button"

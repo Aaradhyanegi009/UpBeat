@@ -1811,7 +1811,7 @@ export default function PlayerBar({
                 onMouseUp={handleScrubEnd}
                 disabled={!track || isSafariMode}
                 style={{
-                  background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${progressPct}%, #202028 ${progressPct}%, #202028 100%)`
+                  background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${progressPct}%, var(--slider-track, #202028) ${progressPct}%, var(--slider-track, #202028) 100%)`
                 }}
                 className="flex-1 argon-slider cursor-pointer disabled:opacity-40"
               />
@@ -1824,14 +1824,14 @@ export default function PlayerBar({
           {/* Desktop Right Controls */}
           <div className="hidden sm:flex items-center justify-end gap-3 w-1/4 min-w-[180px]">
             {hasBackend() && (
-              <div className="hidden md:flex items-center bg-[#121217] border border-[#22222a] rounded-lg p-0.5 text-[11px] font-mono">
+              <div className="hidden md:flex items-center bg-[var(--surface-hover)] border border-[var(--border-subtle)] rounded-lg p-0.5 text-[11px] font-mono">
                 <button
                   onClick={() => setPlaybackMode('app')}
                   title="App Native Engine"
                   className={`p-1.5 rounded-md transition-colors cursor-pointer ${
                     playbackMode === 'app'
-                      ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 font-medium'
-                      : 'text-[#8e8e96] hover:text-[#e4e4e7]'
+                      ? 'bg-white dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 border border-slate-200 dark:border-emerald-500/40 shadow-xs font-semibold'
+                      : 'text-slate-500 dark:text-[#8e8e96] hover:text-slate-900 dark:hover:text-[#e4e4e7]'
                   }`}
                 >
                   <Monitor className="w-3.5 h-3.5" />
@@ -1841,8 +1841,8 @@ export default function PlayerBar({
                   title="Safari Web Engine"
                   className={`p-1.5 rounded-md transition-colors cursor-pointer ${
                     playbackMode === 'safari'
-                      ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 font-medium'
-                      : 'text-[#8e8e96] hover:text-[#e4e4e7]'
+                      ? 'bg-white dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 border border-slate-200 dark:border-emerald-500/40 shadow-xs font-semibold'
+                      : 'text-slate-500 dark:text-[#8e8e96] hover:text-slate-900 dark:hover:text-[#e4e4e7]'
                   }`}
                 >
                   <Compass className="w-3.5 h-3.5" />
@@ -2002,7 +2002,7 @@ export default function PlayerBar({
                   setIsMuted(false)
                 }}
                 style={{
-                  background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${volumeVal}%, #202028 ${volumeVal}%, #202028 100%)`
+                  background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${volumeVal}%, var(--slider-track, #202028) ${volumeVal}%, var(--slider-track, #202028) 100%)`
                 }}
                 className="w-16 argon-slider cursor-pointer"
               />
@@ -2030,7 +2030,7 @@ export default function PlayerBar({
               onMouseUp={handleScrubEnd}
               disabled={!track || isSafariMode}
               style={{
-                background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${progressPct}%, #202028 ${progressPct}%, #202028 100%)`
+                background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${progressPct}%, var(--slider-track, #202028) ${progressPct}%, var(--slider-track, #202028) 100%)`
               }}
               className="flex-1 argon-slider"
             />

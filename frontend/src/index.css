@@ -25,6 +25,7 @@
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.16);
   --surface-hover: rgba(255, 255, 255, 0.06);
+  --slider-track: #202028;
   --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 
   --atm-glow-1: transparent;
@@ -122,6 +123,7 @@
   --border-subtle: rgba(15, 23, 42, 0.09);
   --border-strong: rgba(15, 23, 42, 0.18);
   --surface-hover: rgba(15, 23, 42, 0.05);
+  --slider-track: #E2E8F0;
   --card-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 
   --atm-glow-1: rgba(225, 29, 72, 0.06);
@@ -141,12 +143,17 @@
 .theme-light .bg-\[\#0c0c12\]\/80,
 .theme-light .bg-\[\#0c0c12\]\/95,
 .theme-light .bg-\[\#0c0c12\]\/40,
+.theme-light .bg-\[\#0e0e13\]\/95,
+.theme-light .bg-\[\#101015\]\/95,
 .theme-light .bg-\[\#121214\],
+.theme-light .bg-\[\#121218\],
 .theme-light .bg-\[\#14141c\],
+.theme-light .bg-\[\#14141d\],
+.theme-light .bg-\[\#16161f\],
 .theme-light .bg-\[\#18181b\],
 .theme-light .bg-\[\#1a1a22\] {
-  background-color: #F8F8FC !important;
-  border-color: rgba(15, 23, 42, 0.1) !important;
+  background-color: #FFFFFF !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
   color: #0F172A !important;
 }
 
@@ -178,11 +185,66 @@
 .theme-light .squircle-card .text-zinc-300,
 .theme-light .squircle-card .drop-shadow-sm,
 .theme-light button[class*="bg-rose-600"] .text-white,
+.theme-light button[class*="bg-purple-600"] .text-white,
 .theme-light button[class*="bg-black"] .text-white,
 .theme-light [class*="bg-gradient-to-"] .text-white,
 .theme-light [class*="bg-sky-500"] .text-white,
 .theme-light [class*="bg-rose-500"] .text-white {
   color: #FFFFFF !important;
+}
+
+/* Card circular buttons contrast in all themes */
+.squircle-card button[class*="bg-white"] svg,
+.theme-light .squircle-card button[class*="bg-white"] svg {
+  color: #0F172A !important;
+  fill: #0F172A !important;
+  stroke: #0F172A !important;
+}
+.squircle-card button[class*="bg-white"] svg.lucide-play,
+.theme-light .squircle-card button[class*="bg-white"] svg.lucide-play {
+  fill: #0F172A !important;
+  color: #0F172A !important;
+}
+.squircle-card button[class*="bg-black"],
+.theme-light .squircle-card button[class*="bg-black"] {
+  background-color: rgba(0, 0, 0, 0.65) !important;
+}
+.squircle-card button[class*="bg-black"]:hover,
+.theme-light .squircle-card button[class*="bg-black"]:hover {
+  background-color: rgba(225, 29, 72, 0.9) !important;
+}
+.squircle-card button[class*="bg-black"] svg,
+.theme-light .squircle-card button[class*="bg-black"] svg {
+  color: #FFFFFF !important;
+  fill: none !important;
+  stroke: #FFFFFF !important;
+}
+
+/* Deep jewel-tone text and icons on tinted pills in Light Mode */
+.theme-light .btn-sync-liked,
+.theme-light button[title*="Sync Liked"] {
+  background-color: #FFE4E6 !important;
+  border-color: #FECDD3 !important;
+  color: #BE123C !important;
+  font-weight: 600 !important;
+}
+.theme-light .btn-sync-liked svg,
+.theme-light button[title*="Sync Liked"] svg {
+  color: #BE123C !important;
+  fill: #BE123C !important;
+}
+
+.theme-light .btn-analyze-taste,
+.theme-light button[title*="Analyze"] {
+  background-color: #D1FAE5 !important;
+  border-color: #A7F3D0 !important;
+  color: #047857 !important;
+  font-weight: 600 !important;
+}
+.theme-light .btn-analyze-taste svg,
+.theme-light button[title*="Analyze"] svg {
+  color: #047857 !important;
+  stroke: #047857 !important;
 }
 
 /* High-contrast colors for pills and active badges on light backgrounds */
