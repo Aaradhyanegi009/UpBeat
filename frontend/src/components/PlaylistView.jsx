@@ -13,7 +13,9 @@ import {
   rerollDiscoveryBlock,
   loadBlockTracks,
   fisherYatesShuffle,
-  prewarmTrack
+  prewarmTrack,
+  advanceRotationCursor,
+  getRotationCursor
 } from '../standaloneApi'
 import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscribeOfflineChanges } from '../offlineStorage'
 
@@ -83,6 +85,8 @@ function PlaylistView({
     return out
   }, [favorites, offlineTracks, extractedTracks])
 
+  const lastCycleTimeRef = useRef(Date.now())
+
   // Load and subscribe to dynamic 8-9 discovery blocks
   useEffect(() => {
     let active = true
@@ -97,6 +101,57 @@ function PlaylistView({
     }).catch(() => {})
     return () => {
       active = false
+    }
+  }, [userPersonalTracks, tasteDna, timeInfo])
+
+  // Periodic Cyclic Rotation Engine (rotates every 4 minutes & on return after > 2 mins absence)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nextCursor = advanceRotationCursor(1)
+      lastCycleTimeRef.current = Date.now()
+      fetchListenTogetherFeed({
+        userTracks: userPersonalTracks,
+        tasteDna,
+        forceRefresh: true,
+        rotationIndex: nextCursor,
+        timeInfo
+      }).then((blocks) => {
+        if (Array.isArray(blocks) && blocks.length > 0) {
+          setDiscoveryBlocks(blocks)
+        }
+      }).catch(() => {})
+    }, 4 * 60 * 1000)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const now = Date.now()
+        if (now - lastCycleTimeRef.current > 2 * 60 * 1000) {
+          lastCycleTimeRef.current = now
+          const nextCursor = advanceRotationCursor(1)
+          fetchListenTogetherFeed({
+            userTracks: userPersonalTracks,
+            tasteDna,
+            forceRefresh: true,
+            rotationIndex: nextCursor,
+            timeInfo
+          }).then((blocks) => {
+            if (Array.isArray(blocks) && blocks.length > 0) {
+              setDiscoveryBlocks(blocks)
+            }
+          }).catch(() => {})
+        }
+      }
+    }
+
+    const handleFocus = () => handleVisibilityChange()
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
     }
   }, [userPersonalTracks, tasteDna, timeInfo])
 
@@ -118,10 +173,13 @@ function PlaylistView({
   const handleRefreshFeed = async () => {
     setIsRefreshingFeed(true)
     try {
+      const nextCursor = advanceRotationCursor(1)
+      lastCycleTimeRef.current = Date.now()
       const fresh = await fetchListenTogetherFeed({
         userTracks: userPersonalTracks,
         tasteDna,
         forceRefresh: true,
+        rotationIndex: nextCursor,
         timeInfo
       })
       if (Array.isArray(fresh) && fresh.length > 0) {
@@ -153,14 +211,14 @@ function PlaylistView({
 
   const handleSelectBlock = (block) => {
     if (!block) return
-    // 1. Matched / curated chart playlist takes top priority (e.g. Billboard Hot 100)
-    if (block.browse_id && onSelectMatchedPlaylist) {
-      onSelectMatchedPlaylist(block)
-      return
-    }
-    // 2. Preloaded library tracks (e.g. rotated Rediscover favorites)
+    // 1. Preloaded library tracks (e.g. rotated Rediscover favorites mix) takes top priority
     if (block.preloadedTracks && block.preloadedTracks.length > 0 && onSelectDirectSongs) {
       onSelectDirectSongs(block.preloadedTracks, block.title, block.subtitle)
+      return
+    }
+    // 2. Matched / curated chart playlist takes top priority (e.g. Billboard Hot 100)
+    if (block.browse_id && onSelectMatchedPlaylist) {
+      onSelectMatchedPlaylist(block)
       return
     }
     // 3. Search query fallback with generalized playlist intent detection

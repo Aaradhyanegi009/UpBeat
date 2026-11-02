@@ -915,8 +915,7 @@ const streamUrlCache = new Map()
 const prewarmedSet = new Set()
 
 /**
- * Pre-warms the audio stream URL at the Vercel Edge worker in the background
- * before the user even finishes clicking.
+ * Pre-warms the audio stream in the background before the user even finishes clicking.
  */
 export function prewarmTrack(videoId) {
   if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) return
@@ -929,36 +928,21 @@ export function prewarmTrack(videoId) {
   }
 
   try {
-    const url = `/api/audio?id=${encodeURIComponent(videoId)}&prewarm=1`
-    fetch(url, { priority: 'low' }).catch(() => {})
+    resolveStandaloneAudio(videoId).catch(() => {})
   } catch {}
 }
 
-/** Audio source for the player: instant Edge stream on Web, Mac backend proxy when available, direct stream in APK. */
+/** Audio source for the player: Mac backend proxy when available, otherwise direct standalone stream. */
 export async function getAudioSource(videoId, track = null) {
   if (!videoId) return null
 
   // 1. Memory cache hit (< 1ms)
-  const cached = streamUrlCache.get(videoId)
-  if (cached && Date.now() - cached.ts < 45 * 60 * 1000) {
+  const cached = streamCache.get(videoId)
+  if (cached && Date.now() - cached.ts < 25 * 60 * 1000) {
     return cached
   }
 
-  // 2. Web / Vercel Edge instant single-hop audio stream:
-  // Returns Edge proxy URL immediately on millisecond 0 so <audio> starts streaming right away!
-  if (!isNativeApp() && !getStoredServerUrl()) {
-    const duration = parseDurationText(track?.duration_text) || Number(track?.duration || 0)
-    const entry = {
-      url: `/api/audio?id=${encodeURIComponent(videoId)}`,
-      duration,
-      video_id: videoId,
-      ts: Date.now(),
-    }
-    streamUrlCache.set(videoId, entry)
-    return entry
-  }
-
-  // 3. Mac backend configured:
+  // 2. Mac backend configured:
   if (hasBackend()) {
     try {
       const qParams = new URLSearchParams()
@@ -977,23 +961,21 @@ export async function getAudioSource(videoId, track = null) {
           video_id: info?.video_id || info?.resolved_video_id || videoId,
           ts: Date.now(),
         }
-        streamUrlCache.set(videoId, entry)
+        streamCache.set(videoId, entry)
         return entry
       }
     } catch {}
     // If Mac backend fails (e.g. yt-dlp bot challenge/login-required), try direct Innertube player
     const standalone = await resolveStandaloneAudio(videoId, track)
     if (standalone?.url) {
-      streamUrlCache.set(videoId, standalone)
+      streamCache.set(videoId, standalone)
       return standalone
     }
     return null
   }
-  const standalone = await resolveStandaloneAudio(videoId, track)
-  if (standalone?.url) {
-    streamUrlCache.set(videoId, standalone)
-  }
-  return standalone
+
+  // 3. Standalone direct Innertube stream resolution (APK, macOS native app, Web):
+  return resolveStandaloneAudio(videoId, track)
 }
 
 export function getTrackDownloadUrl(track) {
@@ -1708,8 +1690,32 @@ export function fisherYatesShuffle(array) {
 // ---------------------------------------------------------------------------
 // UpBeat v5.5 Dynamic "Listen Together" / Home Discovery Engine (8–9 Live Blocks)
 // ---------------------------------------------------------------------------
-const DISCOVERY_FEED_CACHE_KEY = 'upbeat_discovery_blocks_v55'
+const ROTATION_CURSOR_KEY = 'upbeat_made_for_you_rotation_idx'
+const DISCOVERY_FEED_CACHE_KEY = 'upbeat_discovery_blocks_v632'
+const DISCOVERY_FEED_CACHE_TTL = 3 * 60 * 1000 // 3-minute stale-while-revalidate TTL
 let _discoveryFeedMemoryCache = null
+
+export function getRotationCursor() {
+  try {
+    const raw = localStorage.getItem(ROTATION_CURSOR_KEY) || sessionStorage.getItem(ROTATION_CURSOR_KEY)
+    const val = parseInt(raw || '0', 10)
+    return isNaN(val) ? 0 : val
+  } catch {
+    return 0
+  }
+}
+
+export function advanceRotationCursor(delta = 1) {
+  try {
+    const cur = getRotationCursor()
+    const next = (cur + delta) % 1000000
+    localStorage.setItem(ROTATION_CURSOR_KEY, String(next))
+    sessionStorage.setItem(ROTATION_CURSOR_KEY, String(next))
+    return next
+  } catch {
+    return 0
+  }
+}
 
 const DYNAMIC_ROTATION_TAGS = [
   'latest hits',
@@ -1729,7 +1735,413 @@ export const DEFAULT_SEED_IDS = new Set([
   'CXDUXjsU5ao', 'TCd6PfxOy0Y', 'QpxFcMYRV08'
 ])
 
+// Mood/Vibe presets that cycle dynamically across rotations
+const MOOD_VIBE_PRESETS = [
+  { name: 'Eclectic Pop & Indie', desc: 'Alternative pop and melodic hooks', query: 'indie pop alternative sound vibes mix', color: 'from-cyan-600/40 to-black' },
+  { name: 'Late Night Synth & Alt', desc: 'Nocturnal synths and introspective beats', query: 'late night synthwave alternative electro chill mix', color: 'from-violet-600/40 to-black' },
+  { name: 'High-Energy Drive & Beats', desc: 'Punchy basslines and driving percussion', query: 'high energy electronic bass driving beat playlist', color: 'from-emerald-600/40 to-black' },
+  { name: 'Acoustic & Melodic Warmth', desc: 'Warm guitars and intimate acoustic melodies', query: 'acoustic guitar warm emotional melody tracks', color: 'from-amber-600/40 to-black' },
+  { name: 'Hypnotic R&B & Nu-Soul', desc: 'Lush neo-soul chords and smooth vocals', query: 'smooth modern r&b neo soul grooves playlist', color: 'from-rose-600/40 to-black' },
+  { name: 'Cinematic Soundscapes & Media', desc: 'Dramatic atmospheric arrangements', query: 'cinematic instrumental dramatic soundtrack hits', color: 'from-sky-600/40 to-black' },
+  { name: 'Sun-Drenched Summer Anthems', desc: 'Feel-good rhythms and bright chords', query: 'feel good upbeat sunny day indie dance pop', color: 'from-yellow-600/40 to-black' },
+  { name: 'Moody Lo-Fi & Downtempo', desc: 'Relaxed chillhop textures and steady groove', query: 'lofi downtempo chill atmospheric study beats', color: 'from-indigo-600/40 to-black' }
+]
+
+// Curated 4-cycle starter rotations for brand-new users
+const STARTER_ROTATION_CYCLES = [
+  [
+    {
+      id: 'block_sonic_archetype',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'The Weeknd & Chart Pop Mix',
+      subtitle: 'Starboy, Blinding Lights & Synthpop Essentials',
+      badge: 'Artist Mix',
+      query: 'The Weeknd chart pop synthwave mix',
+      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg',
+      color: 'from-rose-600/40 to-black'
+    },
+    {
+      id: 'block_deep_cut',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Maroon 5 & Pop Rock Mix',
+      subtitle: 'Sugar, Memories & Infectious Guitar Pop',
+      badge: 'Artist Mix',
+      query: 'Maroon 5 pop rock best hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg',
+      color: 'from-indigo-600/40 to-black'
+    },
+    {
+      id: 'block_recent_vibe',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Billie Eilish & Atmospheric Pop',
+      subtitle: 'Birds of a Feather & Introspective Melodies',
+      badge: 'Vibe Mix',
+      query: 'Billie Eilish pop acoustic melody hits',
+      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
+      color: 'from-cyan-600/40 to-black'
+    },
+    {
+      id: 'block_time_of_day',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Dua Lipa & Nu-Disco Flow',
+      subtitle: 'Levitating, Dance-Pop & Upbeat Energy',
+      badge: 'Time Flow',
+      query: 'Dua Lipa dance pop upbeat hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg',
+      color: 'from-amber-500/40 to-black'
+    }
+  ],
+  [
+    {
+      id: 'block_sonic_archetype',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Ariana Grande & Sweetener R&B',
+      subtitle: 'Positions, 7 rings & Smooth Pop Harmonies',
+      badge: 'Artist Mix',
+      query: 'Ariana Grande pop rnb hits mix playlist',
+      thumbnail: 'https://i.ytimg.com/vi/tcYodQoapMg/hqdefault.jpg',
+      color: 'from-pink-600/40 to-black'
+    },
+    {
+      id: 'block_deep_cut',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Coldplay & Cinematic Rock Mix',
+      subtitle: 'Yellow, Viva La Vida & Stadium Anthems',
+      badge: 'Artist Mix',
+      query: 'Coldplay greatest stadium rock hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/hqdefault.jpg',
+      color: 'from-blue-600/40 to-black'
+    },
+    {
+      id: 'block_recent_vibe',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Lana Del Rey & Dream Pop Noir',
+      subtitle: 'Summertime Sadness & Melancholic Ballads',
+      badge: 'Vibe Mix',
+      query: 'Lana Del Rey dream pop cinematic indie hits',
+      thumbnail: 'https://i.ytimg.com/vi/TdrL3QxjyVw/hqdefault.jpg',
+      color: 'from-purple-600/40 to-black'
+    },
+    {
+      id: 'block_time_of_day',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Bruno Mars & 24K Funk Flow',
+      subtitle: 'Uptown Funk, Silk Sonic & Golden Energy',
+      badge: 'Time Flow',
+      query: 'Bruno Mars Silk Sonic upbeat funk pop hits',
+      thumbnail: 'https://i.ytimg.com/vi/OPf0YbXqDm0/hqdefault.jpg',
+      color: 'from-amber-600/40 to-black'
+    }
+  ],
+  [
+    {
+      id: 'block_sonic_archetype',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Kendrick Lamar & Modern Hip-Hop',
+      subtitle: 'Not Like Us, HUMBLE. & West Coast Anthems',
+      badge: 'Artist Mix',
+      query: 'Kendrick Lamar modern west coast hip hop mix',
+      thumbnail: 'https://i.ytimg.com/vi/T6eK-2OQtew/hqdefault.jpg',
+      color: 'from-emerald-600/40 to-black'
+    },
+    {
+      id: 'block_deep_cut',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Olivia Rodrigo & Alt-Pop Anthem',
+      subtitle: 'Good 4 U, Vampire & Driving Guitars',
+      badge: 'Artist Mix',
+      query: 'Olivia Rodrigo alternative pop rock hits',
+      thumbnail: 'https://i.ytimg.com/vi/gNi_6U5Pm_o/hqdefault.jpg',
+      color: 'from-rose-600/40 to-black'
+    },
+    {
+      id: 'block_recent_vibe',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Daft Punk & French Electro Odyssey',
+      subtitle: 'Get Lucky, One More Time & Nu-Disco Waves',
+      badge: 'Vibe Mix',
+      query: 'Daft Punk french house electro nu disco hits',
+      thumbnail: 'https://i.ytimg.com/vi/5NV6Rdv1a3I/hqdefault.jpg',
+      color: 'from-cyan-600/40 to-black'
+    },
+    {
+      id: 'block_time_of_day',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Harry Styles & Sunset Indie Pop',
+      subtitle: 'As It Was, Watermelon Sugar & Summer Vibes',
+      badge: 'Time Flow',
+      query: 'Harry Styles indie pop sunny summer hits',
+      thumbnail: 'https://i.ytimg.com/vi/H5v3kku4y6Q/hqdefault.jpg',
+      color: 'from-orange-500/40 to-black'
+    }
+  ],
+  [
+    {
+      id: 'block_sonic_archetype',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Eminem & 2000s Rap Royalty',
+      subtitle: 'Without Me, Lose Yourself & Timeless Bars',
+      badge: 'Artist Mix',
+      query: 'Eminem 2000s classic hip hop rap hits',
+      thumbnail: 'https://i.ytimg.com/vi/_Yhyp-_hX2s/hqdefault.jpg',
+      color: 'from-red-600/40 to-black'
+    },
+    {
+      id: 'block_deep_cut',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Arctic Monkeys & Garage Indie',
+      subtitle: 'Do I Wanna Know, 505 & Brit-Rock Classics',
+      badge: 'Artist Mix',
+      query: 'Arctic Monkeys indie rock brit rock essential playlist',
+      thumbnail: 'https://i.ytimg.com/vi/bpOSxM0rNPM/hqdefault.jpg',
+      color: 'from-zinc-600/40 to-black'
+    },
+    {
+      id: 'block_recent_vibe',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Taylor Swift & Acoustic Pop Flow',
+      subtitle: 'Cruel Summer, Cardigan & Melodic Hooks',
+      badge: 'Vibe Mix',
+      query: 'Taylor Swift pop acoustic melodic hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/hqdefault.jpg',
+      color: 'from-teal-600/40 to-black'
+    },
+    {
+      id: 'block_time_of_day',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Post Malone & Melodic Trap Flow',
+      subtitle: 'Circles, Congratulations & Warm Acoustics',
+      badge: 'Time Flow',
+      query: 'Post Malone melodic pop trap acoustic hits',
+      thumbnail: 'https://i.ytimg.com/vi/UYwF-jdcVjY/hqdefault.jpg',
+      color: 'from-purple-600/40 to-black'
+    }
+  ]
+]
+
+/**
+ * Fetches related/radio companion tracks for anchor songs using Innertube automix (v1/next)
+ * or targeted search fallback, filtered by isValidMusicTrack.
+ */
+export async function fetchRelatedCompanionTracks(anchorTracks = [], targetCount = 10) {
+  if (!Array.isArray(anchorTracks) || anchorTracks.length === 0) return []
+
+  const companions = []
+  const seenVids = new Set(anchorTracks.map((a) => a.video_id).filter(Boolean))
+
+  for (const anchor of anchorTracks) {
+    if (companions.length >= targetCount) break
+    const vid = anchor?.video_id
+    if (!vid || vid.length !== 11) continue
+
+    // 1. Try Innertube /next automix endpoint (native YouTube Music radio companion)
+    try {
+      const resp = await callInnertube('next', {
+        context: YTM_CONTEXT,
+        videoId: vid,
+        playlistId: `RDAMVM${vid}`,
+        isAudioOnly: true
+      }, 'music')
+
+      if (resp.ok) {
+        const data = await resp.json()
+        for (const item of findNodes(data, 'playlistPanelVideoRenderer')) {
+          if (companions.length >= targetCount) break
+          const candVid = item.videoId
+          if (!candVid || candVid.length !== 11 || seenVids.has(candVid)) continue
+
+          const title = item.title?.runs?.[0]?.text || ''
+          const artist = item.shortBylineText?.runs?.[0]?.text || item.longBylineText?.runs?.[0]?.text || ''
+          const duration_text = item.lengthText?.runs?.[0]?.text || ''
+          const thumb = item.thumbnail?.thumbnails?.[item.thumbnail.thumbnails.length - 1]?.url ||
+            `https://i.ytimg.com/vi/${candVid}/hqdefault.jpg`
+
+          const candTrack = {
+            video_id: candVid,
+            title,
+            artist,
+            duration_text,
+            thumbnail: thumb,
+            source: 'radio_companion'
+          }
+
+          if (isValidMusicTrack(candTrack)) {
+            seenVids.add(candVid)
+            companions.push(candTrack)
+          }
+        }
+      }
+    } catch {}
+
+    // 2. Fallback to targeted search if next returned fewer than 3 companions for this anchor
+    if (companions.length < targetCount) {
+      try {
+        const searchQ = anchor.artist && anchor.title
+          ? `${anchor.artist} ${anchor.title} similar songs`
+          : `${anchor.artist || anchor.title} radio mix songs`
+        const searchRes = await directSearchStandalone(searchQ, 'songs')
+        for (const cand of (searchRes?.tracks || [])) {
+          if (companions.length >= targetCount) break
+          if (!cand?.video_id || seenVids.has(cand.video_id)) continue
+          if (isValidMusicTrack(cand)) {
+            seenVids.add(cand.video_id)
+            companions.push({ ...cand, source: 'radio_companion' })
+          }
+        }
+      } catch {}
+    }
+  }
+
+  return companions
+}
+
+/**
+ * Builds the hybrid "Rediscover Favorites Mix" card:
+ * Unbiased Fisher-Yates shuffle of user Liked Songs / Favourites (~50%)
+ * interleaved with dynamically fetched related companion tracks (~50%).
+ */
+export async function buildHybridRediscoverBlock({
+  userTracks = [],
+  usedCoverUrls = new Set(),
+  rotationIndex = 0,
+  forceShuffle = false
+} = {}) {
+  // Aggregate user tracks: passed userTracks + localStorage favorites and seeds
+  const pool = []
+  const seen = new Set()
+
+  const addTracks = (list) => {
+    if (!Array.isArray(list)) return
+    for (const t of list) {
+      if (!t?.video_id || seen.has(t.video_id) || DEFAULT_SEED_IDS.has(t.video_id)) continue
+      if (isValidMusicTrack(t)) {
+        seen.add(t.video_id)
+        pool.push(t)
+      }
+    }
+  }
+
+  addTracks(userTracks)
+  try {
+    const rawFavs = localStorage.getItem('upbeat_favorites_v1')
+    if (rawFavs) addTracks(JSON.parse(rawFavs))
+  } catch {}
+  try {
+    const rawSeeds = localStorage.getItem('upbeat_extracted_tracks_v1')
+    if (rawSeeds) addTracks(JSON.parse(rawSeeds))
+  } catch {}
+
+  const hasUserLibrary = pool.length >= 3
+
+  let coreAnchors = []
+  let companionTracks = []
+
+  if (hasUserLibrary) {
+    // True Fisher-Yates Shuffle on entire user favorites pool
+    const shuffledPool = fisherYatesShuffle([...pool])
+    // Select 6 to 8 Core Anchor Tracks
+    const anchorCount = Math.min(8, Math.max(6, Math.floor(shuffledPool.length / 2)))
+    coreAnchors = shuffledPool.slice(0, anchorCount)
+
+    // Pick 2 to 3 anchors to fetch related radio companions
+    const queryAnchors = fisherYatesShuffle([...coreAnchors]).slice(0, Math.min(3, coreAnchors.length))
+    try {
+      companionTracks = await fetchRelatedCompanionTracks(queryAnchors, 10)
+    } catch {}
+  } else {
+    // Brand new user fallback: curated starter anchors
+    const starterSeeds = [
+      { video_id: 'ApXoWvfEYVU', title: 'Sunflower', artist: 'Post Malone, Swae Lee', duration_text: '2:38', thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg' },
+      { video_id: '34Na4j8AVgA', title: 'Starboy', artist: 'The Weeknd, Daft Punk', duration_text: '3:50', thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg' },
+      { video_id: '09R8_2nJtjg', title: 'Sugar', artist: 'Maroon 5', duration_text: '3:55', thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg' },
+      { video_id: 'V1Pl8CzNzCw', title: 'Birds of a Feather', artist: 'Billie Eilish', duration_text: '3:18', thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg' },
+      { video_id: 'TUVcZfQe-Kw', title: 'Levitating', artist: 'Dua Lipa', duration_text: '3:23', thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg' },
+      { video_id: 'dvgZkm1xWPE', title: 'Viva La Vida', artist: 'Coldplay', duration_text: '4:02', thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/hqdefault.jpg' }
+    ]
+    coreAnchors = fisherYatesShuffle(starterSeeds).slice(0, 4)
+    try {
+      companionTracks = await fetchRelatedCompanionTracks(coreAnchors.slice(0, 2), 8)
+    } catch {}
+  }
+
+  // Interleave Shuffled Liked Songs (~50%) and Related Companions (~50%)
+  const interleaved = []
+  const maxLen = Math.max(coreAnchors.length, companionTracks.length)
+  const finalSeen = new Set()
+
+  for (let i = 0; i < maxLen; i++) {
+    if (i < coreAnchors.length && !finalSeen.has(coreAnchors[i].video_id)) {
+      interleaved.push({ ...coreAnchors[i], isAnchorFavorite: true })
+      finalSeen.add(coreAnchors[i].video_id)
+    }
+    if (i < companionTracks.length && !finalSeen.has(companionTracks[i].video_id)) {
+      interleaved.push({ ...companionTracks[i], isCompanionTrack: true })
+      finalSeen.add(companionTracks[i].video_id)
+    }
+  }
+
+  // If we still have remaining liked tracks from the pool, append up to 24 tracks total
+  if (interleaved.length < 16 && pool.length > coreAnchors.length) {
+    for (const t of pool) {
+      if (interleaved.length >= 24) break
+      if (!finalSeen.has(t.video_id)) {
+        interleaved.push({ ...t, isAnchorFavorite: true })
+        finalSeen.add(t.video_id)
+      }
+    }
+  }
+
+  // Determine dynamic cover thumbnail based on lead track (avoiding collision with adjacent cards)
+  let chosenThumb = ''
+  for (const t of interleaved) {
+    const candidateThumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+    if (candidateThumb && !usedCoverUrls.has(candidateThumb)) {
+      chosenThumb = candidateThumb
+      break
+    }
+  }
+  if (!chosenThumb) {
+    chosenThumb = interleaved[0]?.thumbnail || 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg'
+  }
+  usedCoverUrls.add(chosenThumb)
+
+  const leadSongTitle = interleaved[0]?.title || 'Favorites'
+  const anchorArtist = coreAnchors[0]?.artist || 'Curated'
+
+  return {
+    id: 'block_rediscover',
+    tier: 2,
+    title: 'Rediscover Favorites Mix',
+    subtitle: hasUserLibrary ? 'Shuffled favorites & related radio' : 'Essential favorites & related radio',
+    badge: 'Rediscover',
+    query: `${anchorArtist} ${leadSongTitle} favorites radio mix`,
+    preloadedTracks: interleaved,
+    thumbnail: chosenThumb,
+    color: 'from-purple-600/40 to-black',
+    isHybridRediscover: true
+  }
+}
+
 export function getInitialDiscoveryBlocks() {
+  const cursor = getRotationCursor()
+  const starterCycle = STARTER_ROTATION_CYCLES[cursor % STARTER_ROTATION_CYCLES.length]
+
   return [
     {
       id: 'block_us_top_daily',
@@ -1775,66 +2187,31 @@ export function getInitialDiscoveryBlocks() {
       thumbnail: 'https://i.ytimg.com/vi/LK7-_dgAVQE/hqdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     },
-    {
-      id: 'block_sonic_archetype',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'The Weeknd & Chart Pop Mix',
-      subtitle: 'Starboy, Blinding Lights & Synthpop Essentials',
-      badge: 'Artist Mix',
-      query: 'The Weeknd chart pop synthwave mix',
-      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg',
-      color: 'from-rose-600/40 to-black'
-    },
-    {
-      id: 'block_deep_cut',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Maroon 5 & Pop Rock Mix',
-      subtitle: 'Sugar, Memories & Infectious Guitar Pop',
-      badge: 'Artist Mix',
-      query: 'Maroon 5 pop rock best hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg',
-      color: 'from-indigo-600/40 to-black'
-    },
-    {
-      id: 'block_recent_vibe',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Billie Eilish & Atmospheric Pop',
-      subtitle: 'Birds of a Feather & Introspective Melodies',
-      badge: 'Vibe Mix',
-      query: 'Billie Eilish pop acoustic melody hits',
-      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
-      color: 'from-cyan-600/40 to-black'
-    },
-    {
-      id: 'block_time_of_day',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Dua Lipa & Nu-Disco Anthem Flow',
-      subtitle: 'Levitating, Dance-Pop & Upbeat Energy',
-      badge: 'Time Flow',
-      query: 'Dua Lipa dance pop upbeat hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg',
-      color: 'from-amber-500/40 to-black'
-    },
+    ...starterCycle,
     {
       id: 'block_rediscover',
       tier: 2,
       isNewUserSeed: true,
       title: 'Rediscover Favorites Mix',
-      subtitle: 'Sunflower, 7 Years & Essential Timeless Anthems',
+      subtitle: 'Shuffled favorites & related radio',
       badge: 'Rediscover',
       query: 'Post Malone Sunflower Lukas Graham 7 Years radio playlist',
       thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
-      color: 'from-purple-600/40 to-black'
+      color: 'from-purple-600/40 to-black',
+      isHybridRediscover: true
     }
   ]
 }
 
-export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null, forceRefresh = false, timeInfo = null } = {}) {
-  if (!forceRefresh && _discoveryFeedMemoryCache && Date.now() - _discoveryFeedMemoryCache.ts < 30 * 60 * 1000) {
+export async function fetchListenTogetherFeed({
+  userTracks = [],
+  tasteDna = null,
+  forceRefresh = false,
+  timeInfo = null,
+  rotationIndex = undefined
+} = {}) {
+  // Stale-While-Revalidate memory cache check (< 3 mins)
+  if (!forceRefresh && _discoveryFeedMemoryCache && Date.now() - _discoveryFeedMemoryCache.ts < DISCOVERY_FEED_CACHE_TTL) {
     return _discoveryFeedMemoryCache.blocks
   }
 
@@ -1843,13 +2220,15 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       const raw = sessionStorage.getItem(DISCOVERY_FEED_CACHE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (parsed?.blocks?.length >= 8 && Date.now() - (parsed.ts || 0) < 45 * 60 * 1000) {
+        if (parsed?.blocks?.length >= 8 && Date.now() - (parsed.ts || 0) < DISCOVERY_FEED_CACHE_TTL) {
           _discoveryFeedMemoryCache = parsed
           return parsed.blocks
         }
       }
     } catch {}
   }
+
+  const cursor = typeof rotationIndex === 'number' ? rotationIndex : getRotationCursor()
 
   // 1. Determine User Profile Readiness
   const validUserTracks = (userTracks || []).filter(
@@ -1876,11 +2255,9 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
   const artists = Array.from(artistMap.values())
   const isNewUser = artists.length < 2
 
-  const userGenres = Array.isArray(tasteDna?.primary_genres) ? tasteDna.primary_genres : []
   const archetype = tasteDna?.archetype || 'Sonic Explorer'
-  const bpmText = tasteDna?.sonic_attributes?.tempo || (tasteDna?.bpm_range ? `${tasteDna.bpm_range} BPM` : '120-135 BPM')
 
-  // Calculate current time slot for Block 8
+  // Calculate current time slot for Time Flow Block
   const currentHour = new Date().getHours()
   let timeSlotTitle = 'Late Night Downtempo'
   let timeSlotSubtitle = 'Nocturnal Lo-Fi & Deep Ambient Beats'
@@ -1898,7 +2275,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
     timeSlotColor = 'from-slate-700/40 to-black'
   }
 
-  // Tier 1 — 4 Mandatory Regional & Viral Chart Blocks (100% Real Song Art)
+  // Tier 1 — 4 Mandatory Regional & Viral Chart Blocks
   const tier1Blocks = [
     {
       id: 'block_us_top_daily',
@@ -1946,75 +2323,31 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
     }
   ]
 
-  // Tier 2 — 4 to 5 Personalized Mixes (Seeded with User Artists & Song Thumbnails)
+  const usedCoverUrls = new Set(tier1Blocks.map((b) => b.thumbnail))
+
+  // Build the hybrid Rediscover Favorites Mix block
+  const rediscoverBlock = await buildHybridRediscoverBlock({
+    userTracks: validUserTracks,
+    usedCoverUrls,
+    rotationIndex: cursor,
+    forceShuffle: forceRefresh
+  })
+
+  // Tier 2 — 5 Personalized Blocks (Cyclic Rotation Engine)
   let tier2Blocks = []
   if (isNewUser) {
-    tier2Blocks = [
-      {
-        id: 'block_sonic_archetype',
-        tier: 2,
-        isNewUserSeed: true,
-        title: 'The Weeknd & Chart Pop Mix',
-        subtitle: 'Starboy, Blinding Lights & Synthpop Essentials',
-        badge: 'Artist Mix',
-        query: 'The Weeknd chart pop synthwave mix',
-        thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg',
-        color: 'from-rose-600/40 to-black'
-      },
-      {
-        id: 'block_deep_cut',
-        tier: 2,
-        isNewUserSeed: true,
-        title: 'Maroon 5 & Pop Rock Mix',
-        subtitle: 'Sugar, Memories & Infectious Guitar Pop',
-        badge: 'Artist Mix',
-        query: 'Maroon 5 pop rock best hits playlist',
-        thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg',
-        color: 'from-indigo-600/40 to-black'
-      },
-      {
-        id: 'block_recent_vibe',
-        tier: 2,
-        isNewUserSeed: true,
-        title: 'Billie Eilish & Atmospheric Pop',
-        subtitle: 'Birds of a Feather & Introspective Melodies',
-        badge: 'Vibe Mix',
-        query: 'Billie Eilish pop acoustic melody hits',
-        thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
-        color: 'from-cyan-600/40 to-black'
-      },
-      {
-        id: 'block_time_of_day',
-        tier: 2,
-        isNewUserSeed: true,
-        title: 'Dua Lipa & Nu-Disco Anthem Flow',
-        subtitle: 'Levitating, Dance-Pop & Upbeat Energy',
-        badge: 'Time Flow',
-        query: 'Dua Lipa dance pop upbeat hits playlist',
-        thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg',
-        color: 'from-amber-500/40 to-black'
-      },
-      {
-        id: 'block_rediscover',
-        tier: 2,
-        isNewUserSeed: true,
-        title: 'Rediscover Favorites Mix',
-        subtitle: 'Sunflower, 7 Years & Essential Timeless Anthems',
-        badge: 'Rediscover',
-        query: 'Post Malone Sunflower Lukas Graham 7 Years radio playlist',
-        thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
-        color: 'from-purple-600/40 to-black'
-      }
-    ]
+    const starterCycle = STARTER_ROTATION_CYCLES[cursor % STARTER_ROTATION_CYCLES.length]
+    tier2Blocks = [...starterCycle, rediscoverBlock]
   } else {
-    // 100% User Profile Driven Blocks with Mixed Artists and Real Artwork
-    const a0 = artists[0]
-    const a1 = artists[1] || a0
-    const a2 = artists[2] || a0
-    const a3 = artists[3] || a1
-    const a4 = artists[4] || a2
+    // Modular cyclic windowing: (baseIndex + cursor) % artists.length
+    const n = artists.length
+    const a0 = artists[cursor % n]
+    const a1 = artists[(cursor + 1) % n] || a0
+    const a2 = artists[(cursor + 2) % n] || a0
+    const a3 = artists[(cursor + 3) % n] || a1
+    const a4 = artists[(cursor + 4) % n] || a2
 
-    const usedCoverUrls = new Set(tier1Blocks.map((b) => b.thumbnail))
+    const currentMood = MOOD_VIBE_PRESETS[cursor % MOOD_VIBE_PRESETS.length]
 
     const pickUniqueCover = (preferredThumb, fallbackArtist) => {
       if (preferredThumb && !usedCoverUrls.has(preferredThumb)) {
@@ -2035,8 +2368,10 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       return 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg'
     }
 
-    const topUserTrackThumb = validUserTracks[0]?.thumbnail ||
-      (validUserTracks[0]?.video_id ? `https://i.ytimg.com/vi/${validUserTracks[0].video_id}/hqdefault.jpg` : a0.thumb)
+    const topUserTrackThumb = validUserTracks[cursor % validUserTracks.length]?.thumbnail ||
+      (validUserTracks[cursor % validUserTracks.length]?.video_id
+        ? `https://i.ytimg.com/vi/${validUserTracks[cursor % validUserTracks.length].video_id}/hqdefault.jpg`
+        : a0.thumb)
 
     tier2Blocks = [
       {
@@ -2062,12 +2397,12 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
       {
         id: 'block_recent_vibe',
         tier: 2,
-        title: `${a4.name} & Friends Mix`,
-        subtitle: `${archetype} • Matched with your sound taste`,
+        title: `${a4.name} & ${currentMood.name}`,
+        subtitle: `${archetype} • ${currentMood.desc}`,
         badge: 'Vibe Mix',
-        query: `${a4.name} radio playlist`,
+        query: `${a4.name} ${currentMood.query}`,
         thumbnail: pickUniqueCover(a4.thumb, a4),
-        color: 'from-cyan-600/40 to-black'
+        color: currentMood.color
       },
       {
         id: 'block_time_of_day',
@@ -2079,17 +2414,7 @@ export async function fetchListenTogetherFeed({ userTracks = [], tasteDna = null
         thumbnail: pickUniqueCover(topUserTrackThumb, a0),
         color: timeSlotColor
       },
-      {
-        id: 'block_rediscover',
-        tier: 2,
-        title: 'Rediscover Favorites Mix',
-        subtitle: `Rotated favorites from your library & harmonic matches`,
-        badge: 'Rediscover',
-        query: `${a0.name} ${a1.name} hits radio playlist`,
-        preloadedTracks: [...validUserTracks].sort(() => 0.5 - Math.random()).slice(0, 30),
-        thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
-        color: 'from-purple-600/40 to-black'
-      }
+      rediscoverBlock
     ]
   }
 
@@ -2107,10 +2432,29 @@ export async function rerollDiscoveryBlock(blockId, { userTracks = [], tasteDna 
   const existingIdx = currentFeed.findIndex((b) => b.id === blockId)
   if (existingIdx === -1) return null
 
+  // 1. Rediscover Mix: Trigger freshly shuffled favorites + newly fetched companion radio tracks (< 1s)
+  if (blockId === 'block_rediscover') {
+    const usedCovers = new Set(currentFeed.filter((b) => b.id !== blockId).map((b) => b.thumbnail))
+    const nextCursor = advanceRotationCursor(1)
+    const freshRediscover = await buildHybridRediscoverBlock({
+      userTracks,
+      usedCoverUrls: usedCovers,
+      forceShuffle: true,
+      rotationIndex: nextCursor
+    })
+    currentFeed[existingIdx] = freshRediscover
+    _discoveryFeedMemoryCache = { blocks: currentFeed, ts: Date.now() }
+    try {
+      sessionStorage.setItem(DISCOVERY_FEED_CACHE_KEY, JSON.stringify(_discoveryFeedMemoryCache))
+    } catch {}
+    return freshRediscover
+  }
+
+  // 2. Other Tier 2 & Tier 1 blocks: Advance cursor and query fresh candidate tracks/artwork
   const block = { ...currentFeed[existingIdx] }
+  advanceRotationCursor(1)
   block.query = `${block.query.replace(/\s+(latest hits|trending viral|top charting rotation|essential mix|heavy rotation radio|fresh picks 2026)/g, '')} ${getRandomRotationTag()}`
 
-  // Pull fresh candidate preview
   try {
     const freshRes = await directSearchStandalone(block.query, 'songs')
     const candidateTracks = freshRes?.tracks || []
@@ -2134,6 +2478,14 @@ export async function loadBlockTracks(block) {
   if (!block) return []
   if (block.preloadedTracks && block.preloadedTracks.length > 0) {
     return block.preloadedTracks
+  }
+
+  // Hybrid rediscover mix on-demand generation
+  if (block.id === 'block_rediscover') {
+    const hybrid = await buildHybridRediscoverBlock()
+    if (hybrid?.preloadedTracks?.length > 0) {
+      return hybrid.preloadedTracks
+    }
   }
 
   // 1. Direct search (fastest, most reliable across all environments)

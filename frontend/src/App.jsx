@@ -1184,7 +1184,21 @@ export default function App() {
     })
   }
 
-  const handleSelectDirectSongs = () => {
+  const handleSelectDirectSongs = (directTracks, title, subtitle) => {
+    if (Array.isArray(directTracks) && directTracks.length > 0) {
+      const plTitle = title || 'Rediscover Favorites Mix'
+      const plSubtitle = subtitle || `${directTracks.length} tracks`
+      setPlaylist({
+        playlist_title: plTitle,
+        subtitle: plSubtitle,
+        vibe_description: plSubtitle,
+        active_source: 'songs',
+        active_browse_id: '',
+        tracks: directTracks
+      })
+      handlePlayTrack(directTracks[0], 0, directTracks)
+      return
+    }
     setPlaylist((prev) => {
       if (!prev || !prev.song_results?.length) return prev
       const q = prev.search_query || prompt

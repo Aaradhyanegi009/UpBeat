@@ -1439,7 +1439,6 @@ export default function PlayerBar({
           key={deck}
           ref={deck === 'A' ? audioRefA : audioRefB}
           preload="auto"
-          crossOrigin="anonymous"
           onTimeUpdate={(e) => {
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid && !useIframeFallback && !isScrubbingRef.current) {
               const cur = e.currentTarget.currentTime || 0
@@ -1581,17 +1580,15 @@ export default function PlayerBar({
             clearLoadWatchdog()
             const failedSrc = e.currentTarget.src || ''
 
-            // If backend proxy failed, try direct Innertube standalone stream for the same song first
-            if (failedSrc.includes('/api/audio/')) {
-              try {
-                const direct = await resolveStandaloneAudio(resolvedVid, track)
-                if (direct?.url && e.currentTarget.dataset.vid === resolvedVid) {
-                  e.currentTarget.src = direct.url
-                  e.currentTarget.play().catch(() => {})
-                  return
-                }
-              } catch {}
-            }
+            // Immediate recovery: try direct Innertube standalone stream for this song
+            try {
+              const direct = await resolveStandaloneAudio(resolvedVid, track)
+              if (direct?.url && direct.url !== failedSrc && e.currentTarget.dataset.vid === resolvedVid) {
+                e.currentTarget.src = direct.url
+                e.currentTarget.play().catch(() => {})
+                return
+              }
+            } catch {}
 
             if (fallbackQueueRef.current.length > 0) {
               const nextAlt = fallbackQueueRef.current.shift()

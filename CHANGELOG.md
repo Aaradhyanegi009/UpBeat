@@ -4,7 +4,25 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
-## [v6.3.1] - 2026-11-02
+## [v6.3.2] - 2026-11-02
+
+### 🎵 Hybrid "Rediscover Favorites Mix" & Cyclic "Made For You" Rotation Engine + Playback Hotfix
+- **Critical Audio Playback Hotfix (`PlayerBar.jsx` & `standaloneApi.js`)**:
+  - Restored rock-solid direct Innertube player audio streaming (`resolveStandaloneAudio`) with client-side caching across Android, macOS, and Web.
+  - Removed restrictive `crossOrigin="anonymous"` from `<audio>` decks, eliminating media playback CORS errors.
+  - Enhanced `onError` handler in `PlayerBar.jsx` to immediately fall back to `resolveStandaloneAudio(resolvedVid, track)` on any stream error for zero-interruption recovery.
+- **Hybrid "Rediscover Favorites Mix" Card (`REDISCOVER` Card)**:
+  - Unbiased Fisher-Yates shuffle across the user's full pool of Liked Songs / Favourites (`upbeat_favorites_v1` & taste seeds) selecting 6 to 8 Core Anchor Tracks.
+  - Querying YouTube Music Innertube Automix (`v1/next` with `RDAMVM` automix queue) to pull closely matching radio companion tracks matching the acoustic vibe of the anchor songs.
+  - Interleaving Liked Songs (~50%) and Related Companions (~50%), filtered through strict `isValidMusicTrack` rules.
+  - Dynamically updating cover artwork to match the new lead track on every rotation or refresh.
+- **Cyclic "Made For You" Rotation Engine**:
+  - Implemented modular cyclic windowing (`(baseIndex + rotationCursor) % totalSeeds`) over user artists and taste seeds, rotating artist mixes, mood/vibe presets, and search queries across cycles.
+  - Added background auto-cycle timer in `PlaylistView.jsx` rotating every 4 minutes (240,000ms) and on returning to the window/tab after > 2 minutes of absence.
+  - Added per-card manual reroll (`↻` button) immediately regenerating freshly shuffled tracks and new artwork in < 1s.
+  - Upgraded discovery cache to a 3-minute stale-while-revalidate TTL, ensuring instantaneous initial load with zero static lock.
+
+---
 
 ### ⚡ Sub-1-Second Instant Audio Playback on Vercel Edge & Zero-Latency Pre-Warming
 - **Vercel Edge Streaming Audio Function (`api/audio.js`)**:
