@@ -1024,57 +1024,42 @@ function SonicDnaView({
 
   // 3. MODERN INTERACTIVE SONIC TASTE STUDIO
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden bg-transparent select-none gpu-scroll" onClick={() => setQueueMenuIdx(null)}>
-      {/* Sticky Translucent Top Header (Matches Downloads Section) */}
-      <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20 flex items-center justify-between gap-3 text-[var(--text-primary)]">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
-            <Activity className="w-4 h-4" />
-          </div>
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden bg-transparent select-none gpu-scroll content-scroll-container" onClick={() => setQueueMenuIdx(null)}>
+      {/* Sticky Translucent Top Header (Clean Dual Controls: Analyze & Refresh) */}
+      <div className="px-5 py-3 sm:px-6 sm:py-3.5 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20 flex items-center justify-between gap-3 text-[var(--text-primary)]">
+        <div className="flex items-center min-w-0">
           <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
             Taste Profile
           </h1>
-          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0">
-            {allTracks.length} Signals
-          </span>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {onSyncFavorites && (
-            <button
-              onClick={onSyncFavorites}
-              disabled={isSyncing}
-              title="Sync Liked Songs"
-              className="px-3 py-1.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs text-rose-600 dark:text-rose-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0 btn-sync-liked"
-            >
-              <Heart className={`w-3.5 h-3.5 fill-rose-500 text-rose-500 stroke-none shrink-0 ${isSyncing ? 'animate-pulse' : ''}`} />
-              <span className="hidden xs:inline">{isSyncing ? 'Syncing...' : 'Sync Liked'}</span>
-            </button>
-          )}
-
+        <div className="flex items-center gap-[10px] shrink-0">
           <button
             onClick={() => onAnalyzeTaste && onAnalyzeTaste()}
             disabled={isSyncing}
-            title="Re-run deep musical taste analysis with Gemini"
-            className="px-3 py-1.5 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs text-slate-900 dark:text-emerald-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0 btn-analyze-taste"
+            title="Run deep musical taste analysis with Gemini"
+            className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs sm:text-sm text-slate-900 dark:text-emerald-200 font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0 btn-analyze-taste"
           >
-            <Sparkles className={`w-3.5 h-3.5 text-emerald-500 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-4 h-4 text-emerald-500 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>Analyze</span>
           </button>
 
-          {onResetTasteDna && (tasteDna || allTracks.length > 0) && (
-            <button
-              onClick={onResetTasteDna}
-              title="Reset Taste DNA profile"
-              className="w-8 h-8 rounded-full bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer active:scale-95 shrink-0"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (onSyncFavorites) onSyncFavorites()
+              else if (onAnalyzeTaste) onAnalyzeTaste()
+            }}
+            disabled={isSyncing}
+            title="Refresh and re-sync taste profile & seeds"
+            className="h-9 sm:h-10 w-9 sm:w-10 rounded-full bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+            aria-label="Refresh Profile & Seeds"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-emerald-500' : ''}`} />
+          </button>
         </div>
       </div>
 
-      <div className="px-5 py-4 sm:px-8 sm:py-6 pb-[130px] max-w-4xl w-full mx-auto flex flex-col gap-6 sm:gap-8">
+      <div className="px-5 py-4 sm:px-8 sm:py-6 pb-[140px] max-w-4xl w-full mx-auto flex flex-col gap-6 sm:gap-8">
         {/* Main Archetype Hero Card */}
         <div className="relative overflow-hidden rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-xl p-5 sm:p-7 shadow-xl">
           {/* Archetype Title & Summary */}

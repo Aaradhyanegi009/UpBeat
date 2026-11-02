@@ -122,7 +122,7 @@ function OfflineView({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto overflow-x-hidden select-none gpu-scroll">
+    <div className="flex-1 flex flex-col min-h-0 bg-transparent overflow-y-auto overflow-x-hidden select-none gpu-scroll content-scroll-container">
       {/* Sticky Header */}
       <div className="px-5 py-3 sm:px-6 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20 text-[var(--text-primary)]">
         <div className="flex items-center justify-between gap-3">
@@ -223,7 +223,7 @@ function OfflineView({
       </div>
 
       {/* Main Track List Content */}
-      <div className="px-5 py-4 sm:px-6 sm:py-6 pb-[130px] flex-1 min-h-0">
+      <div className="px-5 py-4 sm:px-6 sm:py-6 pb-[140px] flex-1 min-h-0">
         {tracks.length === 0 ? (
           /* Empty State */
           <div className="h-full min-h-[380px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-white/10 rounded-3xl bg-[#0c0c12]/40 backdrop-blur-md">

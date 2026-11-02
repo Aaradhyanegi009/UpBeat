@@ -620,7 +620,7 @@ export default function PlayerBar({
 
   useEffect(() => {
     const handleGesture = () => primeAudioEngines()
-    window.addEventListener('pointerdown', handleGesture, { once: true })
+    window.addEventListener('pointerdown', handleGesture, { once: true, passive: true })
     window.addEventListener('keydown', handleGesture, { once: true })
     return () => {
       window.removeEventListener('pointerdown', handleGesture)
@@ -1660,7 +1660,7 @@ export default function PlayerBar({
                     title={isFav ? 'Remove from Favorites' : 'Save to Favorites'}
                     aria-label="Toggle Favorite"
                     className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer shrink-0 ${
-                      isFav ? 'text-rose-400' : 'text-[#71717a] hover:text-rose-300'
+                      isFav ? 'text-rose-400' : 'text-[var(--text-secondary)] hover:text-rose-400'
                     }`}
                   >
                     <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
@@ -1687,7 +1687,7 @@ export default function PlayerBar({
                 )}
               </>
             ) : (
-              <div className="text-xs text-[#71717a] font-mono py-2">
+              <div className="text-xs text-[var(--text-muted)] font-mono py-2">
                 Tap any track to play
               </div>
             )}
@@ -1764,7 +1764,7 @@ export default function PlayerBar({
                 title="Playback Queue"
                 aria-label="Open Queue"
                 className={`p-1.5 relative rounded-md transition-colors cursor-pointer ${
-                  isQueueOpen ? 'text-sky-300 bg-sky-500/20' : 'text-[#8e8e96] active:text-white'
+                  isQueueOpen ? 'text-sky-300 bg-sky-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:text-white'
                 }`}
               >
                 <ListMusic className="w-4 h-4" />
@@ -1822,7 +1822,7 @@ export default function PlayerBar({
             </div>
 
             <div className="w-full flex items-center gap-3">
-              <span className="text-[11px] font-mono text-[#8e8e96] w-9 text-right">
+              <span className="text-[11px] font-mono text-[var(--text-muted)] w-9 text-right">
                 {formatTime(displayTime)}
               </span>
               <input
@@ -1843,7 +1843,7 @@ export default function PlayerBar({
                 }}
                 className="flex-1 argon-slider cursor-pointer disabled:opacity-40"
               />
-              <span className="text-[11px] font-mono text-[#8e8e96] w-9">
+              <span className="text-[11px] font-mono text-[var(--text-muted)] w-9">
                 {effectiveDuration > 0 ? formatTime(effectiveDuration) : (track?.duration_text && track.duration_text !== '--:--' ? track.duration_text : '0:00')}
               </span>
             </div>
@@ -2018,7 +2018,7 @@ export default function PlayerBar({
         {/* Mobile Scrubber Row */}
         {track && (
           <div className="flex sm:hidden items-center gap-2 w-full px-0.5">
-            <span className="text-[10px] font-mono text-[#71717a] w-7">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] w-7">
               {formatTime(displayTime)}
             </span>
             <input
@@ -2039,7 +2039,7 @@ export default function PlayerBar({
               }}
               className="flex-1 argon-slider"
             />
-            <span className="text-[10px] font-mono text-[#71717a] w-7 text-right">
+            <span className="text-[10px] font-mono text-[var(--text-muted)] w-7 text-right">
               {effectiveDuration > 0 ? formatTime(effectiveDuration) : (track?.duration_text && track.duration_text !== '--:--' ? track.duration_text : '0:00')}
             </span>
           </div>

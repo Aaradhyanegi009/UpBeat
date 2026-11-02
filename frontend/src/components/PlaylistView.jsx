@@ -264,7 +264,7 @@ function PlaylistView({
 
   return (
     <div
-      className="w-full flex flex-col bg-transparent pb-[130px] select-none transition-colors"
+      className="w-full flex flex-col bg-transparent pb-[140px] select-none transition-colors"
       onClick={() => setActiveMenuIdx(null)}
     >
       {/* 1. TOP SECTION: Quick picks Header, Direct Search Subtabs, and Tracks (4-Row Grid / Table) */}
@@ -428,7 +428,8 @@ function PlaylistView({
         viewMode === 'grid' ? (
           <div
             ref={gridScrollRef}
-            className="px-5 sm:px-8 lg:px-10 py-3 overflow-x-auto no-scrollbar scroll-smooth gpu-scroll"
+            style={{ touchAction: 'pan-x pan-y' }}
+            className="px-5 sm:px-8 lg:px-10 py-3 overflow-x-auto no-scrollbar scroll-smooth gpu-scroll carousel-scroll"
           >
             <div className="grid grid-rows-4 grid-flow-col gap-x-5 sm:gap-x-7 gap-y-3 w-max">
               {tracks.map((track, idx) => {
@@ -668,7 +669,8 @@ function PlaylistView({
 
           <div
             ref={tier1ScrollRef}
-            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory gpu-scroll"
+            style={{ touchAction: 'pan-x pan-y' }}
+            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory gpu-scroll carousel-scroll"
           >
             {tier1Blocks.map((block) => {
               const isRerolling = rerollingBlockId === block.id
@@ -778,7 +780,8 @@ function PlaylistView({
 
           <div
             ref={tier2ScrollRef}
-            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory gpu-scroll"
+            style={{ touchAction: 'pan-x pan-y' }}
+            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory gpu-scroll carousel-scroll"
           >
             {tier2Blocks.map((block) => {
               const isRerolling = rerollingBlockId === block.id

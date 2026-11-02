@@ -4,6 +4,28 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v6.3.0] - 2026-11-02
+
+### ✨ Taste Profile Action Cleanup, Free Vertical Scrolling, Translucent Glass UI & Light Mode Contrast
+- **Decluttered Taste Profile Top Controls (`SonicDnaView.jsx`)**:
+  - Stripped out extra redundant symbols, ECG icons, signal pills, and secondary buttons from the Taste Profile header across Mobile and Desktop.
+  - Kept strictly two focused controls: `✨ Analyze` (Gemini Sonic DNA analysis) and `↻ Refresh` (re-sync profile & seeds) aligned cleanly with `gap: 10px` and uniform `36px–40px` touch targets.
+- **Effortless Vertical Scrolling & Non-Trapping Carousel Touch Gestures (`App.jsx`, `PlaylistView.jsx` & `index.css`)**:
+  - Configured `.content-scroll-container` with `touch-action: pan-y`, `overscroll-behavior-y: auto`, and `-webkit-overflow-scrolling: touch` to ensure completely natural and unrestricted page scrolling.
+  - Resolved horizontal card and song list gesture traps by enforcing `touch-action: pan-x pan-y` on carousels (`.carousel-scroll`) and song rows (`.fast-row`), allowing vertical dragging across tracks to scroll smoothly without friction.
+  - Enforced `padding-bottom: 140px` across all main scroll views to prevent floating PlayerBar overlap.
+- **Translucent Studio Glass UI (`index.css`)**:
+  - Implemented rich frosted-glass surfaces (`--surface-glass: rgba(18, 18, 26, 0.58)`, `--card-glass: rgba(255, 255, 255, 0.045)`, specular highlights) across major structural shells so song-reactive ambient aura bleeds through subtly.
+  - Light mode equipped with frosted daylight glass (`rgba(255, 255, 255, 0.68)`) with `backdrop-filter: blur(22px) saturate(180%)`.
+- **Light Mode Font Color Contrast Audit (`PlayerBar.jsx` & `index.css`)**:
+  - Darkened Light Mode typography scale: `--text-primary: #0F172A`, `--text-secondary: #334155`, `--text-muted: #475569`.
+  - Replaced hardcoded washed-out `#8e8e96` and `#71717a` timestamp texts with semantic tokens (`--text-muted`), delivering 100% legibility on light surfaces.
+- **Non-Intrusive Performance Optimization**:
+  - Omitted heavy backdrop blurs on repeating high-count track rows, confining full blurs to primary frames for smooth 120fps scrolling.
+  - Added `passive: true` to touch/pointer down event listeners.
+
+---
+
 ## [v6.2.0] - 2026-11-02
 
 ### 📱 UI/UX Polish, Mobile Card Grid Fit & Multi-Tone Studio Palette

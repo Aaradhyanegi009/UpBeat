@@ -11,22 +11,25 @@
   --sal: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --sar: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
 
-  /* Pure Dark AMOLED Tokens (100% Obsidian Black) */
+  /* Pure Dark AMOLED Tokens (100% Obsidian Black) & Translucent Studio Glass */
   --bg-primary: #000000;
   --bg-elevated: rgba(18, 18, 22, 0.72);
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-glass: rgba(0, 0, 0, 0.75);
-  --bg-glass-heavy: rgba(10, 10, 12, 0.85);
+  --bg-card: rgba(255, 255, 255, 0.045);
+  --bg-glass: rgba(18, 18, 26, 0.58);
+  --bg-glass-heavy: rgba(18, 18, 26, 0.78);
+  --surface-glass: rgba(18, 18, 26, 0.58);
+  --card-glass: rgba(255, 255, 255, 0.045);
+  --border-glass: 1px solid rgba(255, 255, 255, 0.09);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --accent-primary: #e11d48;
   --text-on-accent: #ffffff;
-  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.16);
   --surface-hover: rgba(255, 255, 255, 0.06);
   --slider-track: #202028;
-  --card-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 32px rgba(0, 0, 0, 0.28);
 
   /* Subtle Dynamic Playing-Song Glow Variables */
   --song-glow-1: transparent;
@@ -39,39 +42,45 @@
 .dark, .theme-dark, .theme-afternoon, :root.dark {
   --bg-primary: #000000;
   --bg-elevated: rgba(18, 18, 22, 0.72);
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-glass: rgba(0, 0, 0, 0.75);
-  --bg-glass-heavy: rgba(10, 10, 12, 0.85);
+  --bg-card: rgba(255, 255, 255, 0.045);
+  --bg-glass: rgba(18, 18, 26, 0.58);
+  --bg-glass-heavy: rgba(18, 18, 26, 0.78);
+  --surface-glass: rgba(18, 18, 26, 0.58);
+  --card-glass: rgba(255, 255, 255, 0.045);
+  --border-glass: 1px solid rgba(255, 255, 255, 0.09);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.16);
   --surface-hover: rgba(255, 255, 255, 0.06);
   --slider-track: #202028;
-  --card-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 32px rgba(0, 0, 0, 0.28);
 }
 
-/* Light Mode — Daylight Studio (Exact specs from Pillar 2) */
+/* Light Mode — Daylight Studio (High Contrast & Frosted Daylight Glass) */
 .theme-light, :root.theme-light, html.theme-light {
   color-scheme: light;
   --bg-primary: #F7F7FA;
-  --bg-elevated: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --bg-glass: rgba(255, 255, 255, 0.82);
-  --bg-glass-heavy: rgba(255, 255, 255, 0.94);
+  --bg-elevated: rgba(255, 255, 255, 0.88);
+  --bg-card: rgba(255, 255, 255, 0.62);
+  --bg-glass: rgba(255, 255, 255, 0.68);
+  --bg-glass-heavy: rgba(255, 255, 255, 0.88);
+  --surface-glass: rgba(255, 255, 255, 0.68);
+  --card-glass: rgba(255, 255, 255, 0.62);
+  --border-glass: 1px solid rgba(15, 23, 42, 0.08);
   --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #64748B;
+  --text-secondary: #334155;
+  --text-muted: #475569;
   --accent-primary: #E11D48;
   --text-on-accent: #FFFFFF;
-  --border-subtle: rgba(15, 23, 42, 0.09);
-  --border-strong: rgba(15, 23, 42, 0.18);
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
   --surface-hover: rgba(15, 23, 42, 0.05);
   --slider-track: #E2E8F0;
-  --card-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 24px rgba(15, 23, 42, 0.06);
 
-  --atm-glow-1: rgba(225, 29, 72, 0.06);
+  --atm-glow-1: rgba(225, 29, 72, 0.07);
   --atm-glow-2: rgba(109, 40, 217, 0.04);
   --atm-glow-3: rgba(251, 146, 60, 0.03);
   --atm-accent: rgba(225, 29, 72, 0.03);
@@ -116,12 +125,21 @@
 }
 
 .theme-light .text-zinc-100,
-.theme-light .text-zinc-200 {
+.theme-light .text-zinc-200,
+.theme-light .text-slate-100,
+.theme-light .text-slate-200 {
   color: #0F172A !important;
 }
 
 .theme-light .text-zinc-300,
-.theme-light .text-zinc-400 {
+.theme-light .text-slate-300 {
+  color: #334155 !important;
+}
+
+.theme-light .text-zinc-400,
+.theme-light .text-zinc-500,
+.theme-light .text-slate-400,
+.theme-light .text-slate-500 {
   color: #475569 !important;
 }
 
@@ -224,8 +242,8 @@
   border-radius: 18px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
   box-shadow: var(--card-shadow);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background-color 0.2s ease;
   transform: translateZ(0);
@@ -234,6 +252,11 @@
   background: var(--surface-hover);
   border-color: var(--border-strong);
   transform: translateY(-1px) translateZ(0);
+}
+
+.theme-light .squircle-card {
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
 }
 
 @media (max-width: 768px) {
@@ -317,16 +340,30 @@ html, body, #root {
 /* Mobile GPU Acceleration & Smooth 120fps Scrolling */
 .gpu-scroll {
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
   transform: translateZ(0);
   backface-visibility: hidden;
+}
+
+.content-scroll-container {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: auto;
+}
+
+.carousel-scroll {
+  touch-action: pan-x pan-y !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
 }
 
 .fast-row {
   content-visibility: auto;
   contain-intrinsic-size: 0 68px;
   contain: layout style paint;
-  touch-action: manipulation;
+  touch-action: pan-x pan-y manipulation;
   transform: translateZ(0);
   backface-visibility: hidden;
 }

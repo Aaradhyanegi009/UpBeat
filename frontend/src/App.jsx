@@ -1765,9 +1765,9 @@ export default function App() {
           setCrossfadeSec={setCrossfadeSec}
         />
 
-        <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent overflow-x-hidden">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent overflow-x-hidden main-content">
           {activeTab === 'curator' ? (
-            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 flex flex-col bg-transparent gpu-scroll">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 flex flex-col bg-transparent gpu-scroll content-scroll-container">
               <CuratorPrompt
                 prompt={prompt}
                 setPrompt={handlePromptChange}
