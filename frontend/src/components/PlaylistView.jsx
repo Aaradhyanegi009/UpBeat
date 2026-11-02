@@ -15,7 +15,8 @@ import {
   fisherYatesShuffle,
   prewarmTrack,
   advanceRotationCursor,
-  getRotationCursor
+  getRotationCursor,
+  isValidMusicTrack
 } from '../standaloneApi'
 import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscribeOfflineChanges } from '../offlineStorage'
 
@@ -70,13 +71,13 @@ function PlaylistView({
   const tier1ScrollRef = useRef(null)
   const tier2ScrollRef = useRef(null)
 
-  // Aggregate user's real personal tracks (excluding default seed placeholders)
+  // Aggregate user's real personal tracks (strictly valid music songs, excluding default seed placeholders)
   const userPersonalTracks = useMemo(() => {
     const out = []
     const seen = new Set()
-    const customSeeds = (extractedTracks || []).filter((t) => !DEFAULT_SEED_IDS.has(t?.video_id))
+    const customSeeds = (extractedTracks || []).filter((t) => !DEFAULT_SEED_IDS.has(t?.video_id) && isValidMusicTrack(t))
     for (const t of [...(favorites || []), ...(offlineTracks || []), ...customSeeds]) {
-      if (!t) continue
+      if (!t || !isValidMusicTrack(t)) continue
       const key = t.video_id || `${t.title || ''}::${t.artist || ''}`.toLowerCase()
       if (!key || seen.has(key)) continue
       seen.add(key)
@@ -313,12 +314,15 @@ function PlaylistView({
     )
   }
 
-  const tracks = playlist?.tracks || []
+  const rawTracks = playlist?.tracks || []
+  const tracks = useMemo(() => rawTracks.filter(isValidMusicTrack), [rawTracks])
   const isDirectSearch = Boolean(playlist?.is_direct_search)
   const matchedPlaylists = playlist?.matched_playlists || []
-  const youtubeResults = playlist?.youtube_results || []
-  const songResults = playlist?.song_results || []
-  const activeSource = playlist?.active_source || (youtubeResults.length > 0 ? 'youtube' : 'songs')
+  const rawYt = playlist?.youtube_results || []
+  const youtubeResults = useMemo(() => rawYt.filter(isValidMusicTrack), [rawYt])
+  const rawSongs = playlist?.song_results || []
+  const songResults = useMemo(() => rawSongs.filter(isValidMusicTrack), [rawSongs])
+  const activeSource = playlist?.active_source || (songResults.length > 0 ? 'songs' : (youtubeResults.length > 0 ? 'youtube' : 'songs'))
   const activeBrowseId = playlist?.active_browse_id || ''
 
   return (
@@ -427,24 +431,9 @@ function PlaylistView({
           </div>
         </div>
 
-        {/* Direct Search Subtabs with High Contrast */}
-        {isDirectSearch && (youtubeResults.length > 0 || songResults.length > 0 || matchedPlaylists.length > 0) && (
+        {/* Direct Search Subtabs with High Contrast (Songs Priority) */}
+        {isDirectSearch && (songResults.length > 0 || youtubeResults.length > 0 || matchedPlaylists.length > 0) && (
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
-            {youtubeResults.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onSelectYoutubeResults && onSelectYoutubeResults()}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
-                  activeSource === 'youtube'
-                    ? 'bg-rose-100 dark:bg-rose-500/20 border-rose-300 dark:border-rose-500/60 text-[#BE123C] dark:text-rose-200 shadow-xs'
-                    : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
-                }`}
-              >
-                <Play className="w-3 h-3 text-[#BE123C] dark:text-rose-500 fill-current" />
-                <span>Videos ({youtubeResults.length})</span>
-              </button>
-            )}
-
             {songResults.length > 0 && (
               <button
                 type="button"
@@ -478,6 +467,21 @@ function PlaylistView({
                 </button>
               )
             })}
+
+            {youtubeResults.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSelectYoutubeResults && onSelectYoutubeResults()}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 border ${
+                  activeSource === 'youtube'
+                    ? 'bg-rose-100 dark:bg-rose-500/20 border-rose-300 dark:border-rose-500/60 text-[#BE123C] dark:text-rose-200 shadow-xs'
+                    : 'bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
+                }`}
+              >
+                <Play className="w-3 h-3 text-[#BE123C] dark:text-rose-500 fill-current" />
+                <span>Videos ({youtubeResults.length})</span>
+              </button>
+            )}
           </div>
         )}
       </div>

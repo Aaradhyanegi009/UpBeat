@@ -4,6 +4,25 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v6.3.3] - 2026-11-02
+
+### 🛡️ Strict Songs-Only Filtering in Playlists & Seeds (Academic Lectures & YouTuber Vlogs Purge)
+- **Airtight Non-Music Filter (`NON_MUSIC_REGEX` & `isValidMusicTrack`)**:
+  - Expanded `NON_MUSIC_REGEX` across `standaloneApi.js` and `backend/youtube_search.py` to comprehensively detect and block academic lectures, tutorials, and math/engineering videos (e.g. "Laplace Transform", "Fourier Series", calculus, derivatives, integrals, differential equations, coding, DSA, lectures, syllabus, exams, Khan Academy, NPTEL, etc.).
+  - Aggressively purged non-music YouTuber and creator content (e.g. MrBeast, PewDiePie, CarryMinati, Sidemen, vlogs, pranks, challenges, Q&As, unboxings, tech reviews, reactions, bloopers, meme compilations, video essays, podcasts, audiobooks, gameplay, walkthroughs).
+  - Maintained strict duration guardrails rejecting tracks < 65s (shorts/clips) and > 720s (12 minutes) where duration is known.
+- **Seeds & Library Section Sanitization (`SonicDnaView.jsx` & `App.jsx`)**:
+  - Filtered all seed tracks in the Seeds & Library tab (`mode === 'library'`) through `isValidMusicTrack` so only authentic songs are displayed, counted, and played.
+  - Automatically sanitized stored seeds, favorites, and playlists in `localStorage` on app startup (`argon_seeds_v2`, `argon_extracted_v2`, `upbeat_extracted_tracks_v1`, `argon_favs_v2`, `argon_playlist_v2`).
+  - Guaranteed that Google OAuth Liked Videos (`playlistId: 'LL'`) strictly filters out non-music liked videos before importing into favorites or seed tracks.
+  - Guarded `handleAddSeedTrack` and `handleAddMultipleSeedTracks` to strictly reject non-music additions.
+- **Playlist & Direct Search Prioritization (`PlaylistView.jsx`, `standaloneApi.js` & `backend/youtube_search.py`)**:
+  - Promoted verified **Songs** (YouTube Music catalog) to the primary default track source in direct search, preventing raw YouTube web video results from crowding out authentic tracks.
+  - Positioned the **Songs** tab as the first, primary button in direct search subtabs, followed by matched curated playlists, and finally music videos.
+  - Validated all playlist tracks in `browsePlaylistStandalone` through `isValidMusicTrack`.
+
+---
+
 ## [v6.3.2] - 2026-11-02
 
 ### 🎵 Hybrid "Rediscover Favorites Mix" & Cyclic "Made For You" Rotation Engine + Playback Hotfix

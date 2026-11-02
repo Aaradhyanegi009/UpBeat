@@ -12,11 +12,12 @@ const MODEL_ALIASES = {
 const LOW_THINKING_MODELS = new Set(['gemini-3.8-flash', 'gemini-3.7-flash'])
 const ZERO_BUDGET_MODELS = new Set(['gemini-2.5-flash', 'gemini-robotics-er-2-preview'])
 
-export const NON_MUSIC_REGEX = /\b(minecraft|gameplay|walkthrough|let's play|tutorial|episode|stream|shorts|podcast|review|unboxing|reaction|vlog|mod|pvp|bedwars|skyblock|portal|survival|speedrun)\b/i
+export const NON_MUSIC_REGEX = /\b(laplace|laplacian|fourier|calculus|derivative|derivatives|differentiation|integral|integrals|integration|differential equations?|ode|pde|linear algebra|matrices|matrix|eigenvalues?|eigenvectors?|trigonometry|geometry|theorems?|proofs?|derivations?|physics|quantum|thermodynamics|electromagnetism|kinematics|optics|chemistry|organic chemistry|biology|biochemistry|anatomy|genetics|engineering|mechanical|electrical|civil|electronics|aerospace|computer science|data structures|algorithms|dsa|leetcode|competitive programming|coding|programming|python|javascript|c\+\+|java programming|tutorials?|courses?|crash course|lectures?|class \d+|lesson \d+|chapter \d+|syllabus|semester|curriculum|solved problems?|numerical problems?|question paper|mcqs?|gate exam|jee mains?|jee advanced|neet exam|upsc|ncert|cbse|icse|khan academy|3blue1brown|mit opencourseware|nptel|stanford|harvard|coursera|udemy|edx|unacademy|physics wallah|geeksforgeeks|freecodecamp|gate smashers|neso academy|apna college|codewithharry|chai aur code|youtuber|youtubers|vlogs?|vlogger|vlogging|daily vlog|mrbeast|pewdiepie|carryminati|sidemen|dude perfect|logan paul|jake paul|markiplier|jacksepticeye|technoblade|dream|ssundee|dantdm|mark rober|veritasium|vsauce|kurzgesagt|pranks?|challenges?|24 hours in|last to leave|q&a|qna|ask me anything|ama|mukbang|eating show|try not to laugh|storytime|confessions?|exposed|drama|roast show|unboxing|tech review|phone review|setup tour|room tour|desk tour|pc build|what's in my bag|what's on my phone|day in the life|morning routine|night routine|grwm|get ready with me|tier list|tier ranking|funny moments|bloopers?|fails compilation|meme compilation|reaction|reacts|reacting to|first time hearing|first time watching|stand up comedy|standup comedy|improv comedy|open mic|ted talk|tedx|keynote|webinar|conference talk|official trailer|teaser trailer|movie trailer|trailer \d|movie scene|deleted scene|full movie|short film|documentary|docuseries|how to (?:make|cook|bake|code|build|draw|play|fix|install|use|do|start|solve|pass)|diy|life hacks?|tips (?:and|&) tricks|video essay|asmr|whispering|audiobooks?|read aloud|gym workout|yoga routine|cardio workout|abs workout|gameplay|walkthrough|playthrough|let's play|lets play|speedrun|speed run|no commentary|longplay|bedwars|skyblock|minecraft|roblox|fortnite|valorant|pubg|apex legends|gta v|gta 5|call of duty|warzone|counter strike|csgo|cs2|league of legends|genshin impact|live stream|livestream|twitch vod|stream highlights?)\b/i
 
 /**
  * Pillar 3 Strict Music Filter:
- * Rejects non-music titles/channels and videos shorter than 65s (shorts) or longer than 720s (12 mins).
+ * Rejects non-music titles/channels, educational lectures (e.g. Laplace/Calculus), YouTuber vlogs/pranks,
+ * and videos shorter than 65s (shorts) or longer than 720s (12 mins).
  */
 export function isValidMusicTrack(track) {
   if (!track || typeof track !== 'object') return false
@@ -288,7 +289,11 @@ export async function generateWithDirectGemini(prompt, preferredModel = 'gemini-
 const YTM_CONTEXT = {
   client: { clientName: 'WEB_REMIX', clientVersion: '1.20260918.01.00', hl: 'en', gl: 'IN' }
 }
-const BLOCKED_META = ['Episode', 'Podcast', 'Release - Topic', 'Lights on the Ceiling']
+const BLOCKED_META = [
+  'Episode', 'Podcast', 'Release - Topic', 'Lights on the Ceiling',
+  'Tutorial', 'Lecture', 'Course', 'Chapter', 'Syllabus', 'Unboxing',
+  'Gameplay', 'Walkthrough', 'Vlog', 'Review', 'Reaction', 'Animation Meme'
+]
 const searchCache = new Map()
 const directSearchCache = new Map()
 const playlistBrowseCache = new Map()
@@ -350,7 +355,7 @@ export async function browsePlaylistStandalone(browseId, playlistTitle = '', pla
       if (playlistTitle) reasonParts.push(`Featured in ${playlistTitle}`)
       const reason = reasonParts.length ? reasonParts.join(' • ') : 'Featured track from official playlist'
 
-      tracks.push({
+      const trackObj = {
         title,
         artist,
         video_id: vid,
@@ -362,7 +367,9 @@ export async function browsePlaylistStandalone(browseId, playlistTitle = '', pla
         reason,
         why_it_fits: reason,
         vibe: 'Playlist'
-      })
+      }
+      if (!isValidMusicTrack(trackObj)) continue
+      tracks.push(trackObj)
       if (tracks.length >= maxTracks) break
     }
 
@@ -678,31 +685,38 @@ export async function directSearchStandalone(query, mode = 'auto') {
       (/\b(playlist|chart|billboard|top|hits|daily|trending|countdown|best of|essentials|soundtrack)\b/i.test(qClean) ||
         (matchedPlaylists.length > 0 && matchedPlaylists[0].relevance >= 0.5)))
 
-  let activeSource = 'youtube'
+  const cleanYtmSongs = ytmSongs.filter(isValidMusicTrack)
+  const cleanYtVideos = youtubeResults.filter(isValidMusicTrack)
+
+  // Default to verified songs (YouTube Music), strictly avoiding random non-music YouTuber videos
+  let activeSource = cleanYtmSongs.length > 0 ? 'songs' : (cleanYtVideos.length > 0 ? 'youtube' : 'songs')
   let activeBrowseId = ''
-  let tracks = youtubeResults
+  let tracks = cleanYtmSongs.length > 0 ? cleanYtmSongs : cleanYtVideos
   let playlistTitle = `"${qClean}"`
-  let vibe = `YouTube results : ${youtubeResults.length} videos`
+  let vibe = cleanYtmSongs.length > 0
+    ? `Music tracks : ${cleanYtmSongs.length} songs`
+    : `Music tracks : ${cleanYtVideos.length} songs`
 
   if (isPlaylistIntent && matchedPlaylists.length) {
     const top = matchedPlaylists[0]
     const plTracks = await browsePlaylistStandalone(top.browse_id, top.title, top.subtitle)
-    if (plTracks.length) {
-      tracks = plTracks
+    const cleanPlTracks = plTracks.filter(isValidMusicTrack)
+    if (cleanPlTracks.length) {
+      tracks = cleanPlTracks
       activeSource = 'playlist'
       activeBrowseId = top.browse_id
       playlistTitle = top.title
-      vibe = `Curated playlist : ${plTracks.length} tracks`
+      vibe = `Curated playlist : ${cleanPlTracks.length} tracks`
     }
-  } else if (mode === 'songs' && ytmSongs.length) {
+  } else if (mode === 'songs' && cleanYtmSongs.length) {
     activeSource = 'songs'
-    tracks = ytmSongs
-    vibe = `YouTube results : ${ytmSongs.length} videos`
+    tracks = cleanYtmSongs
+    vibe = `Music tracks : ${cleanYtmSongs.length} songs`
   }
 
   if (!tracks.length) {
-    tracks = ytmSongs
-    activeSource = 'songs'
+    tracks = cleanYtmSongs.length ? cleanYtmSongs : cleanYtVideos
+    activeSource = cleanYtmSongs.length ? 'songs' : 'youtube'
   }
 
   const payload = {
@@ -718,8 +732,8 @@ export async function directSearchStandalone(query, mode = 'auto') {
     active_source: activeSource,
     active_browse_id: activeBrowseId,
     matched_playlists: matchedPlaylists,
-    youtube_results: youtubeResults,
-    song_results: ytmSongs,
+    youtube_results: cleanYtVideos,
+    song_results: cleanYtmSongs,
     tracks
   }
   directSearchCache.set(cacheKey, { data: payload, ts: Date.now() })
@@ -1094,14 +1108,16 @@ export async function searchYouTubeMusicList(query) {
   if (!query || !query.trim()) return []
   try {
     const items = await ytmSearchItems(query)
-    return items.map((it) => ({
-      video_id: it.video_id,
-      title: it.title || 'Unknown Title',
-      artist: it.artist || 'Unknown Artist',
-      thumbnail: `https://i.ytimg.com/vi/${it.video_id}/hqdefault.jpg`,
-      duration_text: it.duration_text || '',
-      url: `https://www.youtube.com/watch?v=${it.video_id}`
-    }))
+    return items
+      .map((it) => ({
+        video_id: it.video_id,
+        title: it.title || 'Unknown Title',
+        artist: it.artist || 'Unknown Artist',
+        thumbnail: `https://i.ytimg.com/vi/${it.video_id}/hqdefault.jpg`,
+        duration_text: it.duration_text || '',
+        url: `https://www.youtube.com/watch?v=${it.video_id}`
+      }))
+      .filter(isValidMusicTrack)
   } catch (err) {
     console.error('searchYouTubeMusicList error:', err)
     return []

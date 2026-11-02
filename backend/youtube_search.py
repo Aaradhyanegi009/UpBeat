@@ -736,6 +736,63 @@ def _duration_to_seconds(d: str) -> int:
     return secs
 
 
+NON_MUSIC_REGEX = re.compile(
+    r"\b("
+    r"laplace|laplacian|fourier|calculus|derivative|derivatives|differentiation|integral|integrals|integration|"
+    r"differential equations?|ode|pde|linear algebra|matrices|matrix|eigenvalues?|eigenvectors?|"
+    r"trigonometry|geometry|theorems?|proofs?|derivations?|physics|quantum|thermodynamics|electromagnetism|"
+    r"kinematics|optics|chemistry|organic chemistry|biology|biochemistry|anatomy|genetics|"
+    r"engineering|mechanical|electrical|civil|electronics|aerospace|computer science|data structures|algorithms|dsa|"
+    r"leetcode|competitive programming|coding|programming|python|javascript|c\+\+|java programming|"
+    r"tutorials?|courses?|crash course|lectures?|class \d+|lesson \d+|chapter \d+|syllabus|semester|curriculum|solved problems?|numerical problems?|"
+    r"question paper|mcqs?|gate exam|jee mains?|jee advanced|neet exam|upsc|ncert|cbse|icse|"
+    r"khan academy|3blue1brown|mit opencourseware|nptel|stanford|harvard|coursera|udemy|edx|unacademy|physics wallah|"
+    r"geeksforgeeks|freecodecamp|gate smashers|neso academy|apna college|codewithharry|chai aur code|"
+    r"youtuber|youtubers|vlogs?|vlogger|vlogging|daily vlog|mrbeast|pewdiepie|carryminati|sidemen|dude perfect|logan paul|jake paul|"
+    r"markiplier|jacksepticeye|technoblade|dream|ssundee|dantdm|mark rober|veritasium|vsauce|kurzgesagt|"
+    r"pranks?|challenges?|24 hours in|last to leave|q&a|qna|ask me anything|ama|mukbang|eating show|try not to laugh|"
+    r"storytime|confessions?|exposed|drama|roast show|"
+    r"unboxing|tech review|phone review|setup tour|room tour|desk tour|pc build|what's in my bag|what's on my phone|"
+    r"day in the life|morning routine|night routine|grwm|get ready with me|"
+    r"tier list|tier ranking|funny moments|bloopers?|fails compilation|meme compilation|"
+    r"reaction|reacts|reacting to|first time hearing|first time watching|"
+    r"stand up comedy|standup comedy|improv comedy|open mic|ted talk|tedx|keynote|webinar|conference talk|"
+    r"official trailer|teaser trailer|movie trailer|trailer \d|movie scene|deleted scene|full movie|short film|documentary|docuseries|"
+    r"how to (?:make|cook|bake|code|build|draw|play|fix|install|use|do|start|solve|pass)|diy|life hacks?|tips (?:and|&) tricks|"
+    r"video essay|asmr|whispering|audiobooks?|read aloud|gym workout|yoga routine|cardio workout|abs workout|"
+    r"gameplay|walkthrough|playthrough|let's play|lets play|speedrun|speed run|no commentary|longplay|bedwars|skyblock|"
+    r"minecraft|roblox|fortnite|valorant|pubg|apex legends|gta v|gta 5|call of duty|warzone|counter strike|csgo|cs2|league of legends|genshin impact|"
+    r"live stream|livestream|twitch vod|stream highlights?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def is_valid_music_track(track: Dict[str, Any]) -> bool:
+    if not isinstance(track, dict):
+        return False
+    title = (track.get("title") or "").strip()
+    artist = (track.get("artist") or "").strip()
+    if not title or not artist:
+        return False
+
+    text = f"{title} {artist}"
+    if NON_MUSIC_REGEX.search(text):
+        return False
+
+    sec = 0
+    dur = track.get("duration_sec") or track.get("duration") or track.get("duration_seconds")
+    if isinstance(dur, (int, float)) and dur > 0:
+        sec = int(dur)
+    elif track.get("duration_text"):
+        sec = _duration_to_seconds(str(track["duration_text"]))
+
+    if sec > 0 and (sec < 65 or sec > 720):
+        return False
+
+    return True
+
+
 def _yt_web_search(query: str, pages: int = 2) -> Dict[str, Any]:
     """Exact same results (and order) as typing the query on youtube.com."""
     url = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
@@ -765,23 +822,24 @@ def _yt_web_search(query: str, pages: int = 2) -> Dict[str, Any]:
             views = _runs_text(v.get("shortViewCountText", {})) or _runs_text(v.get("viewCountText", {}))
             published = _runs_text(v.get("publishedTimeText", {}))
             meta = " • ".join(x for x in (views, published) if x)
-            videos.append(
-                {
-                    "title": title,
-                    "artist": channel or "YouTube",
-                    "video_id": vid,
-                    "fallback_ids": [],
-                    "duration_text": dur,
-                    "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
-                    "url": f"https://www.youtube.com/watch?v={vid}",
-                    "embed_url": f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1",
-                    "match_tier": "Direct Match",
-                    "reason": meta or "YouTube search result",
-                    "why_it_fits": meta or "YouTube search result",
-                    "vibe": "YouTube",
-                    "duration_sec": _duration_to_seconds(dur),
-                }
-            )
+            track_obj = {
+                "title": title,
+                "artist": channel or "YouTube",
+                "video_id": vid,
+                "fallback_ids": [],
+                "duration_text": dur,
+                "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "embed_url": f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1",
+                "match_tier": "Direct Match",
+                "reason": meta or "YouTube search result",
+                "why_it_fits": meta or "YouTube search result",
+                "vibe": "YouTube",
+                "duration_sec": _duration_to_seconds(dur),
+            }
+            if not is_valid_music_track(track_obj):
+                continue
+            videos.append(track_obj)
 
         for lk in _find_nodes(data, "lockupViewModel"):
             if lk.get("contentType") != "LOCKUP_CONTENT_TYPE_PLAYLIST":
@@ -1136,22 +1194,23 @@ def browse_youtube_music_playlist(
                 reason_parts.append(f"Featured in {playlist_title}")
             reason_str = " • ".join(reason_parts) if reason_parts else "Featured track from official playlist"
 
-            tracks.append(
-                {
-                    "title": title,
-                    "artist": artist,
-                    "video_id": vid,
-                    "fallback_ids": [],
-                    "duration_text": dur,
-                    "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
-                    "url": f"https://www.youtube.com/watch?v={vid}",
-                    "embed_url": f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1",
-                    "match_tier": "Direct Match",
-                    "reason": reason_str,
-                    "why_it_fits": reason_str,
-                    "vibe": "Playlist",
-                }
-            )
+            track_obj = {
+                "title": title,
+                "artist": artist,
+                "video_id": vid,
+                "fallback_ids": [],
+                "duration_text": dur,
+                "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "embed_url": f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1",
+                "match_tier": "Direct Match",
+                "reason": reason_str,
+                "why_it_fits": reason_str,
+                "vibe": "Playlist",
+            }
+            if not is_valid_music_track(track_obj):
+                continue
+            tracks.append(track_obj)
             if len(tracks) >= max_tracks:
                 break
 
@@ -1209,23 +1268,24 @@ def _parse_ytm_songs(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         if plays:
             bits.append(plays)
         reason = " • ".join(bits) if bits else "YouTube Music song"
+        track_obj = {
+            "title": cols[0],
+            "artist": artist,
+            "video_id": vid,
+            "fallback_ids": [],
+            "duration_text": dur,
+            "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "embed_url": f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1",
+            "match_tier": "Direct Match",
+            "reason": reason,
+            "why_it_fits": reason,
+            "vibe": "YT Music",
+        }
+        if not is_valid_music_track(track_obj):
+            continue
         seen.add(vid)
-        out.append(
-            {
-                "title": cols[0],
-                "artist": artist,
-                "video_id": vid,
-                "fallback_ids": [],
-                "duration_text": dur,
-                "thumbnail": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
-                "url": f"https://www.youtube.com/watch?v={vid}",
-                "embed_url": f"https://www.youtube.com/embed/{vid}?autoplay=1&enablejsapi=1",
-                "match_tier": "Direct Match",
-                "reason": reason,
-                "why_it_fits": reason,
-                "vibe": "YT Music",
-            }
-        )
+        out.append(track_obj)
         if len(out) >= 25:
             break
 
@@ -1322,34 +1382,38 @@ def direct_search_youtube_music(query: str, mode: str = "auto") -> Dict[str, Any
     matched_playlists.sort(key=lambda p: -p["relevance"])
     matched_playlists = matched_playlists[:6]
 
+    clean_ytm_songs = [t for t in ytm_songs if is_valid_music_track(t)]
+    clean_yt_videos = [t for t in youtube_results if is_valid_music_track(t)]
+
     q_lower = q_clean.lower()
     wants_playlist = mode == "playlists" or (mode == "auto" and "playlist" in q_lower)
     wants_ytm = mode == "songs"
 
-    active_source = "youtube"
+    # Default to verified music tracks (YT Music Songs), strictly filtering out non-music YouTuber videos
+    active_source = "songs" if clean_ytm_songs else ("youtube" if clean_yt_videos else "songs")
     active_browse_id = ""
-    tracks = youtube_results
+    tracks = clean_ytm_songs if clean_ytm_songs else clean_yt_videos
     playlist_title = f'"{q_clean}"'
-    vibe = f"YouTube results : {len(youtube_results)} videos"
+    vibe = f"Music tracks : {len(tracks)} songs"
 
-    if wants_ytm and ytm_songs:
+    if wants_ytm and clean_ytm_songs:
         active_source = "songs"
-        tracks = ytm_songs
-        vibe = f"YouTube results : {len(ytm_songs)} videos"
+        tracks = clean_ytm_songs
+        vibe = f"Music tracks : {len(clean_ytm_songs)} songs"
     elif wants_playlist and matched_playlists:
         top = matched_playlists[0]
         pl_tracks = browse_youtube_music_playlist(top["browse_id"], top["title"], top["subtitle"])
-        if pl_tracks:
-            tracks = pl_tracks
+        clean_pl_tracks = [t for t in pl_tracks if is_valid_music_track(t)]
+        if clean_pl_tracks:
+            tracks = clean_pl_tracks
             active_source = "playlist"
             active_browse_id = top["browse_id"]
             playlist_title = top["title"]
-            vibe = f"YouTube results : {len(pl_tracks)} videos"
+            vibe = f"Curated playlist : {len(clean_pl_tracks)} tracks"
 
     if not tracks:
-        # Fall back gracefully if YouTube web search was blocked
-        tracks = ytm_songs
-        active_source = "songs"
+        tracks = clean_ytm_songs if clean_ytm_songs else clean_yt_videos
+        active_source = "songs" if clean_ytm_songs else "youtube"
 
     if tracks:
         prefetch_streams_async([t["video_id"] for t in tracks[:3] if t.get("video_id")])
@@ -1367,8 +1431,8 @@ def direct_search_youtube_music(query: str, mode: str = "auto") -> Dict[str, Any
         "active_source": active_source,
         "active_browse_id": active_browse_id,
         "matched_playlists": matched_playlists,
-        "youtube_results": youtube_results,
-        "song_results": ytm_songs,
+        "youtube_results": clean_yt_videos,
+        "song_results": clean_ytm_songs,
         "tracks": tracks,
     }
     _DIRECT_SEARCH_CACHE[cache_key] = {"data": result_payload, "ts": now}

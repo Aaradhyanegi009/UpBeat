@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   X, Search, Link2, Sparkles, Plus, Check, Loader2, Music, RefreshCw, Heart
 } from 'lucide-react'
-import { searchYouTubeMusicList, importYouTubePlaylistStandalone } from '../standaloneApi'
+import { searchYouTubeMusicList, importYouTubePlaylistStandalone, isValidMusicTrack } from '../standaloneApi'
 
 export function Youtube({ className = 'w-4 h-4' }) {
   return (
@@ -40,14 +40,14 @@ export default function YouTubeTasteSyncModal({
     setIsSearching(true)
     try {
       const results = await searchYouTubeMusicList(searchQuery.trim())
-      setSearchResults(results)
+      setSearchResults(results.filter(isValidMusicTrack))
     } finally {
       setIsSearching(false)
     }
   }
 
   const handleAddTrack = (track) => {
-    if (!track) return
+    if (!track || !isValidMusicTrack(track)) return
     onAddSeedTrack(track)
     setAddedIds((prev) => new Set([...prev, track.video_id]))
   }
@@ -58,8 +58,9 @@ export default function YouTubeTasteSyncModal({
     setIsImporting(true)
     try {
       const tracks = await importYouTubePlaylistStandalone(playlistUrl.trim())
-      if (tracks && tracks.length) {
-        onAddMultipleSeedTracks(tracks)
+      const valid = (tracks || []).filter(isValidMusicTrack)
+      if (valid.length) {
+        onAddMultipleSeedTracks(valid)
         setPlaylistUrl('')
         onClose()
       }

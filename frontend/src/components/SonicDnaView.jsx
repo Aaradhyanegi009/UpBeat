@@ -4,7 +4,7 @@ import {
   Sparkles, Download, Check, Loader2, ListPlus, Activity,
   Sliders, Zap, ShieldCheck, Flame, Compass, ChevronRight, Disc, X, Trash2, RotateCcw
 } from 'lucide-react'
-import { getTrackDownloadUrl, getAudioSource, prewarmTrack } from '../standaloneApi'
+import { getTrackDownloadUrl, getAudioSource, prewarmTrack, isValidMusicTrack } from '../standaloneApi'
 import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscribeOfflineChanges } from '../offlineStorage'
 import { Youtube } from './YouTubeTasteSyncModal'
 import { GoogleIcon } from './GoogleAuthModal'
@@ -153,29 +153,38 @@ function SonicDnaView({
     }
   }
 
-  // 1. Favorites Memory Memo (Always declared at top level)
+  // 1. Favorites Memory Memo (Always declared at top level, strictly valid music tracks)
   const filteredFavs = useMemo(() => {
-    if (!filter.trim()) return favorites
+    const valid = (favorites || []).filter(isValidMusicTrack)
+    if (!filter.trim()) return valid
     const q = filter.toLowerCase().trim()
-    return favorites.filter((t) =>
+    return valid.filter((t) =>
       (t.title || '').toLowerCase().includes(q) ||
       (t.artist || '').toLowerCase().includes(q) ||
       (t.vibe || '').toLowerCase().includes(q)
     )
   }, [favorites, filter])
 
-  // 2. Library Seeds Memo (Always declared at top level)
+  // 2. Library Seeds Memo (Always declared at top level, strictly valid music tracks)
+  const librarySeeds = useMemo(() => {
+    return (extractedTracks || []).filter(isValidMusicTrack)
+  }, [extractedTracks])
+
   const filteredTracks = useMemo(() => {
-    if (!filter.trim()) return extractedTracks
+    if (!filter.trim()) return librarySeeds
     const q = filter.toLowerCase().trim()
-    return extractedTracks.filter((t) =>
+    return librarySeeds.filter((t) =>
       (t.title || '').toLowerCase().includes(q) ||
       (t.artist || '').toLowerCase().includes(q)
     )
-  }, [extractedTracks, filter])
+  }, [librarySeeds, filter])
 
   // 3. Sonic DNA & Taste Profile Memos (Always declared at top level before any early return)
-  const allTracks = useMemo(() => (favorites.length > 0 ? favorites : extractedTracks), [favorites, extractedTracks])
+  const allTracks = useMemo(() => {
+    const validFavs = (favorites || []).filter(isValidMusicTrack)
+    const validExtracted = (extractedTracks || []).filter(isValidMusicTrack)
+    return validFavs.length > 0 ? validFavs : validExtracted
+  }, [favorites, extractedTracks])
   const artists = useMemo(() => Array.from(new Set(allTracks.map((t) => t.artist).filter(Boolean))), [allTracks])
 
   const topArtists = useMemo(() => {
@@ -642,13 +651,13 @@ function SonicDnaView({
                   Seeds & Library
                 </h1>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
-                  {extractedTracks.length}
+                  {librarySeeds.length}
                 </span>
               </div>
               <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1.5 font-normal truncate">
                 <Disc className="w-3 h-3 text-sky-400 shrink-0" />
                 <span className="truncate">
-                  {extractedTracks.length} {extractedTracks.length === 1 ? 'track' : 'tracks'} • Seed tracks powering your mixes
+                  {librarySeeds.length} {librarySeeds.length === 1 ? 'track' : 'tracks'} • Seed tracks powering your mixes
                 </span>
               </p>
             </div>
@@ -667,7 +676,7 @@ function SonicDnaView({
                 </button>
               )}
 
-              {onClearSeeds && extractedTracks.length > 0 && (
+              {onClearSeeds && librarySeeds.length > 0 && (
                 <button
                   onClick={onClearSeeds}
                   title="Clear all seed tracks from your Library"
@@ -680,7 +689,7 @@ function SonicDnaView({
           </div>
 
           {/* Search & Filter Bar */}
-          {extractedTracks.length > 0 && (
+          {librarySeeds.length > 0 && (
             <div className="mt-3 flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -706,7 +715,7 @@ function SonicDnaView({
 
         {/* Main Track List Content */}
         <div className="px-5 py-4 sm:px-6 sm:py-6 pb-[130px] flex-1 min-h-0">
-          {extractedTracks.length === 0 ? (
+          {librarySeeds.length === 0 ? (
             <div className="h-full min-h-[340px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-white/10 rounded-3xl bg-[#0c0c12]/40 backdrop-blur-md">
               <div className="w-16 h-16 rounded-3xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-zinc-500 mb-4 shadow-xl">
                 <Disc className="w-8 h-8 text-sky-400" />

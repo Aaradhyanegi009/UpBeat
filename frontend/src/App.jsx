@@ -88,7 +88,7 @@ export default function App() {
         }
       }
 
-      const seedKeys = ['argon_seeds_v2', 'argon_extracted_v2']
+      const seedKeys = ['argon_seeds_v2', 'argon_extracted_v2', 'upbeat_extracted_tracks_v1']
       for (const k of seedKeys) {
         const raw = localStorage.getItem(k)
         if (raw) {
@@ -517,13 +517,16 @@ export default function App() {
     try {
       // 1. Direct imported tracks from playlist link
       if (activeU.importedTracks && activeU.importedTracks.length > 0) {
-        setFavorites(activeU.importedTracks)
-        setExtractedTracks(activeU.importedTracks)
-        try { localStorage.setItem('argon_seeds_v2', JSON.stringify(activeU.importedTracks)) } catch {}
-        const dna = await analyzeTasteDnaStandalone(activeU.importedTracks)
-        if (dna) setTasteDna(dna)
-        showNotify(`Imported ${activeU.importedTracks.length} tracks & tailored taste DNA for ${activeU.name}!`, 'success')
-        return
+        const clean = activeU.importedTracks.filter(isValidMusicTrack)
+        if (clean.length > 0) {
+          setFavorites(clean)
+          setExtractedTracks(clean)
+          try { localStorage.setItem('argon_seeds_v2', JSON.stringify(clean)) } catch {}
+          const dna = await analyzeTasteDnaStandalone(clean)
+          if (dna) setTasteDna(dna)
+          showNotify(`Imported ${clean.length} songs & tailored taste DNA for ${activeU.name}!`, 'success')
+          return
+        }
       }
 
       // 2. Real Google OAuth 2.0: Fetch authentic YouTube Liked Videos (playlist ID 'LL')
@@ -542,7 +545,7 @@ export default function App() {
               thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || '',
               vibe: 'YouTube Liked',
               liked_at: Date.now()
-            })).filter((t) => t.video_id && !t.title.includes('Deleted video') && !t.title.includes('Private video'))
+            })).filter((t) => t.video_id && !t.title.includes('Deleted video') && !t.title.includes('Private video') && isValidMusicTrack(t))
 
             if (realTracks.length > 0) {
               setFavorites(realTracks)
@@ -550,7 +553,7 @@ export default function App() {
               try { localStorage.setItem('argon_seeds_v2', JSON.stringify(realTracks)) } catch {}
               const dna = await analyzeTasteDnaStandalone(realTracks)
               if (dna) setTasteDna(dna)
-              showNotify(`Synced ${realTracks.length} authentic liked tracks from ${activeU.name}'s YouTube account!`, 'success')
+              showNotify(`Synced ${realTracks.length} authentic liked songs from ${activeU.name}'s YouTube account!`, 'success')
               return
             }
           } else {
@@ -571,13 +574,16 @@ export default function App() {
           if (res.ok) {
             const data = await res.json()
             if (data.tracks && data.tracks.length) {
-              setFavorites(data.tracks)
-              setExtractedTracks(data.tracks)
-              try { localStorage.setItem('argon_seeds_v2', JSON.stringify(data.tracks)) } catch {}
-              const dna = await analyzeTasteDnaStandalone(data.tracks)
-              if (dna) setTasteDna(dna)
-              showNotify(`Synced ${data.tracks.length} tracks from YouTube Music`, 'success')
-              return
+              const clean = data.tracks.filter(isValidMusicTrack)
+              if (clean.length > 0) {
+                setFavorites(clean)
+                setExtractedTracks(clean)
+                try { localStorage.setItem('argon_seeds_v2', JSON.stringify(clean)) } catch {}
+                const dna = await analyzeTasteDnaStandalone(clean)
+                if (dna) setTasteDna(dna)
+                showNotify(`Synced ${clean.length} songs from YouTube Music`, 'success')
+                return
+              }
             }
           }
         } catch {}
@@ -586,30 +592,33 @@ export default function App() {
       // 4. On Android / standalone mobile:
       // If user already has hearted favorites on this device, derive their authentic taste profile from them!
       if (favorites && favorites.length > 0) {
+        const cleanFavs = favorites.filter(isValidMusicTrack)
         setExtractedTracks((prev) => {
-          const existingIds = new Set(prev.map((t) => t.video_id))
-          const newSeeds = favorites.filter((f) => !existingIds.has(f.video_id))
-          const updated = [...newSeeds, ...prev]
+          const cleanPrev = prev.filter(isValidMusicTrack)
+          const existingIds = new Set(cleanPrev.map((t) => t.video_id))
+          const newSeeds = cleanFavs.filter((f) => !existingIds.has(f.video_id))
+          const updated = [...newSeeds, ...cleanPrev]
           try { localStorage.setItem('argon_seeds_v2', JSON.stringify(updated)) } catch {}
           return updated
         })
-        const dna = await analyzeTasteDnaStandalone(favorites)
+        const dna = await analyzeTasteDnaStandalone(cleanFavs)
         if (dna) setTasteDna(dna)
-        showNotify(`Analyzed ${favorites.length} saved songs into ${activeU.name}'s taste profile!`, 'success')
+        showNotify(`Analyzed ${cleanFavs.length} saved songs into ${activeU.name}'s taste profile!`, 'success')
         return
       }
 
       // 5. If user has seed tracks in their Library, derive from their seed tracks
       if (extractedTracks && extractedTracks.length > 0) {
-        const dna = await analyzeTasteDnaStandalone(extractedTracks)
+        const cleanSeeds = extractedTracks.filter(isValidMusicTrack)
+        const dna = await analyzeTasteDnaStandalone(cleanSeeds)
         if (dna) setTasteDna(dna)
         showNotify(`Generated taste profile for ${activeU.name} from seed tracks!`, 'success')
         return
       }
 
-      // 6. For new users with zero songs, pull real top trending songs (not hardcoded anime)
+      // 6. For new users with zero songs, pull real top trending songs (not hardcoded anime or non-music)
       const searchRes = await directSearchStandalone('Top Hits 2026', 'songs')
-      const starterTracks = (searchRes?.tracks || []).slice(0, 6)
+      const starterTracks = (searchRes?.tracks || []).filter(isValidMusicTrack).slice(0, 6)
       if (starterTracks.length > 0) {
         setExtractedTracks(starterTracks)
         try { localStorage.setItem('argon_seeds_v2', JSON.stringify(starterTracks)) } catch {}
@@ -1505,23 +1514,33 @@ export default function App() {
   }
 
   const handleAddSeedTrack = (track) => {
-    if (!track) return
+    if (!track || !isValidMusicTrack(track)) {
+      showNotify('Only music songs can be added to Seeds', 'warning')
+      return
+    }
     setExtractedTracks((prev) => {
-      const exists = prev.some((t) => t.video_id === track.video_id || (t.title === track.title && t.artist === track.artist))
-      if (exists) return prev
-      return [track, ...prev]
+      const cleanPrev = prev.filter(isValidMusicTrack)
+      const exists = cleanPrev.some((t) => t.video_id === track.video_id || (t.title === track.title && t.artist === track.artist))
+      if (exists) return cleanPrev
+      return [track, ...cleanPrev]
     })
     showNotify(`Added "${track.title}" to Seeds`, 'success')
   }
 
   const handleAddMultipleSeedTracks = (newTracks) => {
     if (!newTracks || !newTracks.length) return
+    const valid = newTracks.filter(isValidMusicTrack)
+    if (!valid.length) {
+      showNotify('No valid music songs found to import', 'warning')
+      return
+    }
     setExtractedTracks((prev) => {
-      const existingIds = new Set(prev.map((t) => t.video_id).filter(Boolean))
-      const toAdd = newTracks.filter((t) => !existingIds.has(t.video_id))
-      return [...toAdd, ...prev]
+      const cleanPrev = prev.filter(isValidMusicTrack)
+      const existingIds = new Set(cleanPrev.map((t) => t.video_id).filter(Boolean))
+      const toAdd = valid.filter((t) => !existingIds.has(t.video_id))
+      return [...toAdd, ...cleanPrev]
     })
-    showNotify(`Imported ${newTracks.length} seeds from YouTube`, 'success')
+    showNotify(`Imported ${valid.length} seed songs from YouTube`, 'success')
   }
 
   const handleAnalyzeTaste = async () => {
