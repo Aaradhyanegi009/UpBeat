@@ -3,6 +3,7 @@ name: Build UpBeat Android APK
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
   workflow_dispatch:
 
 permissions:
@@ -64,10 +65,12 @@ jobs:
           fi
 
       - name: Publish UpBeat.apk and macOS Release to GitHub
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v5.4.0' }}
-          name: ${{ github.ref_type == 'tag' && format('UpBeat {0}', github.ref_name) || 'UpBeat v5.4.0 — Dual-Deck Equal-Power Crossfade (0s-12s) & Streamlined Now Playing UI' }}
+          tag_name: ${{ github.ref_name }}
+          name: UpBeat ${{ github.ref_name }}
+          generate_release_notes: true
           files: |
             android/app/build/outputs/apk/debug/UpBeat.apk
             UpBeat-macOS.zip
