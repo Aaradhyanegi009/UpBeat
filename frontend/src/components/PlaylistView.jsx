@@ -297,6 +297,17 @@ function PlaylistView({
   const tier2Blocks = useMemo(() => discoveryBlocks.filter((b) => b.tier === 2), [discoveryBlocks])
   const isNewUser = userPersonalTracks.length <= 5
 
+  const rawTracks = playlist?.tracks || []
+  const tracks = useMemo(() => rawTracks.filter(isValidMusicTrack), [rawTracks])
+  const isDirectSearch = Boolean(playlist?.is_direct_search)
+  const matchedPlaylists = playlist?.matched_playlists || []
+  const rawYt = playlist?.youtube_results || []
+  const youtubeResults = useMemo(() => rawYt.filter(isValidMusicTrack), [rawYt])
+  const rawSongs = playlist?.song_results || []
+  const songResults = useMemo(() => rawSongs.filter(isValidMusicTrack), [rawSongs])
+  const activeSource = playlist?.active_source || (songResults.length > 0 ? 'songs' : (youtubeResults.length > 0 ? 'youtube' : 'songs'))
+  const activeBrowseId = playlist?.active_browse_id || ''
+
   // Loading Skeleton State
   if (isGenerating || isSearching) {
     return (
@@ -313,17 +324,6 @@ function PlaylistView({
       </div>
     )
   }
-
-  const rawTracks = playlist?.tracks || []
-  const tracks = useMemo(() => rawTracks.filter(isValidMusicTrack), [rawTracks])
-  const isDirectSearch = Boolean(playlist?.is_direct_search)
-  const matchedPlaylists = playlist?.matched_playlists || []
-  const rawYt = playlist?.youtube_results || []
-  const youtubeResults = useMemo(() => rawYt.filter(isValidMusicTrack), [rawYt])
-  const rawSongs = playlist?.song_results || []
-  const songResults = useMemo(() => rawSongs.filter(isValidMusicTrack), [rawSongs])
-  const activeSource = playlist?.active_source || (songResults.length > 0 ? 'songs' : (youtubeResults.length > 0 ? 'youtube' : 'songs'))
-  const activeBrowseId = playlist?.active_browse_id || ''
 
   return (
     <div
