@@ -21,7 +21,7 @@ const DEFAULT_SEED_IDS = new Set([
   'CXDUXjsU5ao', 'TCd6PfxOy0Y', 'QpxFcMYRV08'
 ])
 
-export default function PlaylistView({
+function PlaylistView({
   playlist,
   currentTrack,
   isPlaying,
@@ -428,7 +428,7 @@ export default function PlaylistView({
         viewMode === 'grid' ? (
           <div
             ref={gridScrollRef}
-            className="px-5 sm:px-8 lg:px-10 py-3 overflow-x-auto no-scrollbar scroll-smooth"
+            className="px-5 sm:px-8 lg:px-10 py-3 overflow-x-auto no-scrollbar scroll-smooth gpu-scroll"
           >
             <div className="grid grid-rows-4 grid-flow-col gap-x-5 sm:gap-x-7 gap-y-3 w-max">
               {tracks.map((track, idx) => {
@@ -444,11 +444,11 @@ export default function PlaylistView({
 
                 return (
                   <div
-                    key={idx}
+                    key={track.video_id ? `${track.video_id}-${idx}` : idx}
                     onClick={() => onPlayTrack(track, idx)}
-                    className={`group flex items-center justify-between gap-3.5 py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-[16px] transition-all cursor-pointer min-h-[64px] sm:min-h-[72px] w-[310px] sm:w-[360px] lg:w-[390px] border ${
+                    className={`group flex items-center justify-between gap-3.5 py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-[16px] transition-colors cursor-pointer min-h-[64px] sm:min-h-[72px] w-[310px] sm:w-[360px] lg:w-[390px] border fast-row ${
                       isSelected
-                        ? 'bg-rose-500/10 border-rose-500/40 shadow-lg shadow-rose-950/20 scale-[1.01]'
+                        ? 'bg-rose-500/10 border-rose-500/40 shadow-lg shadow-rose-950/20'
                         : 'bg-[var(--bg-card)] hover:bg-[var(--surface-hover)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
                     }`}
                   >
@@ -456,7 +456,7 @@ export default function PlaylistView({
                     <div className="flex items-center gap-3.5 min-w-0">
                       <div className="w-12 h-12 rounded-[12px] bg-zinc-900 border border-[var(--border-subtle)] overflow-hidden shrink-0 relative shadow-sm">
                         {thumbUrl ? (
-                          <img src={thumbUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          <img src={thumbUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)]">
                             <Music className="w-5 h-5" />
@@ -668,7 +668,7 @@ export default function PlaylistView({
 
           <div
             ref={tier1ScrollRef}
-            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory"
+            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory gpu-scroll"
           >
             {tier1Blocks.map((block) => {
               const isRerolling = rerollingBlockId === block.id
@@ -676,13 +676,14 @@ export default function PlaylistView({
                 <div
                   key={block.id}
                   onClick={() => handleSelectBlock(block)}
-                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-all duration-300 hover:scale-[1.02] shadow-xl"
+                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
                 >
                   <img
                     src={block.thumbnail}
                     alt=""
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-65"
                     loading="lazy"
+                    decoding="async"
                     onLoad={(e) => {
                       if (e.currentTarget.naturalWidth <= 120) {
                         e.currentTarget.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
@@ -776,7 +777,7 @@ export default function PlaylistView({
 
           <div
             ref={tier2ScrollRef}
-            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory"
+            className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 scroll-smooth snap-x snap-mandatory gpu-scroll"
           >
             {tier2Blocks.map((block) => {
               const isRerolling = rerollingBlockId === block.id
@@ -784,13 +785,14 @@ export default function PlaylistView({
                 <div
                   key={block.id}
                   onClick={() => handleSelectBlock(block)}
-                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-all duration-300 hover:scale-[1.02] shadow-xl"
+                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
                 >
                   <img
                     src={block.thumbnail}
                     alt=""
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-65"
                     loading="lazy"
+                    decoding="async"
                     onLoad={(e) => {
                       if (e.currentTarget.naturalWidth <= 120) {
                         e.currentTarget.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
@@ -858,3 +860,21 @@ export default function PlaylistView({
     </div>
   )
 }
+
+export default React.memo(PlaylistView, (prev, next) => (
+  prev.playlist === next.playlist &&
+  prev.currentTrack === next.currentTrack &&
+  prev.isPlaying === next.isPlaying &&
+  prev.selectedModel === next.selectedModel &&
+  prev.isResolvingBatch === next.isResolvingBatch &&
+  prev.isGenerating === next.isGenerating &&
+  prev.isSearching === next.isSearching &&
+  prev.isLoadingPlaylistBrowse === next.isLoadingPlaylistBrowse &&
+  prev.needsSetup === next.needsSetup &&
+  prev.googleUser === next.googleUser &&
+  prev.favorites === next.favorites &&
+  prev.extractedTracks === next.extractedTracks &&
+  prev.offlineTracks === next.offlineTracks &&
+  prev.tasteDna === next.tasteDna &&
+  prev.timeInfo === next.timeInfo
+))

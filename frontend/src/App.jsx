@@ -1767,7 +1767,7 @@ export default function App() {
 
         <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent overflow-x-hidden">
           {activeTab === 'curator' ? (
-            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 flex flex-col bg-transparent scroll-smooth">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 flex flex-col bg-transparent gpu-scroll">
               <CuratorPrompt
                 prompt={prompt}
                 setPrompt={handlePromptChange}

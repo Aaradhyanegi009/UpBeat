@@ -203,12 +203,31 @@ export default function PlayerBar({
   const isScrubbingRef = useRef(false)
   const lastNativeReportSecRef = useRef(0)
   const currentTimeRef = useRef(0)
+  const lastUiTimeRef = useRef(-1)
   const isDocumentHiddenRef = useRef(false)
+  const nowPlayingOpenRef = useRef(false)
+  const showLyricsRef = useRef(false)
+
+  useEffect(() => {
+    nowPlayingOpenRef.current = Boolean(nowPlayingOpen)
+    showLyricsRef.current = Boolean(showLyrics)
+  }, [nowPlayingOpen, showLyrics])
+
+  const syncUiCurrentTime = (cur, force = false) => {
+    currentTimeRef.current = cur
+    if (isDocumentHiddenRef.current) return
+    const minDelta = (nowPlayingOpenRef.current && showLyricsRef.current) ? 0.22 : 0.48
+    if (force || cur < 0.3 || Math.abs(cur - lastUiTimeRef.current) >= minDelta) {
+      lastUiTimeRef.current = cur
+      setCurrentTime(cur)
+    }
+  }
 
   useEffect(() => {
     const handleVisChange = () => {
       isDocumentHiddenRef.current = document.hidden
       if (!document.hidden) {
+        lastUiTimeRef.current = currentTimeRef.current
         setCurrentTime(currentTimeRef.current)
       }
     }
@@ -1176,10 +1195,7 @@ export default function PlayerBar({
                 : parseDurationText(track?.duration_text))
 
         if (typeof cur === 'number' && !isNaN(cur) && cur >= 0) {
-          currentTimeRef.current = cur
-          if (!isDocumentHiddenRef.current) {
-            setCurrentTime(cur)
-          }
+          syncUiCurrentTime(cur)
 
           // Track progress advancement for stall / frozen detection
           if (Math.abs(cur - lastCurPosRef.current) > 0.05) {
@@ -1261,10 +1277,7 @@ export default function PlayerBar({
         try {
           const cur = p.getCurrentTime()
           if (typeof cur === 'number' && !isNaN(cur) && cur >= 0) {
-            currentTimeRef.current = cur
-            if (!isDocumentHiddenRef.current) {
-              setCurrentTime(cur)
-            }
+            syncUiCurrentTime(cur)
           }
           if (typeof p.getDuration === 'function') {
             const dur = p.getDuration()
@@ -1417,10 +1430,7 @@ export default function PlayerBar({
           onTimeUpdate={(e) => {
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid && !useIframeFallback && !isScrubbingRef.current) {
               const cur = e.currentTarget.currentTime || 0
-              currentTimeRef.current = cur
-              if (!isDocumentHiddenRef.current) {
-                setCurrentTime(cur)
-              }
+              syncUiCurrentTime(cur)
               if (cur > 0.5) {
                 clearLoadWatchdog()
               }

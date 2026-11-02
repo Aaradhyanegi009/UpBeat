@@ -9,7 +9,7 @@ import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscri
 import { Youtube } from './YouTubeTasteSyncModal'
 import { GoogleIcon } from './GoogleAuthModal'
 
-export default function SonicDnaView({
+function SonicDnaView({
   mode = 'dna',
   currentTrack,
   isPlaying = false,
@@ -1269,3 +1269,5 @@ export default function SonicDnaView({
     </div>
   )
 }
+
+export default React.memo(SonicDnaView)

@@ -19,7 +19,7 @@ function formatTime(sec) {
   return `${m}:${remSec.toString().padStart(2, '0')}`
 }
 
-export default function NowPlayingView({
+function NowPlayingView({
   isOpen,
   onClose,
   track,
@@ -141,6 +141,7 @@ export default function NowPlayingView({
 
   // Compute current active lyric line index (with 0.25s vocal anticipation)
   const activeLineIdx = useMemo(() => {
+    if (!isOpen || !showLyrics) return -1
     const data = lyricsState.data
     if (!data || !data.synced || !Array.isArray(data.lines) || !data.lines.length) return -1
     const syncTime = (Number(displayTime) || 0) + 0.25
@@ -153,7 +154,7 @@ export default function NowPlayingView({
       }
     }
     return idx
-  }, [lyricsState.data, displayTime])
+  }, [isOpen, showLyrics, lyricsState.data, displayTime])
 
   // Smoothly auto-scroll the active lyric line into the vertical center of the lyrics container
   useEffect(() => {
@@ -1389,3 +1390,14 @@ export default function NowPlayingView({
     </div>
   )
 }
+
+export default React.memo(NowPlayingView, (prev, next) => {
+  if (!prev.isOpen && !next.isOpen) {
+    return (
+      prev.track?.video_id === next.track?.video_id &&
+      prev.track?.title === next.track?.title &&
+      prev.resolvedVid === next.resolvedVid
+    )
+  }
+  return false
+})

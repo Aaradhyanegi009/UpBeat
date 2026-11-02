@@ -10,7 +10,7 @@ import {
 } from '../offlineStorage'
 import { getTrackDownloadUrl, hasBackend, getApiBase } from '../standaloneApi'
 
-export default function OfflineView({
+function OfflineView({
   currentTrack,
   isPlaying,
   onPlayTrack,
@@ -436,6 +436,8 @@ export default function OfflineView({
                           <img
                             src={t.thumbnail}
                             alt=""
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -547,3 +549,5 @@ export default function OfflineView({
     </div>
   )
 }
+
+export default React.memo(OfflineView)

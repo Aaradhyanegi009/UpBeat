@@ -227,12 +227,24 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: var(--card-shadow);
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background-color 0.2s ease;
+  transform: translateZ(0);
 }
 .squircle-card:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
-  transform: translateY(-1px);
+  transform: translateY(-1px) translateZ(0);
+}
+
+@media (max-width: 768px) {
+  .squircle-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  }
+  .theme-light .squircle-card {
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  }
 }
 
 .squircle-icon {
@@ -267,8 +279,7 @@ html, body, #root {
     radial-gradient(ellipse 110% 620px at 50% -70px, var(--song-glow-1, transparent) 0%, var(--song-glow-2, transparent) 45%, transparent 75%),
     radial-gradient(ellipse 85% 500px at 85% 35%, var(--song-glow-3, transparent) 0%, transparent 60%);
   background-size: 100% 100%;
-  background-attachment: fixed;
-  transition: background-image 0.8s ease-in-out, background-color 0.4s ease-in-out;
+  background-repeat: no-repeat;
 }
 
 /* Light Mode Studio Atmosphere */
@@ -281,6 +292,7 @@ html, body, #root {
   background-image: 
     radial-gradient(ellipse 120% 600px at 50% -60px, var(--song-glow-1, rgba(225, 29, 72, 0.04)) 0%, transparent 70%),
     radial-gradient(ellipse 85% 500px at 85% 35%, var(--song-glow-3, transparent) 0%, transparent 60%);
+  background-repeat: no-repeat;
 }
 
 .ytm-grid-overlay {
@@ -293,15 +305,26 @@ html, body, #root {
 /* Mobile GPU Acceleration & Smooth 120fps Scrolling */
 .gpu-scroll {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   transform: translateZ(0);
   backface-visibility: hidden;
-  will-change: scroll-position;
 }
 
 .fast-row {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 68px;
-  contain: layout style paint;
+  touch-action: manipulation;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@media (max-width: 768px) {
+  .fast-row {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+button, a, input, select, [role="button"] {
+  touch-action: manipulation;
 }
 
 * {
