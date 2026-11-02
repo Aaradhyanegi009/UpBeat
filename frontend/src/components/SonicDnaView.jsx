@@ -9,6 +9,50 @@ import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscri
 import { Youtube } from './YouTubeTasteSyncModal'
 import { GoogleIcon } from './GoogleAuthModal'
 
+const GENRE_PALETTE = [
+  {
+    gradient: 'from-rose-500 to-pink-500',
+    text: 'text-rose-600 dark:text-rose-400',
+    hoverBorder: 'hover:border-rose-500/40',
+  },
+  {
+    gradient: 'from-amber-500 to-orange-400',
+    text: 'text-amber-600 dark:text-amber-400',
+    hoverBorder: 'hover:border-amber-500/40',
+  },
+  {
+    gradient: 'from-emerald-500 to-teal-400',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    hoverBorder: 'hover:border-emerald-500/40',
+  },
+  {
+    gradient: 'from-yellow-500 to-rose-400',
+    text: 'text-amber-600 dark:text-amber-400',
+    hoverBorder: 'hover:border-amber-500/40',
+  },
+]
+
+const ARTIST_PALETTE = [
+  {
+    icon: 'text-rose-500 dark:text-rose-400',
+    bg: 'group-hover:bg-rose-500/20',
+    hoverBorder: 'hover:border-rose-500/40',
+    curateText: 'text-rose-600 dark:text-rose-400 group-hover:text-rose-500',
+  },
+  {
+    icon: 'text-amber-500 dark:text-amber-400',
+    bg: 'group-hover:bg-amber-500/20',
+    hoverBorder: 'hover:border-amber-500/40',
+    curateText: 'text-amber-600 dark:text-amber-400 group-hover:text-amber-500',
+  },
+  {
+    icon: 'text-emerald-500 dark:text-emerald-400',
+    bg: 'group-hover:bg-emerald-500/20',
+    hoverBorder: 'hover:border-emerald-500/40',
+    curateText: 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-500',
+  },
+]
+
 function SonicDnaView({
   mode = 'dna',
   currentTrack,
@@ -1060,7 +1104,7 @@ function SonicDnaView({
               disabled={!favorites.length}
               className="px-4 py-3 sm:py-2.5 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--text-primary)] font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 active:scale-95"
             >
-              <Compass className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
+              <Compass className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
               <span>Explore Boundaries</span>
             </button>
           </div>
@@ -1121,8 +1165,8 @@ function SonicDnaView({
         <div className="p-5 sm:p-6 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-lg relative overflow-hidden">
           <div className="flex items-center justify-between mb-4 gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
-                <Disc className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+              <div className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center shrink-0">
+                <Disc className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
               </div>
               <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight truncate">
                 Genre Affinity
@@ -1134,23 +1178,26 @@ function SonicDnaView({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {genrePills.map((g, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-2xl bg-[var(--surface-hover)] border border-[var(--border-subtle)] hover:border-emerald-500/40 transition-colors"
-              >
-                <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="font-bold text-[var(--text-primary)] tracking-tight truncate mr-2">{g.name}</span>
-                  <span className="text-xs text-emerald-700 dark:text-emerald-300 font-bold shrink-0">{g.pct}%</span>
+            {genrePills.map((g, idx) => {
+              const theme = GENRE_PALETTE[idx % GENRE_PALETTE.length]
+              return (
+                <div
+                  key={idx}
+                  className={`p-3.5 rounded-2xl bg-[var(--surface-hover)] border border-[var(--border-subtle)] ${theme.hoverBorder} transition-colors`}
+                >
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="font-bold text-[var(--text-primary)] tracking-tight truncate mr-2">{g.name}</span>
+                    <span className={`text-xs ${theme.text} font-bold shrink-0`}>{g.pct}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-black/10 dark:bg-black/50 border border-[var(--border-subtle)] overflow-hidden">
+                    <div
+                      style={{ width: `${g.pct}%` }}
+                      className={`h-full bg-gradient-to-r ${theme.gradient} rounded-full`}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-2 rounded-full bg-black/10 dark:bg-black/50 border border-[var(--border-subtle)] overflow-hidden">
-                  <div
-                    style={{ width: `${g.pct}%` }}
-                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
-                  />
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -1158,8 +1205,8 @@ function SonicDnaView({
         <div className="p-5 sm:p-6 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-lg relative overflow-hidden">
           <div className="flex items-center justify-between mb-4 gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
-                <Music className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+              <div className="w-7 h-7 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
+                <Music className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
               </div>
               <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight truncate">
                 Key Anchoring Artists
@@ -1172,27 +1219,30 @@ function SonicDnaView({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {topArtists.length > 0 ? (
-              topArtists.map((a, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => onCurateSimilar && onCurateSimilar({ title: 'Mix', artist: a })}
-                  className="p-3 px-3.5 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] hover:border-emerald-500/40 flex items-center justify-between gap-3 transition-all cursor-pointer group active:scale-98"
-                  title={`Curate mix inspired by ${a}`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-[var(--border-subtle)] group-hover:bg-emerald-500/20 border border-[var(--border-subtle)] flex items-center justify-center shrink-0 transition-colors">
-                      <Music className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+              topArtists.map((a, idx) => {
+                const theme = ARTIST_PALETTE[idx % ARTIST_PALETTE.length]
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => onCurateSimilar && onCurateSimilar({ title: 'Mix', artist: a })}
+                    className={`p-3 px-3.5 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] ${theme.hoverBorder} flex items-center justify-between gap-3 transition-all cursor-pointer group active:scale-98`}
+                    title={`Curate mix inspired by ${a}`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-8 h-8 rounded-xl bg-[var(--border-subtle)] ${theme.bg} border border-[var(--border-subtle)] flex items-center justify-center shrink-0 transition-colors`}>
+                        <Music className={`w-3.5 h-3.5 ${theme.icon}`} />
+                      </div>
+                      <span className="font-semibold text-xs sm:text-sm text-[var(--text-primary)] truncate">
+                        {a}
+                      </span>
                     </div>
-                    <span className="font-semibold text-xs sm:text-sm text-[var(--text-primary)] truncate">
-                      {a}
+                    <span className={`text-xs font-semibold ${theme.curateText} shrink-0 whitespace-nowrap flex items-center gap-1`}>
+                      <span>Curate</span>
+                      <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
                     </span>
                   </div>
-                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 group-hover:text-emerald-500 shrink-0 whitespace-nowrap flex items-center gap-1">
-                    <span>Curate</span>
-                    <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
-                  </span>
-                </div>
-              ))
+                )
+              })
             ) : (
               <p className="text-xs text-[var(--text-secondary)] font-normal py-2 col-span-2">
                 No anchoring artists yet. Heart songs or add seeds to populate your key artists.

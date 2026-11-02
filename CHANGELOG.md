@@ -4,6 +4,28 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v6.2.0] - 2026-11-02
+
+### 📱 UI/UX Polish, Mobile Card Grid Fit & Multi-Tone Studio Palette
+- **Mobile Discovery Card Grid Fit & Single-Line Badges (`PlaylistView.jsx` & `index.css`)**:
+  - Solved mobile card clipping on `< 768px` viewports with dynamic width calculation (`w-[calc(50vw-28px)] min-w-[150px] max-w-[210px]`) that guarantees a clean, zero-clip 2-card fit across all mobile screens.
+  - Added `.discovery-badge` utility (`white-space: nowrap`, `font-size: 0.64rem`, single-line text truncation) preventing category badges (e.g. `INDIA CHART`) from wrapping onto multiple lines.
+  - Eliminated 4-character title truncation (`US T...`, `Indi...`) by restructuring card bottom overlays: titles and subtitles now have full 100% width with `line-clamp-2` stacked cleanly above scaled 30x30px `Shuffle` and `Play` buttons pinned to the bottom right, over an enhanced gradient scrim.
+- **PlayerBar Utility Cluster Clean-up (`PlayerBar.jsx`)**:
+  - Removed duplicate download button from the right-hand utility cluster, keeping the primary offline download button seamlessly positioned beside Heart on the left.
+- **Dynamic Aura & Ambient Glow Boost (+8%) (`PlayerBar.jsx` & `index.css`)**:
+  - Boosted song-reactive atmospheric background aura spread by +8% (`ellipse 120% 680px`, `ellipse 95% 550px`) and increased dynamic glow opacity values (`--song-glow-1: 0.20`, `--song-glow-2: 0.11`, `--song-glow-3: 0.14`).
+  - Strengthened bottom player bar top shadow, progress thumb bloom, and play button elevation glow.
+- **Multi-Tone Studio Palette (`SonicDnaView.jsx`)**:
+  - Replaced monotone emerald accents with a vibrant Crimson Red / Amber Gold / Emerald Green multi-tone palette across `Genre Affinity` bars and `Key Anchoring Artists` influence cards.
+  - Section header icons upgraded with unique theme surfaces (Crimson Rose for genres, Amber Gold for artists).
+- **Cross-Platform Sync & Native Builds**:
+  - Synchronized Android Capacitor web assets and bumped `versionCode` to `76` (`6.2.0`).
+  - Recompiled native macOS universal binary with updated bundle version.
+  - Generated and verified `dist.zip` with SHA-256 integrity checksum.
+
+---
+
 ## [v6.1.0] - 2026-11-02
 
 ### ⚡ Mobile Performance & 120fps Smoothness Upgrade

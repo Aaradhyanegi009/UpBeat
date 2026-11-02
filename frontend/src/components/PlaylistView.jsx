@@ -614,7 +614,7 @@ function PlaylistView({
       )}
 
       {/* 3. Curated Playlists & Daily Top Charts (Listen together - rendered below Songs/Videos) */}
-      <div className="px-5 sm:px-8 lg:px-10 pt-8 sm:pt-10 flex flex-col gap-5 sm:gap-6">
+      <div className="w-full max-w-[100vw] overflow-x-hidden box-border px-5 sm:px-8 lg:px-10 pt-8 sm:pt-10 flex flex-col gap-5 sm:gap-6">
         {/* Section Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -676,7 +676,7 @@ function PlaylistView({
                 <div
                   key={block.id}
                   onClick={() => handleSelectBlock(block)}
-                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
+                  className="group relative w-[calc(50vw-28px)] min-w-[150px] max-w-[210px] sm:w-[185px] md:w-[220px] h-52 sm:h-56 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
                 >
                   <img
                     src={block.thumbnail}
@@ -693,11 +693,12 @@ function PlaylistView({
                       e.currentTarget.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
                     }}
                   />
-                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/45`} />
+                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/40`} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent pointer-events-none" />
 
-                  <div className="absolute inset-0 p-4 flex flex-col justify-between z-10">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-white font-bold px-2 py-0.5 rounded-full bg-white/20 border border-white/20 backdrop-blur-md">
+                  <div className="absolute inset-0 p-3 sm:p-4 flex flex-col justify-between z-10">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="discovery-badge font-mono uppercase tracking-wider text-white font-bold rounded-full bg-white/20 border border-white/20 backdrop-blur-md select-none">
                         {block.badge}
                       </span>
 
@@ -705,27 +706,27 @@ function PlaylistView({
                         onClick={(e) => handleRerollBlock(block.id, e)}
                         disabled={isRerolling}
                         title="Randomize / Reroll block"
-                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer active:scale-90"
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer active:scale-90 shrink-0"
                       >
                         <RotateCcw className={`w-3 h-3 text-white ${isRerolling ? 'animate-spin text-rose-400' : ''}`} />
                       </button>
                     </div>
 
-                    <div className="flex items-end justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-bold text-white group-hover:text-rose-300 transition-colors truncate drop-shadow-sm">
+                    <div className="flex flex-col gap-1.5 sm:gap-2">
+                      <div className="w-full">
+                        <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-rose-300 transition-colors line-clamp-2 leading-snug drop-shadow-sm">
                           {block.title}
                         </h3>
-                        <p className="text-[11px] text-zinc-300 mt-0.5 truncate drop-shadow-sm">
+                        <p className="text-[10px] sm:text-[11px] text-zinc-300 mt-0.5 line-clamp-1 drop-shadow-sm">
                           {block.subtitle}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={(e) => handleShuffleBlock(block, e)}
                           title="Shuffle Play Station"
-                          className="w-8 h-8 rounded-full bg-black/70 hover:bg-rose-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
+                          className="w-[30px] h-[30px] rounded-full bg-black/70 hover:bg-rose-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
                         >
                           <Shuffle className="w-3.5 h-3.5 text-white" />
                         </button>
@@ -735,7 +736,7 @@ function PlaylistView({
                             handleSelectBlock(block)
                           }}
                           title="Play Station"
-                          className="w-8 h-8 rounded-full bg-white text-slate-900 flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
+                          className="w-[30px] h-[30px] rounded-full bg-white text-slate-900 flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
                         >
                           <Play className="w-3.5 h-3.5 fill-[#0F172A] text-[#0F172A] ml-0.5" />
                         </button>
@@ -785,7 +786,7 @@ function PlaylistView({
                 <div
                   key={block.id}
                   onClick={() => handleSelectBlock(block)}
-                  className="group relative w-[160px] sm:w-[172px] md:w-[220px] h-48 sm:h-52 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
+                  className="group relative w-[calc(50vw-28px)] min-w-[150px] max-w-[210px] sm:w-[185px] md:w-[220px] h-52 sm:h-56 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
                 >
                   <img
                     src={block.thumbnail}
@@ -802,11 +803,12 @@ function PlaylistView({
                       e.currentTarget.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
                     }}
                   />
-                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/45`} />
+                  <div className={`absolute inset-0 bg-gradient-to-t ${block.color} via-black/40`} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent pointer-events-none" />
 
-                  <div className="absolute inset-0 p-4 flex flex-col justify-between z-10">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-white font-bold px-2 py-0.5 rounded-full bg-white/20 border border-white/20 backdrop-blur-md">
+                  <div className="absolute inset-0 p-3 sm:p-4 flex flex-col justify-between z-10">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="discovery-badge font-mono uppercase tracking-wider text-white font-bold rounded-full bg-white/20 border border-white/20 backdrop-blur-md select-none">
                         {block.badge}
                       </span>
 
@@ -814,27 +816,27 @@ function PlaylistView({
                         onClick={(e) => handleRerollBlock(block.id, e)}
                         disabled={isRerolling}
                         title="Randomize / Reroll block"
-                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer active:scale-90"
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer active:scale-90 shrink-0"
                       >
-                        <RotateCcw className={`w-3 h-3 text-white ${isRerolling ? 'animate-spin text-rose-400' : ''}`} />
+                        <RotateCcw className={`w-3 h-3 text-white ${isRerolling ? 'animate-spin text-purple-400' : ''}`} />
                       </button>
                     </div>
 
-                    <div className="flex items-end justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors truncate drop-shadow-sm">
+                    <div className="flex flex-col gap-1.5 sm:gap-2">
+                      <div className="w-full">
+                        <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-purple-300 transition-colors line-clamp-2 leading-snug drop-shadow-sm">
                           {block.title}
                         </h3>
-                        <p className="text-[11px] text-zinc-300 mt-0.5 truncate drop-shadow-sm">
+                        <p className="text-[10px] sm:text-[11px] text-zinc-300 mt-0.5 line-clamp-1 drop-shadow-sm">
                           {block.subtitle}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={(e) => handleShuffleBlock(block, e)}
                           title="Shuffle Play Station"
-                          className="w-8 h-8 rounded-full bg-black/70 hover:bg-purple-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
+                          className="w-[30px] h-[30px] rounded-full bg-black/70 hover:bg-purple-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95"
                         >
                           <Shuffle className="w-3.5 h-3.5 text-white" />
                         </button>
@@ -844,7 +846,7 @@ function PlaylistView({
                             handleSelectBlock(block)
                           }}
                           title="Play Station"
-                          className="w-8 h-8 rounded-full bg-white text-slate-900 flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
+                          className="w-[30px] h-[30px] rounded-full bg-white text-slate-900 flex items-center justify-center transition-all shadow-md hover:scale-110 active:scale-95 cursor-pointer"
                         >
                           <Play className="w-3.5 h-3.5 fill-[#0F172A] text-[#0F172A] ml-0.5" />
                         </button>

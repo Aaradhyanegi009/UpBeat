@@ -295,14 +295,14 @@ export default function PlayerBar({
   const thumbUrl = track?.thumbnail || (resolvedVid ? `https://i.ytimg.com/vi/${resolvedVid}/hqdefault.jpg` : '')
   const albumColor = useAlbumColor(thumbUrl)
 
-  // Dynamic Subtle Playing-Song Ambient Aura across the App
+  // Dynamic Subtle Playing-Song Ambient Aura across the App (+8% Boost)
   useEffect(() => {
     if (typeof document === 'undefined') return
     const root = document.documentElement
     if (track && albumColor && albumColor.rgb) {
-      root.style.setProperty('--song-glow-1', `rgba(${albumColor.rgb}, 0.12)`)
-      root.style.setProperty('--song-glow-2', `rgba(${albumColor.rgb}, 0.04)`)
-      root.style.setProperty('--song-glow-3', `rgba(${albumColor.rgb}, 0.06)`)
+      root.style.setProperty('--song-glow-1', `rgba(${albumColor.rgb}, 0.20)`)
+      root.style.setProperty('--song-glow-2', `rgba(${albumColor.rgb}, 0.11)`)
+      root.style.setProperty('--song-glow-3', `rgba(${albumColor.rgb}, 0.14)`)
       root.style.setProperty('--song-primary', albumColor.primary)
     } else {
       root.style.setProperty('--song-glow-1', 'transparent')
@@ -1590,17 +1590,18 @@ export default function PlayerBar({
         style={{
           '--slider-thumb-color': albumColor.primary,
           '--slider-thumb-glow': albumColor.glow,
-          boxShadow: isPlaying ? `0 -8px 28px ${albumColor.subtle}` : 'none',
+          boxShadow: isPlaying ? `0 -10px 36px ${albumColor.subtle}` : 'none',
           transition: 'box-shadow 0.4s ease'
         }}
       >
         {/* Top progress bar */}
         {track && effectiveDuration > 0 && (
           <div
-            className="absolute top-0 left-0 h-[2px] transition-all duration-150 pointer-events-none"
+            className="absolute top-0 left-0 h-[2.5px] transition-all duration-150 pointer-events-none"
             style={{
               width: `${progressPct}%`,
-              background: `linear-gradient(to right, ${albumColor.primary}, ${albumColor.accent})`
+              background: `linear-gradient(to right, ${albumColor.primary}, ${albumColor.accent})`,
+              boxShadow: isPlaying ? `0 0 14px ${albumColor.glow}` : 'none'
             }}
           />
         )}
@@ -1942,29 +1943,6 @@ export default function PlayerBar({
             >
               <Video className="w-4 h-4" />
             </button>
-
-            {track && (
-              <button
-                onClick={() => handleDownload(track)}
-                disabled={downloadState === 'downloading'}
-                title={downloadState === 'downloading' ? 'Downloading audio...' : (downloadState === 'success' || isDownloaded) ? 'Downloaded (Offline ready)' : 'Download Track'}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                  (downloadState === 'success' || isDownloaded)
-                    ? 'text-emerald-400 bg-emerald-500/15'
-                    : downloadState === 'downloading'
-                    ? 'text-emerald-400 animate-pulse bg-emerald-500/10'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
-                }`}
-              >
-                {downloadState === 'downloading' ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                ) : (downloadState === 'success' || isDownloaded) ? (
-                  <Check className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-              </button>
-            )}
 
             {track && (
               <button

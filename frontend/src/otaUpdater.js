@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { CapacitorUpdater } from '@capgo/capacitor-updater'
 
 const GITHUB_REPO = 'AaradhyaNegi009/UpBeat'
-const CURRENT_BUILTIN_VERSION = 'v6.1.0'
+const CURRENT_BUILTIN_VERSION = 'v6.2.0'
 
 /**
  * Initialize OTA updater on app startup.
