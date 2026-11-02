@@ -12,7 +12,8 @@ import {
   fetchListenTogetherFeed,
   rerollDiscoveryBlock,
   loadBlockTracks,
-  fisherYatesShuffle
+  fisherYatesShuffle,
+  prewarmTrack
 } from '../standaloneApi'
 import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscribeOfflineChanges } from '../offlineStorage'
 
@@ -447,6 +448,8 @@ function PlaylistView({
                   <div
                     key={track.video_id ? `${track.video_id}-${idx}` : idx}
                     onClick={() => onPlayTrack(track, idx)}
+                    onMouseEnter={() => track.video_id && prewarmTrack(track.video_id)}
+                    onTouchStart={() => track.video_id && prewarmTrack(track.video_id)}
                     className={`group flex items-center justify-between gap-3.5 py-2.5 px-3.5 sm:py-3 sm:px-4 rounded-[16px] transition-colors cursor-pointer min-h-[64px] sm:min-h-[72px] w-[310px] sm:w-[360px] lg:w-[390px] border fast-row ${
                       isSelected
                         ? 'bg-rose-500/10 border-rose-500/40 shadow-lg shadow-rose-950/20'
@@ -592,6 +595,8 @@ function PlaylistView({
                   <tr
                     key={idx}
                     onClick={() => onPlayTrack(track, idx)}
+                    onMouseEnter={() => track.video_id && prewarmTrack(track.video_id)}
+                    onTouchStart={() => track.video_id && prewarmTrack(track.video_id)}
                     className="hover:bg-[var(--surface-hover)] border-b border-[var(--border-subtle)] transition-colors cursor-pointer"
                   >
                     <td className="py-2.5 px-3 text-[var(--text-muted)] font-mono">{idx + 1}</td>
@@ -678,6 +683,14 @@ function PlaylistView({
                 <div
                   key={block.id}
                   onClick={() => handleSelectBlock(block)}
+                  onMouseEnter={() => {
+                    const firstVid = block.tracks?.[0]?.video_id || block.video_id
+                    if (firstVid) prewarmTrack(firstVid)
+                  }}
+                  onTouchStart={() => {
+                    const firstVid = block.tracks?.[0]?.video_id || block.video_id
+                    if (firstVid) prewarmTrack(firstVid)
+                  }}
                   className="group relative w-[calc(50vw-28px)] min-w-[150px] max-w-[210px] sm:w-[185px] md:w-[220px] h-52 sm:h-56 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
                 >
                   <img
@@ -789,6 +802,14 @@ function PlaylistView({
                 <div
                   key={block.id}
                   onClick={() => handleSelectBlock(block)}
+                  onMouseEnter={() => {
+                    const firstVid = block.tracks?.[0]?.video_id || block.video_id
+                    if (firstVid) prewarmTrack(firstVid)
+                  }}
+                  onTouchStart={() => {
+                    const firstVid = block.tracks?.[0]?.video_id || block.video_id
+                    if (firstVid) prewarmTrack(firstVid)
+                  }}
                   className="group relative w-[calc(50vw-28px)] min-w-[150px] max-w-[210px] sm:w-[185px] md:w-[220px] h-52 sm:h-56 rounded-[18px] squircle-card overflow-hidden cursor-pointer shrink-0 snap-start transition-transform duration-300 hover:scale-[1.02] shadow-xl"
                 >
                   <img

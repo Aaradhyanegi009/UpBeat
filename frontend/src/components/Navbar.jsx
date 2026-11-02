@@ -42,7 +42,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v6.3.0')
+  const [otaVer, setOtaVer] = useState('v6.3.1')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 

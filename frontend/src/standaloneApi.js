@@ -911,8 +911,54 @@ export async function resolveStandaloneAudio(videoId, track = null) {
   return null
 }
 
-/** Audio source for the player: Mac backend proxy when available, otherwise direct stream. */
+const streamUrlCache = new Map()
+const prewarmedSet = new Set()
+
+/**
+ * Pre-warms the audio stream URL at the Vercel Edge worker in the background
+ * before the user even finishes clicking.
+ */
+export function prewarmTrack(videoId) {
+  if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) return
+  if (prewarmedSet.has(videoId)) return
+  prewarmedSet.add(videoId)
+
+  if (prewarmedSet.size > 100) {
+    const first = prewarmedSet.values().next().value
+    prewarmedSet.delete(first)
+  }
+
+  try {
+    const url = `/api/audio?id=${encodeURIComponent(videoId)}&prewarm=1`
+    fetch(url, { priority: 'low' }).catch(() => {})
+  } catch {}
+}
+
+/** Audio source for the player: instant Edge stream on Web, Mac backend proxy when available, direct stream in APK. */
 export async function getAudioSource(videoId, track = null) {
+  if (!videoId) return null
+
+  // 1. Memory cache hit (< 1ms)
+  const cached = streamUrlCache.get(videoId)
+  if (cached && Date.now() - cached.ts < 45 * 60 * 1000) {
+    return cached
+  }
+
+  // 2. Web / Vercel Edge instant single-hop audio stream:
+  // Returns Edge proxy URL immediately on millisecond 0 so <audio> starts streaming right away!
+  if (!isNativeApp() && !getStoredServerUrl()) {
+    const duration = parseDurationText(track?.duration_text) || Number(track?.duration || 0)
+    const entry = {
+      url: `/api/audio?id=${encodeURIComponent(videoId)}`,
+      duration,
+      video_id: videoId,
+      ts: Date.now(),
+    }
+    streamUrlCache.set(videoId, entry)
+    return entry
+  }
+
+  // 3. Mac backend configured:
   if (hasBackend()) {
     try {
       const qParams = new URLSearchParams()
@@ -925,19 +971,29 @@ export async function getAudioSource(videoId, track = null) {
       const resp = await fetch(apiUrl(`/audio-info/${videoId}${qs}`))
       if (resp.ok) {
         const info = await resp.json()
-        return {
+        const entry = {
           url: apiUrl(`/audio/${videoId}${qs}`),
           duration: Number(info?.duration || 0),
-          video_id: info?.video_id || info?.resolved_video_id || videoId
+          video_id: info?.video_id || info?.resolved_video_id || videoId,
+          ts: Date.now(),
         }
+        streamUrlCache.set(videoId, entry)
+        return entry
       }
     } catch {}
     // If Mac backend fails (e.g. yt-dlp bot challenge/login-required), try direct Innertube player
     const standalone = await resolveStandaloneAudio(videoId, track)
-    if (standalone?.url) return standalone
+    if (standalone?.url) {
+      streamUrlCache.set(videoId, standalone)
+      return standalone
+    }
     return null
   }
-  return resolveStandaloneAudio(videoId, track)
+  const standalone = await resolveStandaloneAudio(videoId, track)
+  if (standalone?.url) {
+    streamUrlCache.set(videoId, standalone)
+  }
+  return standalone
 }
 
 export function getTrackDownloadUrl(track) {

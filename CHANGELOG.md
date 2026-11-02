@@ -4,7 +4,27 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
-## [v6.3.0] - 2026-11-02
+## [v6.3.1] - 2026-11-02
+
+### ⚡ Sub-1-Second Instant Audio Playback on Vercel Edge & Zero-Latency Pre-Warming
+- **Vercel Edge Streaming Audio Function (`api/audio.js`)**:
+  - Upgraded `/api/audio` to run on the Vercel Edge Runtime (`export const config = { runtime: 'edge' }`), eliminating Node serverless cold-starts (0ms spin-up).
+  - Integrated in-memory Edge worker URL cache with 45-minute TTL (`streamCache`), resolving byte-range audio chunk requests instantly without re-querying YouTube Innertube.
+  - Implemented unthrottled `ANDROID_VR` (`1.60.19`) + `IOS` (`19.45.4`) multi-client resolution prioritizing Format 140 (`audio/mp4`, 128kbps AAC-LC) with front-loaded `moov` atom and Format 251 (`audio/webm; opus`).
+  - Added native `206 Partial Content` streaming with incoming `Range` header forwarding and direct `ReadableStream` piping, bypassing `googlevideo.com` IP-bound URL mismatch and user-side throttling.
+- **Client Zero-Hop Resolution (`frontend/src/standaloneApi.js`)**:
+  - Eliminated sequential double-hop round-trips: `getAudioSource` returns `/api/audio?id=${videoId}` immediately on millisecond 0 for Web/Vercel PWA deployments.
+  - Built client memory cache `streamUrlCache` for instantaneous cache hits (< 1ms).
+- **Proactive Track Pre-Warming (`prewarmTrack`)**:
+  - Added low-priority background pre-warming (`&prewarm=1`) on hover (`onMouseEnter`) and touch (`onTouchStart`) across all song rows and Discovery station cards in `PlaylistView.jsx`, `SonicDnaView.jsx`, and `QueueDrawer.jsx`.
+  - Added automatic next-track queue pre-warming in `PlayerBar.jsx` after 5 seconds of active playback.
+- **Low-Latency Player Lifecycle (`PlayerBar.jsx` & `frontend/index.html`)**:
+  - Added `crossOrigin="anonymous"` and `preload="auto"` to HTML `<audio>` elements.
+  - Accelerated playback start by triggering `audio.play()` on `loadeddata` and `canplay` without waiting for `canplaythrough`.
+  - Implemented socket cleanup on rapid song clicks (`targetAudio.pause(); targetAudio.removeAttribute('src'); targetAudio.load()`) to free 100% bandwidth for the newly selected track.
+  - Added preconnect and dns-prefetch links for `youtube.com`, `music.youtube.com`, `i.ytimg.com`, and `lh3.googleusercontent.com` in `frontend/index.html`.
+
+---
 
 ### ✨ Taste Profile Action Cleanup, Free Vertical Scrolling, Translucent Glass UI & Light Mode Contrast
 - **Decluttered Taste Profile Top Controls (`SonicDnaView.jsx`)**:

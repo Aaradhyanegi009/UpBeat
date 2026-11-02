@@ -4,7 +4,7 @@ import {
   Sparkles, Download, Check, Loader2, ListPlus, Activity,
   Sliders, Zap, ShieldCheck, Flame, Compass, ChevronRight, Disc, X, Trash2, RotateCcw
 } from 'lucide-react'
-import { getTrackDownloadUrl, getAudioSource } from '../standaloneApi'
+import { getTrackDownloadUrl, getAudioSource, prewarmTrack } from '../standaloneApi'
 import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscribeOfflineChanges } from '../offlineStorage'
 import { Youtube } from './YouTubeTasteSyncModal'
 import { GoogleIcon } from './GoogleAuthModal'
@@ -339,6 +339,8 @@ function SonicDnaView({
                         <tr
                           key={t.video_id || idx}
                           onClick={() => onPlayTrack(t, idx, filteredFavs)}
+                          onMouseEnter={() => t.video_id && prewarmTrack(t.video_id)}
+                          onTouchStart={() => t.video_id && prewarmTrack(t.video_id)}
                           className={`group hover:bg-[var(--surface-hover)] transition-colors cursor-pointer fast-row ${
                             isCur ? 'bg-rose-500/10' : ''
                           }`}
@@ -490,6 +492,8 @@ function SonicDnaView({
                     <div
                       key={t.video_id || idx}
                       onClick={() => onPlayTrack(t, idx, filteredFavs)}
+                      onMouseEnter={() => t.video_id && prewarmTrack(t.video_id)}
+                      onTouchStart={() => t.video_id && prewarmTrack(t.video_id)}
                       className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 fast-row ${
                         isCur
                           ? 'bg-rose-500/15 border-rose-500/40 shadow-lg shadow-rose-950/20 backdrop-blur-xl'
@@ -743,6 +747,8 @@ function SonicDnaView({
                         <tr
                           key={t.video_id || idx}
                           onClick={() => onPlayTrack(t, idx, filteredTracks)}
+                          onMouseEnter={() => t.video_id && prewarmTrack(t.video_id)}
+                          onTouchStart={() => t.video_id && prewarmTrack(t.video_id)}
                           className={`group hover:bg-[var(--surface-hover)] transition-colors cursor-pointer fast-row ${
                             isCur ? 'bg-sky-500/10' : ''
                           }`}
@@ -892,6 +898,8 @@ function SonicDnaView({
                     <div
                       key={t.video_id || idx}
                       onClick={() => onPlayTrack(t, idx, filteredTracks)}
+                      onMouseEnter={() => t.video_id && prewarmTrack(t.video_id)}
+                      onTouchStart={() => t.video_id && prewarmTrack(t.video_id)}
                       className={`p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 fast-row ${
                         isCur
                           ? 'bg-sky-500/15 border-sky-500/40 shadow-lg shadow-sky-950/20 backdrop-blur-xl'
@@ -1260,6 +1268,8 @@ function SonicDnaView({
                   <div
                     key={idx}
                     onClick={() => onPlayTrack(t, idx)}
+                    onMouseEnter={() => t.video_id && prewarmTrack(t.video_id)}
+                    onTouchStart={() => t.video_id && prewarmTrack(t.video_id)}
                     className="p-3 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] hover:border-emerald-500/30 flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-xs active:scale-98"
                   >
                     <div className="flex items-center gap-3 min-w-0">

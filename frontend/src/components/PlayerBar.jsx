@@ -4,7 +4,7 @@ import {
   ExternalLink, Video, Music, Heart, Loader2, Download, Check, ListMusic, ChevronUp,
   Monitor, Compass, Mic2, Moon
 } from 'lucide-react'
-import { getApiBase, hasBackend, getAudioSource, resolveStandaloneAudio, searchYouTubeStandalone, getTrackDownloadUrl, openExternalUrl } from '../standaloneApi'
+import { getApiBase, hasBackend, getAudioSource, resolveStandaloneAudio, searchYouTubeStandalone, getTrackDownloadUrl, openExternalUrl, prewarmTrack } from '../standaloneApi'
 import { isTrackDownloaded, saveTrackOffline, createOfflineAudioUrl, subscribeOfflineChanges } from '../offlineStorage'
 import { useAlbumColor, DEFAULT_LAVENDER_THEME } from '../utils/colorExtractor'
 import NowPlayingView from './NowPlayingView'
@@ -179,6 +179,7 @@ export default function PlayerBar({
   const fallbackQueueRef = useRef([])
   const endedTriggeredRef = useRef(false)
   const endedTriggeredTrackKeyRef = useRef('')
+  const hasPrewarmedNextRef = useRef(false)
   const loadWatchdogRef = useRef(null)
 
   const clearLoadWatchdog = () => {
@@ -784,6 +785,8 @@ export default function PlayerBar({
   useEffect(() => {
     if (!resolvedVid || playbackMode !== 'app' || useIframeFallback) return
 
+    hasPrewarmedNextRef.current = false
+
     // Any crossfade still running from the previous transition must be completed NOW,
     // otherwise its final tick would pause/unload the deck we are about to load into.
     finishCrossfadeNow()
@@ -913,6 +916,15 @@ export default function PlayerBar({
           tryNextFallback()
         }
         return
+      }
+
+      // Abort previous pending stream on rapid clicks to free socket bandwidth immediately
+      if (targetAudio.src && targetAudio.src !== streamSrc) {
+        try {
+          targetAudio.pause()
+          targetAudio.removeAttribute('src')
+          targetAudio.load()
+        } catch {}
       }
 
       targetAudio.dataset.vid = resolvedVid
@@ -1427,12 +1439,22 @@ export default function PlayerBar({
           key={deck}
           ref={deck === 'A' ? audioRefA : audioRefB}
           preload="auto"
+          crossOrigin="anonymous"
           onTimeUpdate={(e) => {
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid && !useIframeFallback && !isScrubbingRef.current) {
               const cur = e.currentTarget.currentTime || 0
               syncUiCurrentTime(cur)
               if (cur > 0.5) {
                 clearLoadWatchdog()
+              }
+              if (cur > 5 && !hasPrewarmedNextRef.current) {
+                hasPrewarmedNextRef.current = true
+                if (queue && queue.length > 0 && typeof queueIndex === 'number') {
+                  const nextTrack = queue[queueIndex + 1]
+                  if (nextTrack?.video_id) {
+                    prewarmTrack(nextTrack.video_id)
+                  }
+                }
               }
               const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
               const rawDur = e.currentTarget.duration
@@ -1471,8 +1493,17 @@ export default function PlayerBar({
               e.currentTarget.play().catch(() => {})
             }
           }}
-          onCanPlay={() => {
+          onLoadedData={(e) => {
             setIsLoadingStream(false)
+            if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
+              e.currentTarget.play().catch(() => {})
+            }
+          }}
+          onCanPlay={(e) => {
+            setIsLoadingStream(false)
+            if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
+              e.currentTarget.play().catch(() => {})
+            }
           }}
           onDurationChange={(e) => {
             if (activeDeckRef.current === deck || e.currentTarget.dataset.vid === resolvedVid) {
