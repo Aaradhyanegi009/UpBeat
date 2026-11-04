@@ -59,7 +59,8 @@ export default function PlayerBar({
   setCrossfadeSec: externalSetCrossfadeSec,
   isShuffle: externalIsShuffle,
   setIsShuffle: externalSetIsShuffle,
-  onToggleShuffle: externalOnToggleShuffle
+  onToggleShuffle: externalOnToggleShuffle,
+  onUserSeek
 }) {
   const [internalNowPlaying, setInternalNowPlaying] = useState(false)
   const nowPlayingOpen = typeof isNowPlayingOpen === 'boolean' ? isNowPlayingOpen : internalNowPlaying
@@ -629,7 +630,9 @@ export default function PlayerBar({
     }
   }, [primeAudioEngines])
 
-  const commitSeek = (targetSec) => {
+  const pendingSeekSecRef = useRef(null)
+
+  const commitSeek = (targetSec, fromRemoteJam = false) => {
     finishCrossfadeNow()
     const sec = Math.max(0, Number(targetSec) || 0)
     currentTimeRef.current = sec
@@ -640,11 +643,19 @@ export default function PlayerBar({
     lastNativeReportSecRef.current = sec
     notifyNativePlayback(Boolean(isPlayingRef.current), sec, effectiveDuration)
     restoreVolume()
+    if (!fromRemoteJam && onUserSeek) {
+      try {
+        onUserSeek(sec)
+      } catch {}
+    }
     const activeAudio = getActiveAudio()
     if (!useIframeFallback && activeAudio) {
       try {
         if (activeAudio.readyState >= 1) {
           activeAudio.currentTime = sec
+          pendingSeekSecRef.current = null
+        } else {
+          pendingSeekSecRef.current = sec
         }
       } catch {}
       return
@@ -657,7 +668,7 @@ export default function PlayerBar({
     }
   }
 
-  // Expose global controls for macOS menu bar, media keys, and external extensions
+  // Expose global controls for macOS menu bar, media keys, Jam sync engine, and external extensions
   useEffect(() => {
     window.UpBeatControls = {
       togglePlay: () => setIsPlaying((p) => !p),
@@ -665,7 +676,18 @@ export default function PlayerBar({
       pause: () => setIsPlaying(false),
       next: () => onNextRef.current(),
       prev: () => onPrev(),
-      seekTo: (sec) => commitSeek(sec)
+      seekTo: (sec, fromRemoteJam = false) => commitSeek(sec, fromRemoteJam),
+      getCurrentTime: () => currentTimeRef.current || 0,
+      getDuration: () => authoritativeDurationRef.current || 0,
+      setPlaybackRate: (rate) => {
+        const a = getActiveAudio()
+        if (a) {
+          try {
+            a.preservesPitch = true
+            a.playbackRate = Number(rate) || 1.0
+          } catch {}
+        }
+      }
     }
     return () => {
       delete window.UpBeatControls
@@ -1487,6 +1509,12 @@ export default function PlayerBar({
             setIsLoadingStream(false)
             if (activeDeckRef.current === deck || e.currentTarget.dataset.vid === resolvedVid) {
               sanitizeDuration(e.currentTarget.duration)
+              if (pendingSeekSecRef.current !== null && pendingSeekSecRef.current > 0) {
+                try {
+                  e.currentTarget.currentTime = pendingSeekSecRef.current
+                  pendingSeekSecRef.current = null
+                } catch {}
+              }
             }
             if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
               e.currentTarget.play().catch(() => {})

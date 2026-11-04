@@ -1,7 +1,7 @@
 {
   "name": "argon-music-frontend",
   "private": true,
-  "version": "6.3.3",
+  "version": "6.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
     "@capacitor/core": "^8.5.3",
     "@capgo/capacitor-updater": "^8.53.1",
     "lucide-react": "^1.16.0",
+    "peerjs": "^1.5.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

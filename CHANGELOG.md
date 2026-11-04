@@ -4,6 +4,24 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v6.4.0] - 2026-11-04
+
+### 👥 Friends / Live Jam Sessions — Synchronized Real-Time Music Listening
+- **Zero-Backend P2P WebRTC + BroadcastChannel Jam Engine (`frontend/src/jamEngine.js`)**:
+  - Built `JamSessionManager` singleton powered by PeerJS WebRTC DataChannels (`STUN` servers) for internet-wide cross-device rooms and `BroadcastChannel` (`upbeat_jam_JAM-XXXX`) for `< 2ms` local multi-tab testing.
+  - Human-friendly 6-character Room Codes (`JAM-XXXX` using unambiguous alphanumeric alphabet `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`).
+  - Automatic NTP-style ping-pong clock offset estimation ($\Delta t$) between Host and Guest peers.
+- **3-Tier Acoustic Drift Compensation Engine (`evaluateAudioDrift` & `PlayerBar.jsx`)**:
+  - **Tier 1 (`|drift| < 150ms`)**: Locked in sync at `1.0x` normal playback rate.
+  - **Tier 2 (`150ms <= |drift| < 850ms`)**: Imperceptible micro-speed ramping (`1.035x` to catch up or `0.965x` to slow down) without audible seek clicks.
+  - **Tier 3 (`|drift| >= 850ms`)**: Instant hard seek to `expectedPosition` (`seekTo(sec, true)`), including `pendingSeekSecRef` on `loadedmetadata` so newly joined guests jump straight to the Host's exact timestamp.
+- **Collaborative Queue, Open Party DJ Mode & Live Emoji Reactions (`JamModal.jsx`, `JamFloatingBar.jsx`, `Navbar.jsx`, `App.jsx`)**:
+  - Dedicated `👥 Jam` button in the top navigation bar (Desktop & Mobile) with a live pulsing emerald indicator and participant count badge.
+  - **Host & Join Modal (`JamModal.jsx`)**: Custom display name & 8 musical avatars (`🎧`, `🎸`, `🎹`, `🎷`, `🥁`, `🎻`, `🚀`, `🔥`), one-tap Room Code / Deep-Link (`?jam=JAM-XXXX`) copy, scannable QR code generator, live participant list, and **Host Only vs. Open Party DJ Mode** toggle.
+  - **Floating Jam Bar & Emoji Particle Stream (`JamFloatingBar.jsx`)**: Compact translucent glass pill above the PlayerBar showing room code, sync status badge (`In Sync` / `Aligning`), avatar stack, and instant floating emoji reactions (`🔥`, `❤️`, `🙌`, `⚡`, `🥹`, `🕺`, `🚀`, `✨`).
+
+---
+
 ## [v6.3.3] - 2026-11-02
 
 ### 🛡️ Strict Songs-Only Filtering in Playlists & Seeds (Academic Lectures & YouTuber Vlogs Purge)

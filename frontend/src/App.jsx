@@ -9,6 +9,9 @@ import OfflineView from './components/OfflineView'
 import PlayerBar from './components/PlayerBar'
 import QueueDrawer from './components/QueueDrawer'
 import GoogleAuthModal from './components/GoogleAuthModal'
+import JamModal from './components/JamModal'
+import JamFloatingBar from './components/JamFloatingBar'
+import { jamManager, evaluateAudioDrift, normalizeRoomCode } from './jamEngine'
 import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges } from './offlineStorage'
 import { initOtaUpdater } from './otaUpdater'
 import { getDayNightThemeInfo, getThemeInfo, getNextThemePreference, applyThemeToDocument } from './utils/themeCycle'
@@ -263,6 +266,177 @@ export default function App() {
   const [otaUpdate, setOtaUpdate] = useState(null)
   const [isApplyingOta, setIsApplyingOta] = useState(false)
   const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
+
+  // Live Jam Session State & Refs
+  const [jamState, setJamState] = useState(() => jamManager.state)
+  const [isJamModalOpen, setIsJamModalOpen] = useState(false)
+  const [initialJamCode, setInitialJamCode] = useState('')
+  const [jamReactions, setJamReactions] = useState([])
+  const currentTrackRef = useRef(currentTrack)
+  const isPlayingRef = useRef(isPlaying)
+  const queueRef = useRef(queue)
+  const remoteJamGuardRef = useRef(false)
+  const handleNextRef = useRef(null)
+  const handlePrevRef = useRef(null)
+
+  currentTrackRef.current = currentTrack
+  isPlayingRef.current = isPlaying
+  queueRef.current = queue
+
+  // Subscribe to Jam Engine state & detect ?jam=XXXX invite link on startup
+  useEffect(() => {
+    const unsub = jamManager.subscribe((nextState) => {
+      setJamState(nextState)
+    })
+
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const jamParam = params.get('jam')
+      if (jamParam) {
+        const cleanCode = normalizeRoomCode(jamParam)
+        if (cleanCode && cleanCode !== 'JAM-') {
+          setInitialJamCode(cleanCode)
+          setIsJamModalOpen(true)
+          const cleanUrl = window.location.pathname + window.location.hash
+          window.history.replaceState({}, document.title, cleanUrl)
+        }
+      }
+    } catch {}
+
+    return () => unsub()
+  }, [])
+
+  // Bind Jam Engine synchronization & control handlers
+  useEffect(() => {
+    jamManager.setHandlers({
+      getHostPlaybackSnapshot: () => ({
+        track: currentTrackRef.current,
+        isPlaying: isPlayingRef.current,
+        currentTime: window.UpBeatControls?.getCurrentTime?.() || 0,
+        queue: queueRef.current || []
+      }),
+      onRemoteSync: (data, clockOffsetMs) => {
+        if (!data) return
+        remoteJamGuardRef.current = true
+        try {
+          if (data.track?.video_id && data.track.video_id !== currentTrackRef.current?.video_id) {
+            setCurrentTrack(data.track)
+          }
+          if (typeof data.isPlaying === 'boolean' && data.isPlaying !== isPlayingRef.current) {
+            setIsPlaying(data.isPlaying)
+          }
+          if (Array.isArray(data.queue)) {
+            setQueue(data.queue)
+          }
+
+          if (data.track?.video_id) {
+            const localTime = window.UpBeatControls?.getCurrentTime?.() || 0
+            const drift = evaluateAudioDrift(
+              localTime,
+              Number(data.currentTime) || 0,
+              Number(data.hostTimestamp) || Date.now(),
+              clockOffsetMs || 0,
+              Boolean(data.isPlaying)
+            )
+            if (drift.action === 'SEEK') {
+              window.UpBeatControls?.seekTo?.(drift.targetTime, true)
+              window.UpBeatControls?.setPlaybackRate?.(1.0)
+            } else if (drift.action === 'RAMP') {
+              window.UpBeatControls?.setPlaybackRate?.(drift.playbackRate)
+            } else {
+              window.UpBeatControls?.setPlaybackRate?.(1.0)
+            }
+            jamManager.reportDriftStatus(drift.driftMs, drift.syncTier)
+          }
+        } finally {
+          setTimeout(() => {
+            remoteJamGuardRef.current = false
+          }, 80)
+        }
+      },
+      onRemoteControl: (data) => {
+        if (!data || !data.action) return
+        remoteJamGuardRef.current = true
+        try {
+          if (data.action === 'SELECT_TRACK' && data.track) {
+            setCurrentTrack(data.track)
+            setIsPlaying(true)
+            window.UpBeatControls?.seekTo?.(0, true)
+          } else if (data.action === 'PLAY') {
+            setIsPlaying(true)
+            if (typeof data.currentTime === 'number') {
+              window.UpBeatControls?.seekTo?.(data.currentTime, true)
+            }
+          } else if (data.action === 'PAUSE') {
+            setIsPlaying(false)
+            if (typeof data.currentTime === 'number') {
+              window.UpBeatControls?.seekTo?.(data.currentTime, true)
+            }
+          } else if (data.action === 'SEEK' && typeof data.currentTime === 'number') {
+            window.UpBeatControls?.seekTo?.(data.currentTime, true)
+          } else if (data.action === 'NEXT') {
+            handleNextRef.current?.(true)
+          } else if (data.action === 'PREV') {
+            handlePrevRef.current?.(true)
+          }
+
+          if (jamManager.state.active && jamManager.state.isHost) {
+            setTimeout(() => jamManager.broadcastHostSync(), 60)
+          }
+        } finally {
+          setTimeout(() => {
+            remoteJamGuardRef.current = false
+          }, 80)
+        }
+      },
+      onRemoteQueueAdd: (track, addedBy) => {
+        if (!track) return
+        setQueue((prev) => {
+          const nextQ = [...prev, track]
+          if (jamManager.state.active && jamManager.state.isHost) {
+            setTimeout(() => jamManager.broadcastHostSync({ queue: nextQ }), 50)
+          }
+          return nextQ
+        })
+        showNotify(
+          `${addedBy?.avatar || '🎧'} ${addedBy?.name || 'Friend'} added "${track.title}" to Jam queue`,
+          'info'
+        )
+      },
+      onReaction: (packet) => {
+        if (!packet?.emoji) return
+        const id = packet.id || `${Date.now()}_${Math.random()}`
+        const xOffset = 18 + Math.floor(Math.random() * 64)
+        setJamReactions((prev) => [
+          ...prev.slice(-14),
+          {
+            id,
+            emoji: packet.emoji,
+            senderName: packet.senderName || 'Listener',
+            senderAvatar: packet.senderAvatar || '🎧',
+            xOffset
+          }
+        ])
+        setTimeout(() => {
+          setJamReactions((prev) => prev.filter((r) => r.id !== id))
+        }, 2650)
+      },
+      onNotify: (msg, type) => {
+        showNotify(msg, type || 'info')
+      }
+    })
+  }, [])
+
+  // Automatically broadcast Host playback state changes to Jam room
+  useEffect(() => {
+    if (!jamState.active || !jamState.isHost || remoteJamGuardRef.current) return
+    jamManager.broadcastHostSync({
+      track: currentTrack,
+      isPlaying,
+      currentTime: window.UpBeatControls?.getCurrentTime?.() || 0,
+      queue
+    })
+  }, [currentTrack?.video_id, isPlaying, queue.length, jamState.active, jamState.isHost])
 
   // Detect iOS Safari (browser mode) to guide users toward adding to Home Screen
   useEffect(() => {
@@ -1288,6 +1462,13 @@ export default function App() {
   const handlePlayTrack = (track, idxOrList, customList) => {
     if (!track) return
 
+    if (jamManager.state.active && !jamManager.state.isHost && jamManager.state.djMode === 'host_only' && !remoteJamGuardRef.current) {
+      jamManager.emitQueueAdd(track)
+      setQueue((prev) => [...prev, track])
+      showNotify(`Host Only DJ mode: Added "${track.title}" to shared Jam queue`, 'info')
+      return
+    }
+
     let listToUse = null
     let actualIdx = 0
 
@@ -1324,7 +1505,13 @@ export default function App() {
       (currentTrack.title === track.title && currentTrack.artist === track.artist)
     )
     if (isSame) {
-      setIsPlaying(!isPlaying)
+      const nextPlay = !isPlaying
+      setIsPlaying(nextPlay)
+      if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
+        jamManager.emitPlaybackControl(nextPlay ? 'PLAY' : 'PAUSE', {
+          currentTime: window.UpBeatControls?.getCurrentTime?.() || 0
+        })
+      }
       if (isMobileDevice) {
         setIsNowPlayingOpen(true)
       }
@@ -1333,6 +1520,9 @@ export default function App() {
     setCurrentTrack(track)
     setCurrentTrackIdx(actualIdx)
     setIsPlaying(true)
+    if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
+      jamManager.emitPlaybackControl('SELECT_TRACK', { track, currentTime: 0 })
+    }
     if (isMobileDevice) {
       setIsNowPlayingOpen(true)
     }
@@ -1343,13 +1533,25 @@ export default function App() {
   }
 
   const handleTogglePlay = () => {
+    if (jamManager.state.active && !jamManager.state.isHost && jamManager.state.djMode === 'host_only' && !remoteJamGuardRef.current) {
+      showNotify('Host Only DJ mode is active — ask the host to enable Open Party mode', 'info')
+      return
+    }
     if (!currentTrack && playlist?.tracks?.length > 0) {
       setCurrentTrack(playlist.tracks[0])
       setCurrentTrackIdx(0)
       setIsPlaying(true)
       return
     }
-    setIsPlaying((prev) => !prev)
+    setIsPlaying((prev) => {
+      const next = !prev
+      if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
+        jamManager.emitPlaybackControl(next ? 'PLAY' : 'PAUSE', {
+          currentTime: window.UpBeatControls?.getCurrentTime?.() || 0
+        })
+      }
+      return next
+    })
   }
 
   const getActiveTrackList = () => {
@@ -1362,7 +1564,15 @@ export default function App() {
     return playlist?.tracks || []
   }
 
-  const handleNext = () => {
+  const handleNext = (fromRemote = false) => {
+    if (jamManager.state.active && !jamManager.state.isHost && !fromRemote && !remoteJamGuardRef.current) {
+      if (jamManager.state.djMode === 'host_only') {
+        showNotify('Host Only DJ mode is active', 'info')
+        return
+      }
+      jamManager.emitPlaybackControl('NEXT', {})
+    }
+
     // 1. Prioritize queued tracks
     if (queue.length > 0) {
       const nextTrack = queue[0]
@@ -1399,6 +1609,7 @@ export default function App() {
       handlePushToSafari(nextTrack)
     }
   }
+  handleNextRef.current = handleNext
 
   const handlePlayNext = (track) => {
     if (!track) return
@@ -1406,12 +1617,18 @@ export default function App() {
       const filtered = prev.filter((t) => t.video_id !== track.video_id)
       return [track, ...filtered]
     })
+    if (jamManager.state.active && !jamManager.state.isHost) {
+      jamManager.emitQueueAdd(track)
+    }
     showNotify(`Playing next: "${track.title}"`, 'info')
   }
 
   const handleAddToQueue = (track) => {
     if (!track) return
     setQueue((prev) => [...prev, track])
+    if (jamManager.state.active && !jamManager.state.isHost) {
+      jamManager.emitQueueAdd(track)
+    }
     showNotify(`Added "${track.title}" to queue (${queue.length + 1})`, 'info')
   }
 
@@ -1574,7 +1791,15 @@ export default function App() {
     }
   }
 
-  const handlePrev = () => {
+  const handlePrev = (fromRemote = false) => {
+    if (jamManager.state.active && !jamManager.state.isHost && !fromRemote && !remoteJamGuardRef.current) {
+      if (jamManager.state.djMode === 'host_only') {
+        showNotify('Host Only DJ mode is active', 'info')
+        return
+      }
+      jamManager.emitPlaybackControl('PREV', {})
+    }
+
     const list = getActiveTrackList()
     if (!list || list.length === 0) return
 
@@ -1596,6 +1821,16 @@ export default function App() {
     setIsPlaying(true)
     if (playbackMode === 'safari') {
       handlePushToSafari(prevTrack)
+    }
+  }
+  handlePrevRef.current = handlePrev
+
+  const handleUserSeek = (targetSec) => {
+    if (!jamManager.state.active || remoteJamGuardRef.current) return
+    if (jamManager.state.isHost) {
+      jamManager.broadcastHostSync({ currentTime: targetSec })
+    } else if (jamManager.state.djMode === 'open') {
+      jamManager.emitPlaybackControl('SEEK', { currentTime: targetSec })
     }
   }
 
@@ -1754,6 +1989,8 @@ export default function App() {
         isSearching={isSearching}
         googleUser={googleUser}
         onOpenGoogleModal={() => setShowGoogleModal(true)}
+        jamState={jamState}
+        onOpenJamModal={() => setIsJamModalOpen(true)}
       />
 
       {/* Workspace Body */}
@@ -1930,6 +2167,28 @@ export default function App() {
         isShuffle={isShuffle}
         setIsShuffle={setIsShuffle}
         onToggleShuffle={handleToggleShuffle}
+        onUserSeek={handleUserSeek}
+      />
+
+      {/* Live Jam Session Floating Bar & Emoji Particle Stream */}
+      <JamFloatingBar
+        jamState={jamState}
+        reactions={jamReactions}
+        onOpenJamModal={() => setIsJamModalOpen(true)}
+      />
+
+      {/* Live Jam Session Modal (Host / Join / Room Dashboard) */}
+      <JamModal
+        isOpen={isJamModalOpen}
+        onClose={() => {
+          setIsJamModalOpen(false)
+          setInitialJamCode('')
+        }}
+        jamState={jamState}
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        initialJoinCode={initialJamCode}
+        onNotify={(msg, type) => showNotify(msg, type || 'info')}
       />
 
       {/* Playback Queue Drawer */}
