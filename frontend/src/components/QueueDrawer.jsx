@@ -34,7 +34,7 @@ export default function QueueDrawer({ isOpen, onClose, queue = [], currentTrack,
               <div className="flex items-center gap-3 min-h-[60px]">
                 <Art track={currentTrack} className="w-12 h-12" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[15px] font-bold text-accent truncate">{currentTrack.title}</div>
+                  <div className="text-[15px] font-bold text-t1 truncate">{currentTrack.title}</div>
                   <div className="text-[13px] text-t2 truncate flex items-center gap-1.5">
                     {isPlaying && <Equalizer />}
                     {currentTrack.artist}

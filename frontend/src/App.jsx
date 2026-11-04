@@ -27,6 +27,7 @@ import CollectionView from './views/CollectionView'
 import LibraryView from './views/LibraryView'
 import SettingsView from './views/SettingsView'
 import Onboarding from './views/Onboarding'
+import ProfileEditModal from './components/ProfileEditModal'
 import { initOtaUpdater } from './otaUpdater'
 import { getThemeInfo, applyThemeToDocument } from './utils/themeCycle'
 import {
@@ -264,10 +265,29 @@ export default function App() {
     return user
   })
   const [showGoogleModal, setShowGoogleModal] = useState(false)
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
   const [isSyncingLikes, setIsSyncingLikes] = useState(false)
   const [otaUpdate, setOtaUpdate] = useState(null)
   const [isApplyingOta, setIsApplyingOta] = useState(false)
   const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
+
+  const handleSaveProfile = (updatedProfile) => {
+    setGoogleUser(updatedProfile)
+    try {
+      localStorage.setItem('upbeat_google_user', JSON.stringify(updatedProfile))
+      localStorage.setItem(
+        'upbeat_jam_profile',
+        JSON.stringify({
+          name: updatedProfile.name,
+          picture: updatedProfile.picture,
+          avatar: '🎧'
+        })
+      )
+    } catch {}
+    jamManager.refreshProfile(updatedProfile)
+    jamManager.broadcastPresenceStatus()
+    showNotify('Profile updated', 'success')
+  }
 
   // ---- v8 shell state -------------------------------------------------
   const route = useRoute()
@@ -2765,6 +2785,7 @@ export default function App() {
             googleUser={googleUser}
             onOpenGoogle={() => setShowGoogleModal(true)}
             onLogout={handleGoogleLogout}
+            onOpenProfileEdit={() => setIsProfileEditOpen(true)}
             offlineStats={offlineStats}
             onClearDownloads={clearDownloads}
             playbackMode={playbackMode}
@@ -2846,12 +2867,15 @@ export default function App() {
             friends={friends}
             incomingCount={jamState?.incomingRequests?.length || 0}
             jamActive={Boolean(jamState?.active)}
-            onOpenProfile={() => navigate('/you')}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onOpenProfile={() => setIsProfileEditOpen(true)}
             onOpenFriends={openFriends}
             onOpenRecent={openRecent}
             onOpenBlock={openBlock}
             onPlayBlock={playBlock}
             onMood={openMood}
+            onPlayTrack={handlePlayTrack}
             onListenAlong={listenAlong}
           />
         )
@@ -2905,7 +2929,7 @@ export default function App() {
                   onSearchSubmit={submitSearch}
                   searchInputRef={searchInputRef}
                   user={googleUser}
-                  onOpenProfile={() => navigate('/you')}
+                  onOpenProfile={() => setIsProfileEditOpen(true)}
                   onOpenSettings={() => navigate('/settings')}
                   friends={friends}
                   incomingCount={jamState?.incomingRequests?.length || 0}
@@ -3063,6 +3087,14 @@ export default function App() {
           onLogout={handleGoogleLogout}
           onSyncYouTubeLikes={() => handleSyncGoogleYouTubeLikes()}
           isSyncingLikes={isSyncingLikes}
+        />
+
+        <ProfileEditModal
+          isOpen={isProfileEditOpen}
+          onClose={() => setIsProfileEditOpen(false)}
+          user={googleUser}
+          onSave={handleSaveProfile}
+          onNotify={showNotify}
         />
 
         {showOnboarding && (

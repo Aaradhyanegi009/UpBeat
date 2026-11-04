@@ -4,6 +4,30 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.2.2] - 2026-11-05
+
+### 🛡️ Pure Music Guard + Live Moods Auto-Refresh + Local Storage Profile Photo + Studio Monochrome Mark
+- **Fixed Non-Music Videos & Bogus View-Count Artists on Home (`safari_bridge.py`, `youtube_search.py`, `standaloneApi.js`, `App.jsx`)**:
+  - Fixed Safari tab metadata scraper: eliminated extraction of `.ytContentMetadataViewModelMetadataText` as channel name which mistakenly parsed view counts (`203k views`, `969k views`) as artists, producing bogus "203k & 969k Mix" cards.
+  - Implemented strict channel name selection (`#channel-name a, ytd-channel-name a, a[href*="/@"]`) and added view-count/subscriber-count rejection regexes (`/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching)?$/i`) across both backend and frontend.
+  - Expanded `NON_MUSIC_REGEX` to purge alien/puppet vlogs, comedy skits, podcasts, unboxings, gaming walkthroughs, and commentary.
+  - Automatically sanitizes and cleans legacy corrupted seeds and mixes from `localStorage` on boot.
+- **Constantly Refreshed & Updated "For You" and Live Mood Feeds (`HomeView.jsx`)**:
+  - Added real-time auto-refresh interval (every 75 seconds) to continuously rotate "For you" mixes and mood feeds so the home screen never feels stale.
+  - Interactive mood chips (**Chill**, **Workout**, **Focus**, **Party**, **Romance**, etc.): tapping any chip dynamically loads curated songs and playlists right on the homepage with 1-click **Play mix**, **Shuffle**, and instant **New picks** re-roll.
+  - Tapping an already active chip immediately triggers an instant rotation.
+- **Profile Photo Upload from Storage & Display Name Editor (`ProfileEditModal.jsx`, `SettingsView.jsx`, `App.jsx`)**:
+  - Added new profile editor modal allowing users to choose an image from device storage/files or camera with automatic client-side canvas downsampling (max 280x280) for lightweight `localStorage` persistence.
+  - Allows editing display name and 1-click photo removal.
+  - Synchronizes updated photo and name across `SettingsView`, mobile home header, desktop `TopBar`, live Jam identity, and real-time presence broadcasting to friends.
+- **Restored Original Black & White Music Symbol Logo (`Shell.jsx`)**:
+  - Replaced the colored square with UpBeat's classic minimalist black & white music badge (`w-[30px] h-[30px] rounded-[9px] bg-white text-[#0A0A0B]`).
+- **Reduced Harsh Orange Font Colors Across the UI (`index.css`, `Shell.jsx`, `PlayerBar.jsx`, `primitives.jsx`)**:
+  - Replaced neon orange (`#FF5E3A`) with UpBeat's signature studio **Crimson Rose** (`#F43F5E`) token.
+  - Cleaned up font colors on sidebar navigation, queue drawer, and track titles so text remains crisp neutral `text-t1` while active playback is marked by the live animated Equalizer.
+
+---
+
 ## [v7.2.1] - 2026-11-04
 
 ### 🎨 Dynamic Playing-Song Color Touch (~5% Track Aura) on Playback & Ambient Surfaces

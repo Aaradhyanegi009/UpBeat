@@ -15,6 +15,7 @@ export default function SettingsView({
   googleUser,
   onOpenGoogle,
   onLogout,
+  onOpenProfileEdit,
   offlineStats,
   onClearDownloads,
   playbackMode,
@@ -72,18 +73,33 @@ export default function SettingsView({
         {isDesktop && <h1 className="text-[34px] font-extrabold tracking-[-0.025em] mt-2">Settings</h1>}
         <Section title="Account">
           <Row>
-            <Avatar name={googleUser?.name || 'You'} picture={googleUser?.picture} size={44} />
+            <button
+              type="button"
+              onClick={onOpenProfileEdit}
+              title="Click to edit profile picture or name"
+              className="relative group cursor-pointer rounded-full shrink-0"
+            >
+              <Avatar name={googleUser?.name || 'You'} picture={googleUser?.picture} size={48} />
+              <span className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold text-white transition-opacity">
+                Edit
+              </span>
+            </button>
             <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-bold truncate">{googleUser ? googleUser.name : 'Not connected'}</div>
-              <div className="text-[13px] text-t2 truncate">{googleUser ? googleUser.email || 'Google account' : 'Connect Google to import your YouTube likes'}</div>
+              <div className="text-[15px] font-bold truncate">{googleUser?.name || 'UpBeat Listener'}</div>
+              <div className="text-[13px] text-t2 truncate">{googleUser?.email || 'Local Studio Profile'}</div>
             </div>
-            {googleUser ? (
-              <Chip variant="ghost" onClick={onLogout}>
-                Disconnect
+            <div className="flex items-center gap-2">
+              <Chip variant="ghost" onClick={onOpenProfileEdit}>
+                Edit profile
               </Chip>
-            ) : (
-              <Chip onClick={onOpenGoogle}>Connect</Chip>
-            )}
+              {googleUser?.accessToken ? (
+                <Chip variant="ghost" onClick={onLogout}>
+                  Disconnect
+                </Chip>
+              ) : (
+                <Chip onClick={onOpenGoogle}>Connect Google</Chip>
+              )}
+            </div>
           </Row>
           {onRedoSetup && (
             <Row className="border-t border-white/[0.08]">
@@ -124,7 +140,7 @@ export default function SettingsView({
         <Section title="AI mixes" id="settings-ai">
           <div className="py-3.5">
             <label htmlFor="gemini-key" className="text-[15px] font-bold flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-accent" />
+              <KeyRound className="w-4 h-4 text-t1" />
               Gemini API key
             </label>
             <p className="text-[13px] text-t2 mt-1 leading-relaxed">

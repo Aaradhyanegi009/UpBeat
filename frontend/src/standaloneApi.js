@@ -12,18 +12,22 @@ const MODEL_ALIASES = {
 const LOW_THINKING_MODELS = new Set(['gemini-3.8-flash', 'gemini-3.7-flash'])
 const ZERO_BUDGET_MODELS = new Set(['gemini-2.5-flash', 'gemini-robotics-er-2-preview'])
 
-export const NON_MUSIC_REGEX = /\b(laplace|laplacian|fourier|calculus|derivative|derivatives|differentiation|integral|integrals|integration|differential equations?|ode|pde|linear algebra|matrices|matrix|eigenvalues?|eigenvectors?|trigonometry|geometry|theorems?|proofs?|derivations?|physics|quantum|thermodynamics|electromagnetism|kinematics|optics|chemistry|organic chemistry|biology|biochemistry|anatomy|genetics|engineering|mechanical|electrical|civil|electronics|aerospace|computer science|data structures|algorithms|dsa|leetcode|competitive programming|coding|programming|python|javascript|c\+\+|java programming|tutorials?|courses?|crash course|lectures?|class \d+|lesson \d+|chapter \d+|syllabus|semester|curriculum|solved problems?|numerical problems?|question paper|mcqs?|gate exam|jee mains?|jee advanced|neet exam|upsc|ncert|cbse|icse|khan academy|3blue1brown|mit opencourseware|nptel|stanford|harvard|coursera|udemy|edx|unacademy|physics wallah|geeksforgeeks|freecodecamp|gate smashers|neso academy|apna college|codewithharry|chai aur code|youtuber|youtubers|vlogs?|vlogger|vlogging|daily vlog|mrbeast|pewdiepie|carryminati|sidemen|dude perfect|logan paul|jake paul|markiplier|jacksepticeye|technoblade|dream|ssundee|dantdm|mark rober|veritasium|vsauce|kurzgesagt|pranks?|challenges?|24 hours in|last to leave|q&a|qna|ask me anything|ama|mukbang|eating show|try not to laugh|storytime|confessions?|exposed|drama|roast show|unboxing|tech review|phone review|setup tour|room tour|desk tour|pc build|what's in my bag|what's on my phone|day in the life|morning routine|night routine|grwm|get ready with me|tier list|tier ranking|funny moments|bloopers?|fails compilation|meme compilation|reaction|reacts|reacting to|first time hearing|first time watching|stand up comedy|standup comedy|improv comedy|open mic|ted talk|tedx|keynote|webinar|conference talk|official trailer|teaser trailer|movie trailer|trailer \d|movie scene|deleted scene|full movie|short film|documentary|docuseries|how to (?:make|cook|bake|code|build|draw|play|fix|install|use|do|start|solve|pass)|diy|life hacks?|tips (?:and|&) tricks|video essay|asmr|whispering|audiobooks?|read aloud|gym workout|yoga routine|cardio workout|abs workout|gameplay|walkthrough|playthrough|let's play|lets play|speedrun|speed run|no commentary|longplay|bedwars|skyblock|minecraft|roblox|fortnite|valorant|pubg|apex legends|gta v|gta 5|call of duty|warzone|counter strike|csgo|cs2|league of legends|genshin impact|live stream|livestream|twitch vod|stream highlights?)\b/i
+export const NON_MUSIC_REGEX = /\b(laplace|laplacian|fourier|calculus|derivative|derivatives|differentiation|integral|integrals|integration|differential equations?|ode|pde|linear algebra|matrices|matrix|eigenvalues?|eigenvectors?|trigonometry|geometry|theorems?|proofs?|derivations?|physics|quantum|thermodynamics|electromagnetism|kinematics|optics|chemistry|organic chemistry|biology|biochemistry|anatomy|genetics|engineering|mechanical|electrical|civil|electronics|aerospace|computer science|data structures|algorithms|dsa|leetcode|competitive programming|coding|programming|python|javascript|c\+\+|java programming|tutorials?|courses?|crash course|lectures?|class \d+|lesson \d+|chapter \d+|syllabus|semester|curriculum|solved problems?|numerical problems?|question paper|mcqs?|gate exam|jee mains?|jee advanced|neet exam|upsc|ncert|cbse|icse|khan academy|3blue1brown|mit opencourseware|nptel|stanford|harvard|coursera|udemy|edx|unacademy|physics wallah|geeksforgeeks|freecodecamp|gate smashers|neso academy|apna college|codewithharry|chai aur code|youtuber|youtubers|vlogs?|vlogger|vlogging|daily vlog|mrbeast|pewdiepie|carryminati|sidemen|dude perfect|logan paul|jake paul|markiplier|jacksepticeye|technoblade|dream|ssundee|dantdm|mark rober|veritasium|vsauce|kurzgesagt|pranks?|challenges?|24 hours in|last to leave|q&a|qna|ask me anything|ama|mukbang|eating show|try not to laugh|storytime|confessions?|exposed|drama|roast show|alien|puppet|comedy skit|skits?|podcasts?|interview|unboxing|tech review|phone review|setup tour|room tour|desk tour|pc build|what's in my bag|what's on my phone|day in the life|morning routine|night routine|grwm|get ready with me|tier list|tier ranking|funny moments|bloopers?|fails compilation|meme compilation|reaction|reacts|reacting to|first time hearing|first time watching|stand up comedy|standup comedy|improv comedy|open mic|ted talk|tedx|keynote|webinar|conference talk|official trailer|teaser trailer|movie trailer|trailer \d|movie scene|deleted scene|full movie|short film|documentary|docuseries|how to (?:make|cook|bake|code|build|draw|play|fix|install|use|do|start|solve|pass)|diy|life hacks?|tips (?:and|&) tricks|video essay|asmr|whispering|audiobooks?|read aloud|gym workout|yoga routine|cardio workout|abs workout|gameplay|walkthrough|playthrough|let's play|lets play|speedrun|speed run|no commentary|longplay|bedwars|skyblock|minecraft|roblox|fortnite|valorant|pubg|apex legends|gta v|gta 5|call of duty|warzone|counter strike|csgo|cs2|league of legends|genshin impact|live stream|livestream|twitch vod|stream highlights?)\b/i
 
 /**
  * Pillar 3 Strict Music Filter:
  * Rejects non-music titles/channels, educational lectures (e.g. Laplace/Calculus), YouTuber vlogs/pranks,
- * and videos shorter than 65s (shorts) or longer than 720s (12 mins).
+ * view counts/subscriber numbers mistakenly parsed as artists, and videos shorter than 65s or longer than 720s.
  */
 export function isValidMusicTrack(track) {
   if (!track || typeof track !== 'object') return false
   const title = (track.title || '').trim()
   const artist = (track.artist || '').trim()
   if (!title || !artist) return false
+
+  // Reject view counts, subscriber counts, or relative dates captured as artist
+  if (/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(artist)) return false
+  if (/^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$/i.test(artist)) return false
 
   const textToScan = `${title} ${artist}`
   if (NON_MUSIC_REGEX.test(textToScan)) return false
@@ -2261,7 +2265,13 @@ export async function fetchListenTogetherFeed({
   for (const t of validUserTracks) {
     const rawArtist = (t.artist || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim()
     const cleanArt = rawArtist.split(/\s+(?:feat\.?|ft\.?|&|x)\s+|,\s*/i)[0].trim()
-    if (cleanArt && cleanArt.length >= 2) {
+    if (
+      cleanArt &&
+      cleanArt.length >= 2 &&
+      !/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(cleanArt) &&
+      !/^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$/i.test(cleanArt) &&
+      !NON_MUSIC_REGEX.test(cleanArt)
+    ) {
       const key = cleanArt.toLowerCase()
       const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
       if (!artistMap.has(key)) {

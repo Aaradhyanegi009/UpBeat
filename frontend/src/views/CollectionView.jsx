@@ -70,7 +70,7 @@ export default function CollectionView({
       )}
       <div className={isDesktop ? 'min-w-0 pb-1' : 'mt-5 w-full'}>
         <div className={`flex items-center gap-1.5 text-sm text-t2 ${isDesktop ? '' : 'justify-center'}`}>
-          <span className={`inline-flex items-center gap-1 font-bold ${kind === 'mix' ? 'text-accent' : 'text-t1'}`}>
+          <span className="inline-flex items-center gap-1 font-bold text-t1">
             {kind === 'mix' && <Sparkles className="w-3.5 h-3.5" />}
             {KIND_LABEL[kind] || 'Playlist'}
           </span>

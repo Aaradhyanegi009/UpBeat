@@ -137,7 +137,7 @@ export default function LibraryView({
             })}
             {saved.length === 0 && !q && (
               <p className="text-sm text-t2 mt-4 leading-relaxed">
-                Save AI mixes, charts and playlists with the <span className="text-accent font-bold">+</span> button on their page, or tap the + above to start your own playlist.
+                Save AI mixes, charts and playlists with the <span className="text-t1 font-bold">+</span> button on their page, or tap the + above to start your own playlist.
               </p>
             )}
           </div>

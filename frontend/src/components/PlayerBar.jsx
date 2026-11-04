@@ -322,8 +322,8 @@ export default function PlayerBar({
       root.style.setProperty('--song-glow-1', 'transparent')
       root.style.setProperty('--song-glow-2', 'transparent')
       root.style.setProperty('--song-glow-3', 'transparent')
-      root.style.setProperty('--song-primary', '#FF5E3A')
-      root.style.setProperty('--song-accent', '#FF5E3A')
+      root.style.setProperty('--song-primary', '#F43F5E')
+      root.style.setProperty('--song-accent', '#F43F5E')
       root.style.setProperty('--album', '#2A2A2F')
     }
   }, [track, albumColor])

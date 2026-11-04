@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.2.1)
+# 🎵 UpBeat (v7.2.2)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -10,7 +10,14 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 
 ##  Features & Highlights
 
-###  Real-Time Friends & Live P2P Jam Social Engine (v7.2.1)
+###  Pure Music Guard & Live Moods Engine (v7.2.2)
+- **Strict Non-Music & View-Count Elimination**: Purged YouTube view counts (`203k`, `969k`) and non-music videos (vlogs, comedy, gaming, puppets, podcasts) from Safari tab extraction, search, seed lists, and AI mixes.
+- **Dynamic Auto-Refreshing Moods & "For You" Feed**: The homepage continuously rotates and updates "For you" picks every 75 seconds, while tapping any mood chip (**Chill**, **Workout**, **Focus**, **Party**, etc.) loads a dynamic stream of curated songs and playlists with instant 1-click **Play mix**, **Shuffle**, and **New picks**.
+- **Device Storage Profile Photo & Name Editor**: Upload profile pictures directly from your device storage or phone camera with automatic client-side canvas scaling, change your listener display name, and sync live to friends across P2P jams.
+- **Original Black & White Music Symbol Logo**: Restored the classic monochrome studio music badge across the desktop sidebar and app header.
+- **Refined Studio Rose Accent (`#F43F5E`)**: Reduced harsh neon orange font colors across the UI in favor of a sleek, sophisticated Crimson Rose accent and crisp neutral typography.
+
+###  Real-Time Friends & Live P2P Jam Social Engine
 - **4-Layer Hybrid Transport Engine**: Combines `BroadcastChannel` (0ms same-browser), Local FastAPI Backend Relay (`/api/jam/*`), PeerJS WebRTC DataChannel with public TURN servers, and Cloud Pub/Sub SSE Relay (`ntfy.sh` with 12-hour message retention) so Friend Requests and Jam rooms connect reliably across devices and networks.
 - **Direct QR Code & Link Auto-Join**: Friends can scan a QR code with their camera or tap an invite link (`?jam=JAM-XXXX` or `#jam=JAM-XXXX`) to automatically connect and sync audio in real time with zero code typing.
 - **1-Click Profile QR & Friend Links**: Share profile links (`?addFriend=UP-XXXXXX`) or show your personal QR code for instant zero-friction friend requests.

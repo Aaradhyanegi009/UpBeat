@@ -358,8 +358,8 @@ export function TrackRow({
       <Art track={track} style={{ width: artSize, height: artSize }} className={artSize < 48 ? '!rounded-lg' : ''} />
       <div className="flex-1 min-w-0">
         <div
-          className={`text-[15px] sm:text-base font-bold truncate transition-colors ${isCurrent ? 'text-accent' : 'text-t1'}`}
-          style={isCurrent ? { color: 'var(--song-primary, var(--accent))' } : undefined}
+          className={`text-[15px] sm:text-base font-bold truncate transition-colors ${isCurrent ? 'font-extrabold' : 'text-t1'}`}
+          style={isCurrent ? { color: 'var(--song-primary, var(--t1))' } : undefined}
         >
           {track.title}
         </div>

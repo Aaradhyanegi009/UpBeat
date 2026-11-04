@@ -7,7 +7,7 @@ import { useMediaQuery } from './router'
 export const TABS = [
   { id: 'home', path: '/', label: 'Home', icon: House },
   { id: 'search', path: '/search', label: 'Search', icon: Search },
-  { id: 'create', path: '/create', label: 'Create', icon: Sparkles, accent: true },
+  { id: 'create', path: '/create', label: 'Create', icon: Sparkles },
   { id: 'library', path: '/library', label: 'Library', icon: Library }
 ]
 
@@ -26,8 +26,8 @@ export function TabBar({ activeTab, onSelect }) {
               aria-current={on ? 'page' : undefined}
               className={`flex flex-col items-center justify-center gap-1 text-xs font-semibold cursor-pointer ${on ? 'text-t1' : 'text-t3'}`}
             >
-              <span className={`w-[60px] h-8 rounded-full flex items-center justify-center transition-colors ${on ? 'bg-s3' : ''}`}>
-                <t.icon className={`w-6 h-6 ${t.accent ? 'text-accent' : ''}`} strokeWidth={on ? 2.25 : 2} />
+              <span className={`w-[60px] h-8 rounded-full flex items-center justify-center transition-colors ${on ? 'bg-s3 text-t1' : ''}`}>
+                <t.icon className="w-6 h-6" strokeWidth={on ? 2.25 : 2} />
               </span>
               {t.label}
             </button>
@@ -45,8 +45,8 @@ export function SideNav({ activeTab, onSelect, saved = [], favoritesCount = 0, d
     <div className="flex flex-col gap-2 min-h-0 flex-1">
       <div className="rounded-[14px] bg-bg p-3 shrink-0">
         <div className="flex items-center gap-2.5 px-2.5 pt-1 pb-3.5 text-xl font-extrabold tracking-[-0.02em]">
-          <span className="w-[30px] h-[30px] rounded-[9px] bg-accent text-on-accent flex items-center justify-center">
-            <Music className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
+          <span className="w-[30px] h-[30px] rounded-[9px] bg-white text-[#0A0A0B] dark:bg-white dark:text-[#0A0A0B] flex items-center justify-center shadow-xs">
+            <Music className="w-4 h-4 fill-current" strokeWidth={2.5} aria-hidden="true" />
           </span>
           UpBeat
         </div>
@@ -62,7 +62,7 @@ export function SideNav({ activeTab, onSelect, saved = [], favoritesCount = 0, d
                 aria-current={on ? 'page' : undefined}
                 className={`h-11 px-3 rounded-[10px] flex items-center gap-3.5 text-[15px] font-bold cursor-pointer transition-colors ${on ? 'bg-s2 text-t1' : 'text-t2 hover:text-t1'}`}
               >
-                <t.icon className={`w-[22px] h-[22px] ${t.accent ? 'text-accent' : ''}`} />
+                <t.icon className="w-[22px] h-[22px]" />
                 {t.label}
                 {kbd && <kbd className="ml-auto font-sans text-xs font-semibold text-t3 bg-s2 rounded-md px-1.5 py-0.5">{kbd}</kbd>}
               </button>
@@ -135,7 +135,7 @@ function SideItem({ onClick, art, title, sub, active, playing }) {
     >
       {art}
       <span className="flex-1 min-w-0">
-        <span className={`block text-[15px] font-bold truncate ${playing ? 'text-accent' : ''}`}>{title}</span>
+        <span className={`block text-[15px] font-bold truncate ${playing ? 'text-t1 font-extrabold' : ''}`}>{title}</span>
         <span className="block text-[13px] text-t2 truncate">{sub}</span>
       </span>
     </button>

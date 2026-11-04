@@ -751,7 +751,7 @@ NON_MUSIC_REGEX = re.compile(
     r"youtuber|youtubers|vlogs?|vlogger|vlogging|daily vlog|mrbeast|pewdiepie|carryminati|sidemen|dude perfect|logan paul|jake paul|"
     r"markiplier|jacksepticeye|technoblade|dream|ssundee|dantdm|mark rober|veritasium|vsauce|kurzgesagt|"
     r"pranks?|challenges?|24 hours in|last to leave|q&a|qna|ask me anything|ama|mukbang|eating show|try not to laugh|"
-    r"storytime|confessions?|exposed|drama|roast show|"
+    r"storytime|confessions?|exposed|drama|roast show|alien|puppet|comedy skit|skit|"
     r"unboxing|tech review|phone review|setup tour|room tour|desk tour|pc build|what's in my bag|what's on my phone|"
     r"day in the life|morning routine|night routine|grwm|get ready with me|"
     r"tier list|tier ranking|funny moments|bloopers?|fails compilation|meme compilation|"
@@ -774,6 +774,12 @@ def is_valid_music_track(track: Dict[str, Any]) -> bool:
     title = (track.get("title") or "").strip()
     artist = (track.get("artist") or "").strip()
     if not title or not artist:
+        return False
+
+    # Reject view counts, subscriber counts, or relative dates captured as artist
+    if re.match(r"^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$", artist, re.IGNORECASE):
+        return False
+    if re.match(r"^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube)$", artist, re.IGNORECASE):
         return False
 
     text = f"{title} {artist}"

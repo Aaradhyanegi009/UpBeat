@@ -24,9 +24,9 @@
   --t2: #A1A1AA;
   --t3: #8B8B94;
 
-  /* One accent: AI and likes. Green only for live / offline-ready status. */
-  --accent: #FF5E3A;
-  --on-accent: #1B0A05;
+  /* One accent: AI and likes (Rose/Crimson studio accent). Green only for live / offline-ready status. */
+  --accent: #F43F5E;
+  --on-accent: #FFFFFF;
   --live: #34D399;
 
   /* Legacy names mapped onto the new tokens so older components follow along */

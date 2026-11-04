@@ -31,6 +31,7 @@ try:
         direct_search_youtube_music,
         browse_youtube_music_playlist,
         format_seconds,
+        is_valid_music_track,
     )
     from favorites_store import get_favorites, toggle_favorite
 except ImportError:
@@ -51,13 +52,14 @@ except ImportError:
         direct_search_youtube_music,
         browse_youtube_music_playlist,
         format_seconds,
+        is_valid_music_track,
     )
     from backend.favorites_store import get_favorites, toggle_favorite
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="7.2.1",
-    description="UpBeat v7.2.1 - Dynamic Playing-Song Color Touch, v8 UI Redesign, 4-Layer Hybrid Jam & Friends Engine"
+    version="7.2.2",
+    description="UpBeat v7.2.2 - Pure Music Guard, Live Moods Auto-Refresh, Local Profile Photo Storage & Studio Monochrome Mark"
 )
 
 app.add_middleware(
@@ -186,10 +188,10 @@ def get_taste_profile(req: TasteDnaRequest):
 def generate_playlist(req: CurateRequest):
     try:
         # Auto-pull from Safari if seed_tracks is empty and Safari has YT open
-        seeds = req.seed_tracks
+        seeds = [t for t in (req.seed_tracks or []) if is_valid_music_track(t)]
         if not seeds:
             extracted = extract_all_safari_yt_tracks()
-            seeds = extracted.get("tracks", [])
+            seeds = [t for t in extracted.get("tracks", []) if is_valid_music_track(t)]
 
         playlist_data = curate_playlist(
             seed_tracks=seeds,

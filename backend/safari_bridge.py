@@ -142,10 +142,22 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
 
         function addTrack(title, artist, videoId, thumb, href) {
             if (!title) return;
-            const cleanTitle = title.replace(/\\s+/g, ' ').trim();
+            const cleanTitle = title.replace(/\s+/g, ' ').trim();
             if (!cleanTitle || cleanTitle === 'Play all' || cleanTitle === 'PLAY ALL' || cleanTitle === 'Shuffle' || cleanTitle === 'Liked videos') return;
             if (cleanTitle.includes('Private video') || cleanTitle.includes('Deleted video')) return;
-            if (/^\\d+:\\d+$/.test(cleanTitle)) return;
+            if (/^\d+:\d+$/.test(cleanTitle)) return;
+
+            // Reject non-music content and view counts as artist
+            let cleanArtist = (artist || '').replace(/\s+/g, ' ').trim();
+            if (/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(cleanArtist) ||
+                /^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube)$/i.test(cleanArtist)) {
+                cleanArtist = '';
+            }
+
+            const nonMusicCheck = (cleanTitle + ' ' + cleanArtist).toLowerCase();
+            if (/\b(laplace|calculus|tutorial|lecture|vlog|vlogger|vlogging|mrbeast|pewdiepie|prank|challenge|mukbang|unboxing|tech review|pc build|gameplay|walkthrough|speedrun|minecraft|roblox|fortnite|gta|live stream|livestream|alien|puppet|comedy skit|storytime|podcast episode)\b/i.test(nonMusicCheck)) {
+                return;
+            }
 
             const key = videoId || cleanTitle.toLowerCase();
             if (seenIds.has(key)) return;
@@ -156,12 +168,12 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
                 : (videoId ? 'https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg' : '');
 
             const finalUrl = href
-                ? (href.startsWith('http') ? href : (isMusic ? 'https://music.youtube.com/' + href.replace(/^\\//, '') : 'https://www.youtube.com' + (href.startsWith('/') ? href : '/' + href)))
+                ? (href.startsWith('http') ? href : (isMusic ? 'https://music.youtube.com/' + href.replace(/^\//, '') : 'https://www.youtube.com' + (href.startsWith('/') ? href : '/' + href)))
                 : (videoId ? 'https://www.youtube.com/watch?v=' + videoId : '');
 
             results.push({
                 title: cleanTitle,
-                artist: (artist || '').replace(/\\s+/g, ' ').trim() || 'YouTube',
+                artist: cleanArtist || 'YouTube Music',
                 thumbnail: finalThumb,
                 video_id: videoId || '',
                 url: finalUrl
@@ -196,7 +208,7 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
                 }
             }
         } else {
-            // 1. Modern YouTube Lockup View Models & Classic Renderers
+            // For standard YouTube, specifically select the channel/author element (NEVER view count metadata!)
             const cards = Array.from(document.querySelectorAll(
                 'yt-lockup-view-model, ytd-playlist-video-renderer, ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer'
             ));
@@ -204,14 +216,15 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
                 const titleEl = el.querySelector(
                     'a.ytLockupMetadataViewModelTitle, a#video-title, a#video-title-link, #video-title, h3 a'
                 );
-                const metaEls = Array.from(el.querySelectorAll(
-                    '.ytContentMetadataViewModelMetadataText, #channel-name a, #byline-container a, ytd-channel-name a, .ytd-channel-name'
-                ));
+                // Strict channel element: avoid .ytContentMetadataViewModelMetadataText which contains views/dates
+                const channelEl = el.querySelector(
+                    '#channel-name a, #byline-container a, ytd-channel-name a, .ytd-channel-name a, a[href*="/@"], a[href*="/channel/"]'
+                );
                 const imgEl = el.querySelector('img');
                 const href = titleEl?.getAttribute('href') || el.querySelector('a[href*="watch?v="]')?.getAttribute('href') || '';
                 const vid = extractVid(href);
                 const title = titleEl ? (titleEl.textContent || titleEl.getAttribute('title') || '') : '';
-                const artist = metaEls.length > 0 ? metaEls[0].textContent : '';
+                const artist = channelEl ? (channelEl.textContent || '') : '';
                 addTrack(title, artist, vid, imgEl ? imgEl.src : '', href);
             });
 
