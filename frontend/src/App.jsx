@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Sparkles, Heart, Sliders, Disc, Dna, DownloadCloud, Loader2, X, Share } from 'lucide-react'
 import Navbar from './components/Navbar'
 import Sidebar, { PRESET_MODES } from './components/Sidebar'
