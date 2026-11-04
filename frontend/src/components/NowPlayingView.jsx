@@ -3,9 +3,14 @@ import {
   ChevronDown, Heart, Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Download, Check, Loader2,
   ListMusic, ExternalLink, Video, Calendar, Sparkles, Volume2, VolumeX, Music, ShieldCheck, Mic2,
-  Share2, Copy, X, Moon
+  Share2, Copy, X, Moon, Users, User, Radio, MessageSquareQuote, ListPlus
 } from 'lucide-react'
 import { fetchTrackExtendedMeta, fetchTrackLyrics, openExternalUrl } from '../standaloneApi'
+import { ActionMenu, artUrl } from '../ui/primitives'
+
+function firstArtist(artist = '') {
+  return String(artist).split(/,|&| feat\.| ft\./i)[0].trim()
+}
 
 function formatTime(sec) {
   if (!sec || isNaN(sec) || sec < 0) return '0:00'
@@ -61,7 +66,13 @@ function NowPlayingView({
   setShowLyrics: externalSetShowLyrics,
   onSeek,
   sleepTimer,
-  onOpenSleepTimer
+  onOpenSleepTimer,
+  playingFromTitle = '',
+  onGoToArtist,
+  onStartRadio,
+  onAddToPlaylist,
+  jamActive = false,
+  onOpenJam
 }) {
   const [extendedMeta, setExtendedMeta] = useState(null)
   const [internalShowLyrics, setInternalShowLyrics] = useState(false)
@@ -83,6 +94,9 @@ function NowPlayingView({
 
   const vid = track?.video_id || resolvedVid
   const thumbUrl = track?.thumbnail || (vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : '')
+  // Large, un-letterboxed artwork for the player
+  const coverUrl = artUrl(track, true) || thumbUrl
+  const coverFallback = artUrl(track, false) || thumbUrl
   const trackKey = vid || `${track?.title || ''}|${track?.artist || ''}`
 
   useEffect(() => {
@@ -625,86 +639,55 @@ function NowPlayingView({
     : (track?.reason && track.reason.includes('views') ? track.reason.split('•')[0].trim() : '')
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#08080c]/98 backdrop-blur-2xl flex flex-col justify-between overflow-hidden select-none animate-in fade-in slide-in-from-bottom-8 duration-200">
-      {/* Dynamic Ambient Background Glow */}
-      <div
-        className="absolute inset-0 pointer-events-none transition-all duration-700 -z-10"
-        style={{
-          background: `radial-gradient(circle at 50% 28%, ${albumColor.primary}35 0%, ${albumColor.accent}18 40%, #08080c 75%)`
-        }}
-      />
+    <div
+      className="fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col justify-between overflow-hidden select-none animate-in fade-in slide-in-from-bottom-8 duration-200"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Now playing: ${track.title}`}
+    >
+      {/* Background taken from the artwork */}
+      {coverFallback && (
+        <img
+          src={coverFallback}
+          alt=""
+          aria-hidden="true"
+          className="absolute -inset-[120px] w-[calc(100%+240px)] h-[calc(100%+240px)] max-w-none object-cover blur-[70px] saturate-[1.3] brightness-[0.55] pointer-events-none -z-10"
+        />
+      )}
+      <div className="absolute inset-0 -z-10 pointer-events-none bg-gradient-to-b from-black/10 via-black/50 to-black/90" />
 
-      {/* Top Header Bar */}
-      <header className="pt-safe-top bg-black/40 backdrop-blur-md border-b border-white/10 shrink-0 sticky top-0 z-20">
-        <div className="h-12 sm:h-16 px-4 sm:px-8 flex items-center justify-between">
+      {/* Header: close, where this is playing from, more */}
+      <header className="pt-safe-top shrink-0 z-20">
+        <div className="h-14 sm:h-16 px-3 sm:px-6 flex items-center justify-between gap-2">
           <button
+            type="button"
             onClick={handleClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
-            title="Collapse to mini player"
-            aria-label="Collapse"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 active:scale-90 transition-all cursor-pointer shrink-0"
+            title="Close player"
+            aria-label="Close player"
           >
-            <ChevronDown className="w-6 h-6" />
+            <ChevronDown className="w-7 h-7" />
           </button>
-
-          {/* Segmented Mode Switcher: Artwork vs Live Lyrics */}
-          <div className="flex items-center p-1 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-md">
-            <button
-              onClick={() => setShowLyrics(false)}
-              className={`px-3.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                !showLyrics
-                  ? 'bg-white/15 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              Track
-            </button>
-            <button
-              onClick={() => {
-                if (!showLyrics) handleToggleLyrics()
-              }}
-              className={`px-3.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                showLyrics
-                  ? 'text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-              style={
-                showLyrics
-                  ? {
-                      backgroundColor: `${albumColor.primary}30`,
-                      border: `1px solid ${albumColor.primary}60`
-                    }
-                  : undefined
-              }
-            >
-              <Mic2 className="w-3.5 h-3.5" style={showLyrics ? { color: albumColor.primary } : undefined} />
-              <span>Lyrics</span>
-              {lyricsState.data?.synced && (
-                <span
-                  className="w-1.5 h-1.5 rounded-full animate-pulse"
-                  style={{ backgroundColor: albumColor.primary }}
-                  title="Live Time-Synced Lyrics Available"
-                />
-              )}
-            </button>
+          <div className="min-w-0 text-center">
+            <div className="text-[11px] font-bold tracking-[0.12em] uppercase text-white/70">
+              {showLyrics ? 'Lyrics' : playingFromTitle ? 'Playing from' : 'Now playing'}
+            </div>
+            <div className="text-sm font-bold truncate">{showLyrics ? track.title : playingFromTitle || track.title}</div>
           </div>
-
-          <div className="flex items-center gap-1">
-            {onToggleQueue && (
-              <button
-                onClick={onToggleQueue}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer relative"
-                title="Open Playback Queue"
-                aria-label="Open Queue"
-              >
-                <ListMusic className="w-5 h-5" />
-                {queueCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-sky-500 text-[9px] font-bold text-white flex items-center justify-center">
-                    {queueCount}
-                  </span>
-                )}
-              </button>
-            )}
-          </div>
+          <ActionMenu
+            label="More options"
+            buttonSize={44}
+            className="!text-white/90"
+            items={[
+              onAddToPlaylist && { label: 'Add to playlist…', icon: ListPlus, onClick: () => onAddToPlaylist(track) },
+              onGoToArtist && track.artist && { label: `Go to ${firstArtist(track.artist)}`, icon: User, onClick: () => onGoToArtist(firstArtist(track.artist)) },
+              onStartRadio && { label: 'Start radio', icon: Radio, onClick: () => onStartRadio(track) },
+              { divider: true },
+              { label: showVideo ? 'Show artwork' : 'Watch video', icon: Video, onClick: handleToggleVideo },
+              onToggleQueue && { label: queueCount ? `Queue (${queueCount})` : 'Queue', icon: ListMusic, onClick: onToggleQueue },
+              { label: 'Open in YouTube', icon: ExternalLink, onClick: handleOpenExternal }
+            ].filter(Boolean)}
+          />
         </div>
       </header>
 
@@ -942,7 +925,7 @@ function NowPlayingView({
                 : 'max-w-[280px] xs:max-w-[320px] sm:max-w-[380px] aspect-square'
             } rounded-2xl sm:rounded-3xl overflow-hidden transition-all duration-300 bg-black`}
             style={{
-              boxShadow: isPlaying ? `0 20px 50px ${albumColor.glow || 'rgba(0,0,0,0.6)'}` : '0 10px 30px rgba(0,0,0,0.5)',
+              boxShadow: '0 30px 70px rgba(0,0,0,0.55)',
               maxHeight: showVideo ? 'min(40vh, 400px)' : 'min(36vh, 380px)'
             }}
           >
@@ -955,24 +938,19 @@ function NowPlayingView({
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
               />
-            ) : thumbUrl ? (
+            ) : coverUrl ? (
               <img
-                src={thumbUrl}
+                src={coverUrl}
                 alt={track.title}
                 className="w-full h-full object-cover select-none"
                 loading="eager"
+                onError={(e) => {
+                  if (coverFallback && e.currentTarget.src !== coverFallback) e.currentTarget.src = coverFallback
+                }}
               />
             ) : (
               <div className="w-full h-full bg-[#121218] flex items-center justify-center text-zinc-600">
                 <Music className="w-16 h-16" />
-              </div>
-            )}
-
-            {/* Playing wave overlay indicator */}
-            {!showVideo && isPlaying && (
-              <div className="absolute bottom-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: albumColor.primary }} />
-                <span className="text-[10px] text-zinc-200 font-semibold">Live</span>
               </div>
             )}
           </div>
@@ -983,14 +961,19 @@ function NowPlayingView({
       <div className="px-6 sm:px-10 shrink-0 flex flex-col gap-1.5 max-w-lg mx-auto w-full z-10">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight truncate">
+            <h2 className="text-2xl font-extrabold text-white tracking-[-0.02em] truncate">
               {track.title}
             </h2>
-            <div className="flex items-center gap-1.5 text-sm sm:text-base text-zinc-300 font-medium min-w-0 mt-0.5">
-              <span className="truncate">{artistName}</span>
-              <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" title="Verified Track" />
+            <div className="flex items-center gap-2 text-[15px] text-white/75 font-medium min-w-0 mt-0.5">
+              <button
+                type="button"
+                onClick={() => onGoToArtist?.(firstArtist(artistName))}
+                className="truncate hover:underline cursor-pointer text-left"
+              >
+                {artistName}
+              </button>
               {isPlayingOffline && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/10 text-live shrink-0">
                   Offline
                 </span>
               )}
@@ -1005,37 +988,15 @@ function NowPlayingView({
           {onToggleFavorite && (
             <button
               onClick={() => onToggleFavorite(track)}
-              title={isFav ? 'Remove from Favorites' : 'Save to Favorites'}
-              aria-label="Toggle Favorite"
-              className="p-2.5 rounded-full hover:bg-white/10 active:scale-90 transition-all cursor-pointer shrink-0"
+              title={isFav ? 'Remove from liked songs' : 'Like'}
+              aria-label={isFav ? 'Remove from liked songs' : 'Like'}
+              className="w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-90 transition-all cursor-pointer shrink-0"
             >
-              <Heart className={`w-6 h-6 transition-colors ${isFav ? 'fill-rose-500 text-rose-500' : 'text-zinc-400 hover:text-white'}`} />
+              <Heart className={`w-7 h-7 transition-colors ${isFav ? 'fill-accent text-accent' : 'text-white/80 hover:text-white'}`} />
             </button>
           )}
         </div>
 
-        {/* Release Date & Extra Info Badges (Hidden when lyrics view is expanded to maximize lyrics space) */}
-        {!showLyrics && (
-          <div className="flex items-center flex-wrap gap-2 text-xs font-medium mt-1">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-zinc-200">
-              <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-              <span>Released: {releaseDateStr}</span>
-            </div>
-
-            {track?.vibe && (
-              <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-purple-500/15 border border-purple-500/25 text-purple-200">
-                <Sparkles className="w-3 h-3 text-purple-400" />
-                <span>{track.vibe}</span>
-              </div>
-            )}
-
-            {viewCountStr && (
-              <div className="px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-zinc-400 hidden xs:inline-flex items-center gap-1">
-                <span>{viewCountStr}</span>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Scrubber & Live Time Duration */}
@@ -1053,12 +1014,11 @@ function NowPlayingView({
           onTouchEnd={handleScrubEnd}
           onMouseUp={handleScrubEnd}
           disabled={!track}
-          style={{
-            background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${progressPct}%, #202028 ${progressPct}%, #202028 100%)`
-          }}
-          className="w-full argon-slider cursor-pointer h-1.5"
+          aria-label="Seek"
+          style={{ '--pct': `${progressPct}%`, '--s3': 'rgba(255,255,255,0.22)' }}
+          className="ub-range w-full"
         />
-        <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 mt-1.5">
+        <div className="flex items-center justify-between text-xs font-semibold text-white/65 mt-0.5 tabular-nums">
           <span>{formatTime(displayTime)}</span>
           <span>{effectiveDuration > 0 ? formatTime(effectiveDuration) : (track?.duration_text || '0:00')}</span>
         </div>
@@ -1068,35 +1028,31 @@ function NowPlayingView({
       <div className="px-6 sm:px-10 py-2 sm:py-4 shrink-0 flex items-center justify-between max-w-lg mx-auto w-full z-10">
         <button
           onClick={() => (onToggleShuffle ? onToggleShuffle() : setIsShuffle && setIsShuffle((prev) => !prev))}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-            isShuffle ? 'text-white bg-white/15' : 'text-zinc-500 hover:text-zinc-300'
+          className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+            isShuffle ? 'text-white' : 'text-white/60 hover:text-white'
           }`}
-          title={isShuffle ? 'Shuffle On' : 'Shuffle Off'}
-          aria-label="Toggle Shuffle"
+          title={isShuffle ? 'Shuffle on' : 'Shuffle off'}
+          aria-label={isShuffle ? 'Shuffle on' : 'Shuffle off'}
+          aria-pressed={isShuffle}
         >
-          <Shuffle className="w-5 h-5" />
+          <Shuffle className="w-[22px] h-[22px]" />
+          {isShuffle && <span className="absolute bottom-1 left-1/2 -ml-[2px] w-1 h-1 rounded-full bg-current" />}
         </button>
 
         <button
           onClick={onPrev}
           disabled={!track}
-          className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-white/10 active:scale-90 disabled:opacity-30 transition-transform cursor-pointer"
-          style={{ color: albumColor.primary }}
-          title="Previous Track"
-          aria-label="Previous Track"
+          className="w-14 h-14 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 transition-transform cursor-pointer"
+          title="Previous"
+          aria-label="Previous"
         >
-          <SkipBack className="w-7 h-7 fill-current opacity-90" />
+          <SkipBack className="w-8 h-8 fill-current" />
         </button>
 
         <button
           onClick={onTogglePlay}
           disabled={!track}
-          className="w-16 h-16 sm:w-18 sm:h-18 rounded-full flex items-center justify-center active:scale-95 transition-all shadow-xl cursor-pointer hover:brightness-110"
-          style={{
-            backgroundColor: albumColor.primary,
-            color: albumColor.contrastText,
-            boxShadow: isPlaying ? `0 8px 32px ${albumColor.glow}` : '0 4px 16px rgba(0,0,0,0.5)'
-          }}
+          className="w-[72px] h-[72px] rounded-full flex items-center justify-center bg-white text-[#0A0A0B] active:scale-95 transition-all shadow-xl cursor-pointer hover:scale-105"
           title={isPlaying ? 'Pause' : 'Play'}
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
@@ -1112,97 +1068,70 @@ function NowPlayingView({
         <button
           onClick={onNext}
           disabled={!track}
-          className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-white/10 active:scale-90 disabled:opacity-30 transition-transform cursor-pointer"
-          style={{ color: albumColor.primary }}
-          title="Next Track"
-          aria-label="Next Track"
+          className="w-14 h-14 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 transition-transform cursor-pointer"
+          title="Next"
+          aria-label="Next"
         >
-          <SkipForward className="w-7 h-7 fill-current opacity-90" />
+          <SkipForward className="w-8 h-8 fill-current" />
         </button>
 
         <button
           onClick={() => setRepeatMode && setRepeatMode((prev) => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'))}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-            repeatMode && repeatMode !== 'off' ? 'text-white bg-white/15' : 'text-zinc-500 hover:text-zinc-300'
+          className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+            repeatMode && repeatMode !== 'off' ? 'text-white' : 'text-white/60 hover:text-white'
           }`}
-          title={`Repeat: ${repeatMode || 'off'}`}
-          aria-label="Toggle Repeat"
+          title={repeatMode === 'one' ? 'Repeat one' : repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}
+          aria-label={repeatMode === 'one' ? 'Repeat one' : repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}
         >
-          {repeatMode === 'one' ? <Repeat1 className="w-5 h-5 text-emerald-400" /> : <Repeat className="w-5 h-5" />}
+          {repeatMode === 'one' ? <Repeat1 className="w-[22px] h-[22px]" /> : <Repeat className="w-[22px] h-[22px]" />}
+          {repeatMode && repeatMode !== 'off' && <span className="absolute bottom-1 left-1/2 -ml-[2px] w-1 h-1 rounded-full bg-current" />}
         </button>
       </div>
 
-      {/* Bottom Utility Row (Lyrics, Download, Share, Video Preview, Volume) */}
-      <div className="px-8 pb-safe pb-4 pt-1 sm:pb-6 shrink-0 flex items-center justify-between text-zinc-400 max-w-lg mx-auto w-full z-10">
+      {/* Bottom row: Jam, Lyrics, Download, Sleep (+ volume on wide screens) */}
+      <div className="px-8 pb-safe pb-5 pt-1 sm:pb-7 shrink-0 flex items-center justify-between text-white/80 max-w-lg mx-auto w-full z-10">
+        {onOpenJam && (
+          <button
+            type="button"
+            onClick={onOpenJam}
+            title={jamActive ? 'Jam is live' : 'Listen with friends'}
+            aria-label={jamActive ? 'Jam is live' : 'Listen with friends'}
+            className={`w-11 h-11 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${jamActive ? 'text-live' : ''}`}
+          >
+            <Users className="w-[22px] h-[22px]" />
+          </button>
+        )}
+
         <button
+          type="button"
           onClick={handleToggleLyrics}
           disabled={!track}
-          title={showLyrics ? 'Hide Synced Lyrics' : 'Show Live Synced Lyrics'}
-          aria-label="Toggle Lyrics"
-          className={`p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-30 active:scale-90 relative ${
-            showLyrics ? 'text-white ring-1' : 'text-zinc-400 hover:text-white'
-          }`}
-          style={
-            showLyrics
-              ? {
-                  backgroundColor: `${albumColor.primary}25`,
-                  borderColor: `${albumColor.primary}60`,
-                  color: albumColor.primary
-                }
-              : undefined
-          }
+          title={showLyrics ? 'Hide lyrics' : 'Lyrics'}
+          aria-label={showLyrics ? 'Hide lyrics' : 'Lyrics'}
+          aria-pressed={showLyrics}
+          className={`relative w-11 h-11 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-30 ${showLyrics ? 'bg-white/15 text-white' : ''}`}
         >
-          <Mic2 className="w-5 h-5" />
-          {lyricsState.data?.synced && !showLyrics && (
-            <span
-              className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-              style={{ backgroundColor: albumColor.primary }}
-            />
-          )}
+          <MessageSquareQuote className="w-[22px] h-[22px]" />
         </button>
 
         {track && (
           <button
+            type="button"
             onClick={() => handleDownload && handleDownload(track)}
             disabled={downloadState === 'downloading'}
-            title={downloadState === 'downloading' ? 'Downloading...' : isDownloaded ? 'Downloaded (Offline Ready)' : 'Download Track'}
-            aria-label="Download Track"
-            className={`p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer ${
-              isDownloaded ? 'text-emerald-400' : 'text-zinc-400 hover:text-white'
-            }`}
+            title={downloadState === 'downloading' ? 'Downloading…' : isDownloaded ? 'Downloaded' : 'Download'}
+            aria-label={downloadState === 'downloading' ? 'Downloading' : isDownloaded ? 'Downloaded' : 'Download'}
+            className={`w-11 h-11 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${isDownloaded ? 'text-live' : ''}`}
           >
             {downloadState === 'downloading' ? (
-              <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+              <Loader2 className="w-[22px] h-[22px] animate-spin" />
             ) : isDownloaded ? (
-              <Check className="w-5 h-5 text-emerald-400" />
+              <Check className="w-[22px] h-[22px]" />
             ) : (
-              <Download className="w-5 h-5" />
+              <Download className="w-[22px] h-[22px]" />
             )}
           </button>
         )}
-
-        {track && (
-          <button
-            onClick={handleOpenExternal}
-            title="Open on YouTube / Browser"
-            aria-label="Open on YouTube / Browser"
-            className="p-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer active:scale-90"
-          >
-            <ExternalLink className="w-5 h-5" />
-          </button>
-        )}
-
-        <button
-          onClick={handleToggleVideo}
-          disabled={!track || (!track.video_id && !resolvedVid)}
-          title={showVideo ? 'Switch to Artwork' : 'Watch Video'}
-          aria-label={showVideo ? 'Switch to Artwork' : 'Watch Video'}
-          className={`p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-30 active:scale-90 ${
-            showVideo ? 'text-emerald-300 bg-emerald-500/20 ring-1 ring-emerald-500/40' : 'text-zinc-400 hover:text-white'
-          }`}
-        >
-          <Video className="w-5 h-5" />
-        </button>
 
         {onOpenSleepTimer && (
           <button
@@ -1213,16 +1142,14 @@ function NowPlayingView({
                 : 'Sleep Timer & Crossfade'
             }
             aria-label="Sleep Timer & Crossfade"
-            className={`p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer active:scale-90 relative ${
-              sleepTimer?.active ? 'text-white bg-white/15' : 'text-zinc-400 hover:text-white'
+            className={`w-11 h-11 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer relative ${
+              sleepTimer?.active ? 'text-white bg-white/15' : ''
             }`}
-            style={sleepTimer?.active ? { color: albumColor.primary } : undefined}
           >
-            <Moon className="w-5 h-5" />
+            <Moon className="w-[22px] h-[22px]" />
             {sleepTimer?.active && sleepTimer.mode === 'minutes' && (
               <span
-                className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center shadow-xs"
-                style={{ backgroundColor: albumColor.primary }}
+                className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full text-[10px] font-extrabold bg-white text-[#0A0A0B] flex items-center justify-center"
               >
                 {Math.ceil((sleepTimer.remainingSec || 0) / 60)}m
               </span>

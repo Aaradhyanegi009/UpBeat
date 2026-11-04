@@ -1,65 +1,34 @@
-// UpBeat Minimalist Dark & Light Theme Engine
-// - Dark: Pure AMOLED obsidian black with dynamic playing song ambient aura
-// - Light: High-contrast clean studio alabaster aesthetic
+// UpBeat theme: dark only.
+// The app no longer offers a light/dark switch. Colour that changes with the
+// playing song's artwork is handled separately by colorExtractor.js.
 
-export const THEME_OPTIONS = [
-  { id: 'dark', label: 'Dark' },
-  { id: 'light', label: 'Light' }
-]
-
-export function getNextThemePreference(current = 'dark') {
-  return current === 'light' ? 'dark' : 'light'
+const DARK_THEME = {
+  id: 'theme-dark',
+  label: 'Dark',
+  timeSlot: 'Dark',
+  type: 'dark',
+  color: '#94a3b8',
+  accentColor: '#ffffff',
+  preference: 'dark'
 }
 
-export function getDayNightThemeInfo() {
-  return getThemeInfo('dark')
+export function getThemeInfo() {
+  return DARK_THEME
 }
 
-export function getThemeInfo(preference = 'dark') {
-  if (preference === 'light') {
-    return {
-      id: 'theme-light',
-      label: 'Light',
-      timeSlot: 'Light',
-      type: 'light',
-      color: '#f59e0b',
-      accentColor: '#e11d48',
-      preference: 'light'
-    }
-  }
-  return {
-    id: 'theme-dark',
-    label: 'Dark',
-    timeSlot: 'Dark',
-    type: 'dark',
-    color: '#94a3b8',
-    accentColor: '#ffffff',
-    preference: 'dark'
-  }
-}
-
-export function applyThemeToDocument(preference, themeInfo) {
+export function applyThemeToDocument() {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  root.classList.remove('theme-morning', 'theme-afternoon', 'theme-night', 'theme-light', 'dark', 'theme-dark')
-  const isLight = preference === 'light' || themeInfo?.type === 'light'
-
-  if (isLight) {
-    root.classList.add('theme-light')
-    root.setAttribute('data-theme', 'light')
-    root.style.colorScheme = 'light'
-  } else {
-    root.classList.add('dark', 'theme-dark')
-    root.setAttribute('data-theme', 'dark')
-    root.style.colorScheme = 'dark'
-  }
+  root.classList.remove('theme-morning', 'theme-afternoon', 'theme-night', 'theme-light')
+  root.classList.add('dark', 'theme-dark')
+  root.setAttribute('data-theme', 'dark')
+  root.style.colorScheme = 'dark'
 }
 
-// Immediate execution on load to prevent any theme flash
+// Apply immediately on load to avoid a flash, and drop any old saved preference.
 if (typeof window !== 'undefined') {
   try {
-    const saved = localStorage.getItem('upbeat_theme_preference')
-    const pref = saved === 'light' ? 'light' : 'dark'
-    applyThemeToDocument(pref, getThemeInfo(pref))
+    localStorage.removeItem('upbeat_theme_preference')
   } catch {}
+  applyThemeToDocument()
 }

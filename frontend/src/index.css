@@ -2,239 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+/* UpBeat v8 design tokens. Dark only. */
 :root {
   font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   color-scheme: dark;
-  /* Adaptive safe area insets */
+
   --sat: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
   --sab: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
   --sal: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --sar: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
 
-  /* Pure Dark AMOLED Tokens (100% Obsidian Black) & Translucent Studio Glass */
-  --bg-primary: #000000;
-  --bg-elevated: rgba(18, 18, 22, 0.72);
-  --bg-card: rgba(255, 255, 255, 0.045);
-  --bg-glass: rgba(18, 18, 26, 0.58);
-  --bg-glass-heavy: rgba(18, 18, 26, 0.78);
-  --surface-glass: rgba(18, 18, 26, 0.58);
-  --card-glass: rgba(255, 255, 255, 0.045);
-  --border-glass: 1px solid rgba(255, 255, 255, 0.09);
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --accent-primary: #e11d48;
-  --text-on-accent: #ffffff;
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --surface-hover: rgba(255, 255, 255, 0.06);
-  --slider-track: #202028;
-  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 32px rgba(0, 0, 0, 0.28);
+  /* Surfaces (graphite) */
+  --bg: #0A0A0B;
+  --s1: #141416;
+  --s2: #1C1C1F;
+  --s3: #2A2A2F;
+  --line: rgba(255, 255, 255, 0.08);
 
-  /* Subtle Dynamic Playing-Song Glow Variables */
+  /* Text */
+  --t1: #F4F4F5;
+  --t2: #A1A1AA;
+  --t3: #8B8B94;
+
+  /* One accent: AI and likes. Green only for live / offline-ready status. */
+  --accent: #FF5E3A;
+  --on-accent: #1B0A05;
+  --live: #34D399;
+
+  /* Legacy names mapped onto the new tokens so older components follow along */
+  --bg-primary: var(--bg);
+  --bg-elevated: var(--s2);
+  --bg-card: var(--s1);
+  --bg-glass: rgba(10, 10, 11, 0.92);
+  --bg-glass-heavy: #121214;
+  --surface-glass: rgba(20, 20, 22, 0.96);
+  --card-glass: var(--s1);
+  --border-glass: 1px solid var(--line);
+  --text-primary: var(--t1);
+  --text-secondary: var(--t2);
+  --text-muted: var(--t3);
+  --accent-primary: var(--accent);
+  --text-on-accent: var(--on-accent);
+  --border-subtle: var(--line);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --slider-track: var(--s3);
+  --card-shadow: none;
+
+  /* Set by the player from the current artwork */
   --song-glow-1: transparent;
   --song-glow-2: transparent;
   --song-glow-3: transparent;
-  --song-primary: #e11d48;
-}
-
-/* Dark AMOLED Theme Explicit Definitions */
-.dark, .theme-dark, .theme-afternoon, :root.dark {
-  --bg-primary: #000000;
-  --bg-elevated: rgba(18, 18, 22, 0.72);
-  --bg-card: rgba(255, 255, 255, 0.045);
-  --bg-glass: rgba(18, 18, 26, 0.58);
-  --bg-glass-heavy: rgba(18, 18, 26, 0.78);
-  --surface-glass: rgba(18, 18, 26, 0.58);
-  --card-glass: rgba(255, 255, 255, 0.045);
-  --border-glass: 1px solid rgba(255, 255, 255, 0.09);
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --surface-hover: rgba(255, 255, 255, 0.06);
-  --slider-track: #202028;
-  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 32px rgba(0, 0, 0, 0.28);
-}
-
-/* Light Mode — Daylight Studio (High Contrast & Frosted Daylight Glass) */
-.theme-light, :root.theme-light, html.theme-light {
-  color-scheme: light;
-  --bg-primary: #F7F7FA;
-  --bg-elevated: rgba(255, 255, 255, 0.88);
-  --bg-card: rgba(255, 255, 255, 0.62);
-  --bg-glass: rgba(255, 255, 255, 0.68);
-  --bg-glass-heavy: rgba(255, 255, 255, 0.88);
-  --surface-glass: rgba(255, 255, 255, 0.68);
-  --card-glass: rgba(255, 255, 255, 0.62);
-  --border-glass: 1px solid rgba(15, 23, 42, 0.08);
-  --text-primary: #0F172A;
-  --text-secondary: #334155;
-  --text-muted: #475569;
-  --accent-primary: #E11D48;
-  --text-on-accent: #FFFFFF;
-  --border-subtle: rgba(15, 23, 42, 0.08);
-  --border-strong: rgba(15, 23, 42, 0.16);
-  --surface-hover: rgba(15, 23, 42, 0.05);
-  --slider-track: #E2E8F0;
-  --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 24px rgba(15, 23, 42, 0.06);
-
-  --atm-glow-1: rgba(225, 29, 72, 0.07);
-  --atm-glow-2: rgba(109, 40, 217, 0.04);
-  --atm-glow-3: rgba(251, 146, 60, 0.03);
-  --atm-accent: rgba(225, 29, 72, 0.03);
-  --atm-grid: rgba(15, 23, 42, 0.025);
-}
-
-/* Light mode overrides for legacy dark container classes to maintain soft slight-gray/white contrast */
-.theme-light .bg-black\/40,
-.theme-light .bg-black\/50,
-.theme-light .bg-black\/60,
-.theme-light .bg-black\/75,
-.theme-light .bg-\[\#0c0c12\],
-.theme-light .bg-\[\#0c0c12\]\/75,
-.theme-light .bg-\[\#0c0c12\]\/80,
-.theme-light .bg-\[\#0c0c12\]\/95,
-.theme-light .bg-\[\#0c0c12\]\/40,
-.theme-light .bg-\[\#0e0e13\]\/95,
-.theme-light .bg-\[\#101015\]\/95,
-.theme-light .bg-\[\#121214\],
-.theme-light .bg-\[\#121218\],
-.theme-light .bg-\[\#14141c\],
-.theme-light .bg-\[\#14141d\],
-.theme-light .bg-\[\#16161f\],
-.theme-light .bg-\[\#18181b\],
-.theme-light .bg-\[\#1a1a22\] {
-  background-color: #FFFFFF !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
-  color: #0F172A !important;
-}
-
-.theme-light .border-white\/10,
-.theme-light .border-white\/\[0\.08\],
-.theme-light .border-white\/\[0\.06\],
-.theme-light .border-white\/\[0\.04\],
-.theme-light .divide-white\/\[0\.04\] {
-  border-color: var(--border-subtle) !important;
-}
-
-/* Light mode text contrast audit & deep legibility guarantees */
-.theme-light .text-white {
-  color: #0F172A !important;
-}
-
-.theme-light .text-zinc-100,
-.theme-light .text-zinc-200,
-.theme-light .text-slate-100,
-.theme-light .text-slate-200 {
-  color: #0F172A !important;
-}
-
-.theme-light .text-zinc-300,
-.theme-light .text-slate-300 {
-  color: #334155 !important;
-}
-
-.theme-light .text-zinc-400,
-.theme-light .text-zinc-500,
-.theme-light .text-slate-400,
-.theme-light .text-slate-500 {
-  color: #475569 !important;
-}
-
-/* Preserve white text exclusively on top of album artwork, dark scrims, or solid accent buttons */
-.theme-light .squircle-card .text-white,
-.theme-light .squircle-card .text-zinc-300,
-.theme-light .squircle-card .drop-shadow-sm,
-.theme-light button[class*="bg-rose-600"] .text-white,
-.theme-light button[class*="bg-purple-600"] .text-white,
-.theme-light button[class*="bg-black"] .text-white,
-.theme-light [class*="bg-gradient-to-"] .text-white,
-.theme-light [class*="bg-sky-500"] .text-white,
-.theme-light [class*="bg-rose-500"] .text-white {
-  color: #FFFFFF !important;
-}
-
-/* Card circular buttons contrast in all themes */
-.squircle-card button[class*="bg-white"] svg,
-.theme-light .squircle-card button[class*="bg-white"] svg {
-  color: #0F172A !important;
-  fill: #0F172A !important;
-  stroke: #0F172A !important;
-}
-.squircle-card button[class*="bg-white"] svg.lucide-play,
-.theme-light .squircle-card button[class*="bg-white"] svg.lucide-play {
-  fill: #0F172A !important;
-  color: #0F172A !important;
-}
-.squircle-card button[class*="bg-black"],
-.theme-light .squircle-card button[class*="bg-black"] {
-  background-color: rgba(0, 0, 0, 0.65) !important;
-}
-.squircle-card button[class*="bg-black"]:hover,
-.theme-light .squircle-card button[class*="bg-black"]:hover {
-  background-color: rgba(225, 29, 72, 0.9) !important;
-}
-.squircle-card button[class*="bg-black"] svg,
-.theme-light .squircle-card button[class*="bg-black"] svg {
-  color: #FFFFFF !important;
-  fill: none !important;
-  stroke: #FFFFFF !important;
-}
-
-/* Sync Liked & Taste Memory Pill - Clean, borderless Heart */
-.btn-sync-liked {
-  font-weight: 600 !important;
-}
-.btn-sync-liked svg,
-.btn-sync-liked svg.lucide-heart,
-.btn-sync-liked path,
-.theme-light .btn-sync-liked svg,
-.theme-light .btn-sync-liked path {
-  stroke: none !important;
-  stroke-width: 0 !important;
-}
-.theme-light .btn-sync-liked {
-  background-color: #FFE4E6 !important;
-  border-color: #FECDD3 !important;
-  color: #BE123C !important;
-}
-.theme-light .btn-sync-liked svg {
-  color: #BE123C !important;
-  fill: #BE123C !important;
-  stroke: none !important;
-}
-
-/* Analyze Taste Pill */
-.theme-light .btn-analyze-taste {
-  background-color: #D1FAE5 !important;
-  border-color: #A7F3D0 !important;
-  color: #047857 !important;
-  font-weight: 600 !important;
-}
-.theme-light .btn-analyze-taste svg {
-  color: #047857 !important;
-}
-
-/* High-contrast colors for pills and active badges on light backgrounds */
-.theme-light .text-rose-200,
-.theme-light .text-rose-300 {
-  color: #9f1239 !important;
-}
-
-.theme-light .text-emerald-300,
-.theme-light .text-emerald-400 {
-  color: #065f46 !important;
-}
-
-.theme-light .text-purple-300,
-.theme-light .text-purple-400 {
-  color: #581c87 !important;
-}
-
-.theme-light .text-sky-300 {
-  color: #075985 !important;
+  --song-primary: var(--accent);
+  --album: #2A2A2F;
 }
 
 /* Squircle & Luxury Pill UI System (Signature squircle aesthetic) */
@@ -253,23 +73,13 @@
   border-color: var(--border-strong);
   transform: translateY(-1px) translateZ(0);
 }
-
-.theme-light .squircle-card {
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-}
-
 @media (max-width: 768px) {
   .squircle-card {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   }
-  .theme-light .squircle-card {
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-  }
 }
-
 .squircle-icon {
   border-radius: 14px;
   background: var(--surface-hover);
@@ -279,7 +89,6 @@
   justify-content: center;
   flex-shrink: 0;
 }
-
 .floating-dock {
   background: var(--bg-glass-heavy);
   backdrop-filter: blur(24px);
@@ -287,44 +96,22 @@
   border: 1px solid var(--border-subtle);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 0 1px 1px var(--border-subtle);
 }
-
 html, body, #root {
   height: 100%;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   overscroll-behavior: none;
 }
-
-/* Dark AMOLED Atmosphere with Subtle Dynamic Playing-Song Aura (+8% Boost) */
+/* Flat app background. Album colour is applied inside player surfaces only. */
 .ytm-atmosphere {
-  background-color: var(--bg-primary, #000000);
-  background-image: 
-    radial-gradient(ellipse 120% 680px at 50% -70px, var(--song-glow-1, transparent) 0%, var(--song-glow-2, transparent) 48%, transparent 78%),
-    radial-gradient(ellipse 95% 550px at 85% 35%, var(--song-glow-3, transparent) 0%, transparent 65%);
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
+  background-color: var(--bg-primary);
 }
-
-/* Light Mode Studio Atmosphere (+8% Boost) */
-.theme-light.ytm-atmosphere,
-.theme-light .ytm-atmosphere,
-:root.theme-light .ytm-atmosphere,
-:root.theme-light {
-  background-color: #F8F9FC !important;
-  color: #0F172A !important;
-  background-image: 
-    radial-gradient(ellipse 125% 660px at 50% -60px, var(--song-glow-1, rgba(225, 29, 72, 0.07)) 0%, transparent 72%),
-    radial-gradient(ellipse 95% 550px at 85% 35%, var(--song-glow-3, transparent) 0%, transparent 65%);
-  background-repeat: no-repeat;
-}
-
 .ytm-grid-overlay {
   background-image: 
     linear-gradient(to right, var(--atm-grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--atm-grid) 1px, transparent 1px);
   background-size: 40px 40px;
 }
-
 /* Discovery Card Badge Utility (Single-line, non-wrapping) */
 .discovery-badge {
   white-space: nowrap;
@@ -336,7 +123,6 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 /* Mobile GPU Acceleration & Smooth 120fps Scrolling */
 .gpu-scroll {
   -webkit-overflow-scrolling: touch;
@@ -344,7 +130,6 @@ html, body, #root {
   transform: translateZ(0);
   backface-visibility: hidden;
 }
-
 .content-scroll-container {
   overflow-y: auto !important;
   overflow-x: hidden;
@@ -352,13 +137,11 @@ html, body, #root {
   touch-action: pan-y;
   overscroll-behavior-y: auto;
 }
-
 .carousel-scroll {
   touch-action: pan-x pan-y !important;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: auto;
 }
-
 .fast-row {
   content-visibility: auto;
   contain-intrinsic-size: 0 68px;
@@ -367,29 +150,24 @@ html, body, #root {
   transform: translateZ(0);
   backface-visibility: hidden;
 }
-
 @media (max-width: 768px) {
   .fast-row {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
 }
-
 button, a, input, select, [role="button"] {
   touch-action: manipulation;
 }
-
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
 html, body {
   background-color: var(--bg-primary);
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
 }
-
 .pt-safe { padding-top: var(--sat); }
 .pt-safe-top {
   padding-top: max(var(--sat), 26px);
@@ -401,18 +179,14 @@ html, body {
 }
 .pb-safe { padding-bottom: var(--sab); }
 .px-safe { padding-left: var(--sal); padding-right: var(--sar); }
-
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
-
 @media (hover: none) {
   button, a, [role="button"] { touch-action: manipulation; }
 }
-
 code, pre, .font-mono {
   font-family: 'JetBrains Mono', monospace;
 }
-
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -427,7 +201,6 @@ code, pre, .font-mono {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
-
 input[type="range"].argon-slider {
   -webkit-appearance: none;
   appearance: none;
@@ -435,7 +208,6 @@ input[type="range"].argon-slider {
   border-radius: 999px;
   outline: none;
 }
-
 input[type="range"].argon-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -448,7 +220,6 @@ input[type="range"].argon-slider::-webkit-slider-thumb {
   cursor: pointer;
   transition: transform 0.1s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
-
 input[type="range"].argon-slider::-moz-range-thumb {
   width: 12px;
   height: 12px;
@@ -459,25 +230,21 @@ input[type="range"].argon-slider::-moz-range-thumb {
   cursor: pointer;
   transition: transform 0.1s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
-
 input[type="range"].argon-slider::-webkit-slider-thumb:hover {
   transform: scale(1.2);
   background: #ffffff;
   box-shadow: 0 0 12px var(--slider-thumb-glow, rgba(184, 157, 245, 0.7));
 }
-
 input[type="range"].argon-slider::-moz-range-thumb:hover {
   transform: scale(1.2);
   background: #ffffff;
   box-shadow: 0 0 12px var(--slider-thumb-glow, rgba(184, 157, 245, 0.7));
 }
-
 @media (pointer: coarse) {
   input[type="range"].argon-slider { height: 6px; }
   input[type="range"].argon-slider::-webkit-slider-thumb { width: 16px; height: 16px; }
   input[type="range"].argon-slider::-moz-range-thumb { width: 16px; height: 16px; }
 }
-
 /* ============================================================================
    UpBeat v7.0 Studio Glass Surfaces & Inputs for Friends & Live Jam Hub
    ============================================================================ */
@@ -490,7 +257,6 @@ input[type="range"].argon-slider::-moz-range-thumb:hover {
   color: var(--text-primary);
   font-family: inherit;
 }
-
 .jam-glass-pill {
   border-radius: 999px;
   background: var(--surface-glass, rgba(18, 18, 26, 0.68));
@@ -501,15 +267,6 @@ input[type="range"].argon-slider::-moz-range-thumb:hover {
   color: var(--text-primary);
   font-family: inherit;
 }
-
-.theme-light .jam-glass-surface,
-.theme-light .jam-glass-pill {
-  background: rgba(255, 255, 255, 0.88) !important;
-  border: 1px solid rgba(15, 23, 42, 0.1) !important;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
-  color: #0F172A !important;
-}
-
 .jam-input-field {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-subtle);
@@ -519,18 +276,60 @@ input[type="range"].argon-slider::-moz-range-thumb:hover {
   color: var(--text-muted);
 }
 .jam-input-field:focus {
-  border-color: #F43F5E;
+  border-color: var(--accent);
 }
 
-.theme-light .jam-input-field {
-  background: #F1F5F9 !important;
-  border: 1px solid rgba(15, 23, 42, 0.14) !important;
-  color: #0F172A !important;
+/* v8: equalizer bars for the playing row */
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
 }
-.theme-light .jam-input-field::placeholder {
-  color: #64748B !important;
+[class*="animate-[eq"] { transform-origin: bottom; }
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[eq"] { animation: none !important; }
 }
-.theme-light .jam-input-field:focus {
-  border-color: #F43F5E !important;
-  background: #FFFFFF !important;
+
+/* v8: range input (Create sliders, settings) */
+input[type="range"].ub-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
 }
+input[type="range"].ub-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--t1) var(--pct, 50%), var(--s3) var(--pct, 50%));
+}
+input[type="range"].ub-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+input[type="range"].ub-range::-moz-range-track { height: 4px; border-radius: 4px; background: var(--s3); }
+input[type="range"].ub-range::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--t1); }
+input[type="range"].ub-range::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: #fff; }
+input[type="range"].ub-range:focus-visible { outline: none; }
+input[type="range"].ub-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25); }
+
+/* v8: visible keyboard focus everywhere */
+:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+textarea:focus-visible, input[type="text"]:focus-visible, input[type="search"]:focus-visible, input[type="password"]:focus-visible { outline: none; }
+
+/* v8: thin scrubber / volume variant */
+input[type="range"].ub-range.sm { height: 16px; }
+input[type="range"].ub-range.sm::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; opacity: 0; transition: opacity 0.15s; }
+input[type="range"].ub-range.sm:hover::-webkit-slider-thumb,
+input[type="range"].ub-range.sm:active::-webkit-slider-thumb,
+input[type="range"].ub-range.sm:focus-visible::-webkit-slider-thumb { opacity: 1; }
+input[type="range"].ub-range.sm::-moz-range-thumb { width: 12px; height: 12px; }
+input[type="range"].ub-range:disabled { cursor: default; opacity: 0.5; }
+
+/* Legacy screens with their own sticky header sit below the desktop top bar */
+.ub-under-topbar .sticky { top: 80px; }

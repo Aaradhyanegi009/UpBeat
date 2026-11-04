@@ -5,7 +5,8 @@ import { jamManager, buildJamInviteUrl } from '../jamEngine'
 export default function JamFloatingBar({
   jamState,
   googleUser = null,
-  onOpenJamModal
+  onOpenJamModal,
+  hideWidget = false
 }) {
   const incomingInvite = jamState?.incomingJamInvite
   const hasActiveJam = Boolean(jamState?.active)
@@ -174,7 +175,7 @@ export default function JamFloatingBar({
       )}
 
       {/* Movable Jam Floating Widget (Icon by default, expands to bar menu when pressed) */}
-      {hasActiveJam && (
+      {hasActiveJam && !hideWidget && (
         <div
           style={{
             position: 'fixed',

@@ -16,6 +16,18 @@ export default {
         '2xl': '1.125rem',
       },
       colors: {
+        bg: 'var(--bg)',
+        s1: 'var(--s1)',
+        s2: 'var(--s2)',
+        s3: 'var(--s3)',
+        line: 'var(--line)',
+        t1: 'var(--t1)',
+        t2: 'var(--t2)',
+        t3: 'var(--t3)',
+        accent: 'var(--accent)',
+        'on-accent': 'var(--on-accent)',
+        live: 'var(--live)',
+        album: 'var(--album)',
         argon: {
           900: '#07090e',
           850: '#0b0f19',

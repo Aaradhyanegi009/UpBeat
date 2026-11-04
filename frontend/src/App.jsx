@@ -1,11 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Sparkles, Heart, Sliders, Disc, Dna, DownloadCloud, Loader2, X, Share } from 'lucide-react'
-import Navbar from './components/Navbar'
-import Sidebar, { PRESET_MODES } from './components/Sidebar'
-import CuratorPrompt from './components/CuratorPrompt'
-import PlaylistView from './components/PlaylistView'
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
+import { Sparkles, Loader2, X, Share, Users, Settings, Trash2, Pencil } from 'lucide-react'
 import SonicDnaView from './components/SonicDnaView'
-import OfflineView from './components/OfflineView'
 import PlayerBar from './components/PlayerBar'
 import QueueDrawer from './components/QueueDrawer'
 import GoogleAuthModal from './components/GoogleAuthModal'
@@ -19,9 +14,20 @@ import {
   extractDeepLinkParams,
   renderEmoji
 } from './jamEngine'
-import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges } from './offlineStorage'
+import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges, saveTrackOffline, deleteOfflineTrack, clearAllOfflineTracks } from './offlineStorage'
+import { useRoute, navigate, goBack, canGoBack, useMediaQuery } from './ui/router'
+import { AppContext, sameTrack } from './ui/AppContext'
+import { TabBar, SideNav, TopBar, TABS } from './ui/Shell'
+import { RightPanel, AddToPlaylistSheet, NameDialog, Toast } from './ui/Panels'
+import { PageHeader, IconButton } from './ui/primitives'
+import HomeView from './views/HomeView'
+import SearchView from './views/SearchView'
+import CreateView from './views/CreateView'
+import CollectionView from './views/CollectionView'
+import LibraryView from './views/LibraryView'
+import SettingsView from './views/SettingsView'
 import { initOtaUpdater } from './otaUpdater'
-import { getDayNightThemeInfo, getThemeInfo, getNextThemePreference, applyThemeToDocument } from './utils/themeCycle'
+import { getThemeInfo, applyThemeToDocument } from './utils/themeCycle'
 import {
   getApiBase,
   curateStandalone,
@@ -32,6 +38,8 @@ import {
   isNativeApp,
   isConfigured,
   getStoredApiKey,
+  getStoredServerUrl,
+  fetchRelatedCompanionTracks,
   formatDurationSeconds,
   openExternalUrl,
   fisherYatesShuffle,
@@ -48,6 +56,28 @@ const DEFAULT_SEEDS = [
   { title: 'A New Error', artist: 'Moderat', video_id: 'QpxFcMYRV08', duration_text: '6:07', thumbnail: 'https://i.ytimg.com/vi/QpxFcMYRV08/hqdefault.jpg' }
 ]
 
+// Keep stored track snapshots small.
+function slimTrack(t) {
+  if (!t) return t
+  const { title, artist, video_id, duration_text, thumbnail, url } = t
+  return { title, artist, video_id, duration_text, thumbnail, url }
+}
+
+function saveStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {}
+}
+
+// The Mac app serves this UI from its companion server on :8000; other devices can point at it in Settings.
+function hasMacCompanion() {
+  try {
+    return Boolean(getStoredServerUrl()) || (!isNativeApp() && window.location.port === '8000')
+  } catch {
+    return false
+  }
+}
+
 function loadStorage(key, fallback) {
   try {
     const raw = localStorage.getItem(key)
@@ -58,27 +88,12 @@ function loadStorage(key, fallback) {
 }
 
 export default function App() {
-  const [themePreference, setThemePreference] = useState(() => {
-    try {
-      const saved = localStorage.getItem('upbeat_theme_preference')
-      return saved === 'light' ? 'light' : 'dark'
-    } catch {
-      return 'dark'
-    }
-  })
-  const [themeInfo, setThemeInfo] = useState(() => {
-    try {
-      const saved = localStorage.getItem('upbeat_theme_preference')
-      const pref = saved === 'light' ? 'light' : 'dark'
-      return getThemeInfo(pref)
-    } catch {
-      return getThemeInfo('dark')
-    }
-  })
+  // Dark only. Song-artwork colours are applied by the player separately.
+  const themeInfo = getThemeInfo()
 
   useEffect(() => {
-    applyThemeToDocument(themePreference, themeInfo)
-  }, [themePreference, themeInfo])
+    applyThemeToDocument()
+  }, [])
 
   // Boot music sanitizer: Purge non-music videos (gameplay, vlogs, tutorial) from localStorage
   useEffect(() => {
@@ -129,23 +144,6 @@ export default function App() {
       console.warn('Boot music sanitizer error:', e)
     }
   }, [])
-
-  const handleSelectThemePreference = (pref) => {
-    const cleanPref = pref === 'light' ? 'light' : 'dark'
-    setThemePreference(cleanPref)
-    try {
-      localStorage.setItem('upbeat_theme_preference', cleanPref)
-    } catch {}
-    const info = getThemeInfo(cleanPref)
-    setThemeInfo(info)
-    applyThemeToDocument(cleanPref, info)
-    showNotify(`Theme: ${info.label}`, 'info')
-  }
-
-  const handleCycleTheme = () => {
-    const nextPref = getNextThemePreference(themePreference)
-    handleSelectThemePreference(nextPref)
-  }
 
   const [models] = useState([
     { id: 'gemini-4-argon', name: 'Gemini 4 Argon (⚡ 1s Fastest)' },
@@ -200,14 +198,12 @@ export default function App() {
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackMode, setPlaybackMode] = useState('app')
-  const [prompt, setPrompt] = useState(() => {
-    return hasBackend()
-      ? 'High-impact orchestral rock, Hiroyuki Sawano style soundtracks, and Monogatari / anime openings'
-      : ''
-  })
-  const [activePresetId, setActivePresetId] = useState(() => (hasBackend() ? 'ost' : null))
-  const [energyLevel, setEnergyLevel] = useState(78) // Matches 'ost' preset default (78%)
-  const [trackCount, setTrackCount] = useState(8)
+  const [prompt, setPrompt] = useState('')
+  const [activePresetId, setActivePresetId] = useState(null)
+  const [energyLevel, setEnergyLevel] = useState(60)
+  const [discoveryLevel, setDiscoveryLevel] = useState(50)
+  const [trackCount, setTrackCount] = useState(20)
+  const [createSeed, setCreateSeed] = useState(null)
   const [crossfadeSec, setCrossfadeSecState] = useState(() => {
     try {
       const saved = localStorage.getItem('upbeat_crossfade_sec')
@@ -238,9 +234,11 @@ export default function App() {
   })
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [notification, setNotification] = useState(null)
-  const showNotify = useCallback((msg, type = 'info') => {
-    setNotification({ msg, type })
-    setTimeout(() => setNotification(null), 3200)
+  const notifyTimerRef = useRef(null)
+  const showNotify = useCallback((msg, type = 'info', action = null) => {
+    setNotification({ msg, type, action, id: Date.now() })
+    clearTimeout(notifyTimerRef.current)
+    notifyTimerRef.current = setTimeout(() => setNotification(null), action ? 5000 : 3200)
   }, [])
   const [offlineTracks, setOfflineTracks] = useState([])
   const [offlineStats, setOfflineStats] = useState({ count: 0, totalBytes: 0, formattedSize: '0 B' })
@@ -277,6 +275,30 @@ export default function App() {
   const [otaUpdate, setOtaUpdate] = useState(null)
   const [isApplyingOta, setIsApplyingOta] = useState(false)
   const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
+
+  // ---- v8 shell state -------------------------------------------------
+  const route = useRoute()
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const [searchQuery, setSearchQuery] = useState(() => route.params?.q || '')
+  const [searchResults, setSearchResults] = useState(null)
+  const [recentSearches, setRecentSearches] = useState(() => loadStorage('upbeat_recent_searches_v1', []))
+  const [savedCollections, setSavedCollections] = useState(() => loadStorage('upbeat_library_v1', []))
+  const [recentMixes, setRecentMixes] = useState(() => loadStorage('upbeat_mixes_v1', []))
+  const [playHistory, setPlayHistory] = useState(() => loadStorage('upbeat_history_v1', []))
+  const [recents, setRecents] = useState(() => loadStorage('upbeat_recents_v1', []))
+  const [collectionLoading, setCollectionLoading] = useState(false)
+  const [playingFrom, setPlayingFrom] = useState(null)
+  const [rightPanelOpen, setRightPanelOpen] = useState(() => loadStorage('upbeat_right_panel_v1', true))
+  const [rightTab, setRightTab] = useState('next')
+  const [addToPlaylistTrack, setAddToPlaylistTrack] = useState(null)
+  const [nameDialog, setNameDialog] = useState(null) // { mode: 'create' | 'rename', id?, initial?, pendingTrack? }
+  const [downloadJobs, setDownloadJobs] = useState({}) // collectionId -> { busy, done, total }
+  const [sideLibFilter, setSideLibFilter] = useState('all')
+  const collectionTokenRef = useRef(0)
+  const lastTabRef = useRef('home')
+  const scrollRef = useRef(null)
+  const scrollMemoryRef = useRef({})
+  const searchInputRef = useRef(null)
 
   // Live Jam & Friends Social State & Refs
   const [jamState, setJamState] = useState(() => jamManager.state)
@@ -541,8 +563,10 @@ export default function App() {
 
     const handleOnline = () => showNotify('Internet connection restored', 'info')
     const handleOffline = () => {
-      showNotify('Device is offline. Showing downloaded tracks.', 'info')
-      setActiveTab('offline')
+      showNotify("You're offline. Downloaded songs still play.", 'info', {
+        label: 'Downloads',
+        onClick: () => navigate('/downloads')
+      })
     }
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -611,7 +635,7 @@ export default function App() {
     const handleKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault()
-        setIsSidebarOpen((prev) => !prev)
+        setRightPanelOpen((prev) => !prev)
       }
     }
     window.addEventListener('keydown', handleKey)
@@ -1005,10 +1029,9 @@ export default function App() {
           const data = await res.json()
           setFavorites(data.favorites || [])
           showNotify(
-            data.is_favorite
-              ? `Saved "${track.title}" to Favorites memory`
-              : `Removed "${track.title}" from Favorites`,
-            'info'
+            data.is_favorite ? 'Added to liked songs' : 'Removed from liked songs',
+            'info',
+            data.is_favorite ? null : { label: 'Undo', onClick: () => handleToggleFavorite(track) }
           )
           return
         }
@@ -1029,10 +1052,9 @@ export default function App() {
       : [{ ...track, liked_at: Math.floor(Date.now() / 1000) }, ...favorites]
     setFavorites(nextFavs)
     showNotify(
-      !alreadyLiked
-        ? `Saved "${track.title}" to Favorites memory`
-        : `Removed "${track.title}" from Favorites`,
-      'info'
+      !alreadyLiked ? 'Added to liked songs' : 'Removed from liked songs',
+      'info',
+      alreadyLiked ? { label: 'Undo', onClick: () => setFavorites((cur) => (cur.some((f) => sameTrack(f, track)) ? cur : [track, ...cur])) } : null
     )
   }
 
@@ -1156,12 +1178,12 @@ export default function App() {
   // Sync Liked Songs: Analyzes favorites to update Sonic Taste DNA and curates fresh songs
   const handleSyncFavorites = async () => {
     if (!favorites || favorites.length === 0) {
-      showNotify('No liked songs in Favourites yet! Heart some tracks to sync & curate.', 'warning')
+      showNotify('Like a few songs first, then make a mix from them.', 'info')
       return
     }
 
     setIsSyncing(true)
-    showNotify(`Analyzing ${favorites.length} Liked songs & curating playlist...`, 'info')
+    showNotify(`Making a mix from your ${favorites.length} liked songs…`, 'info')
 
     try {
       // 1. Deep Taste DNA Analysis on user's Liked favorites
@@ -1224,16 +1246,25 @@ export default function App() {
       }
 
       if (curateData && curateData.tracks && curateData.tracks.length > 0) {
-        setPlaylist(curateData)
+        const mix = {
+          id: `mix_${Date.now()}`,
+          kind: 'mix',
+          title: curateData.playlist_title || 'From your likes',
+          subtitle: curateData.subtitle || '',
+          prompt: 'Mix from my liked songs',
+          tracks: curateData.tracks,
+          createdAt: Date.now()
+        }
+        setPlaylist(mix)
+        recordMix(mix)
+        recordRecent(mix)
+        navigate('/collection')
         if (!currentTrack || !isPlaying) {
-          setCurrentTrack(curateData.tracks[0])
+          setCurrentTrack(mix.tracks[0])
           setCurrentTrackIdx(0)
         }
-        setActiveTab('curator')
-        showNotify(`Synced ${favorites.length} Liked songs & curated "${curateData.playlist_title}"!`, 'success')
       } else {
-        setActiveTab('curator')
-        showNotify(`Analyzed ${favorites.length} Liked songs & updated Taste DNA!`, 'success')
+        showNotify('Updated your taste profile', 'success')
       }
     } catch (err) {
       showNotify(`Sync error: ${err.message}`, 'error')
@@ -1242,19 +1273,24 @@ export default function App() {
     }
   }
 
-  // Generate Curated Playlist (Mac Backend + Standalone Android Fallback)
-  const handleGenerate = async (overridePrompt, overrideSeeds, overrideEnergy) => {
-    const activePrompt = overridePrompt || prompt
+  // Generate an AI mix (Mac companion first when configured, Gemini directly otherwise)
+  const handleGenerate = async (overridePrompt, overrideSeeds, overrideEnergy, opts = {}) => {
+    const activePrompt = (overridePrompt || prompt || '').trim()
     if (!activePrompt || isGenerating) return
 
-    if (!isConfigured()) {
-      setShowKeyModal(true)
-      showNotify('Add your Gemini API key or Mac Server IP to curate new playlists', 'info')
+    const hasKey = Boolean(getStoredApiKey())
+    const hasCompanion = hasMacCompanion()
+    if (!hasKey && !hasCompanion) {
+      showNotify('Add a Gemini key to make mixes', 'info', { label: 'Add key', onClick: () => navigate('/settings', { params: { section: 'ai' } }) })
       return
     }
 
+    const displayPrompt = opts.displayPrompt || activePrompt
+    const token = ++collectionTokenRef.current
     setIsGenerating(true)
-    setActiveTab('curator')
+    setCollectionLoading(true)
+    setPlaylist({ id: `mix_pending_${token}`, kind: 'mix', title: 'Making your mix…', prompt: displayPrompt, tracks: [] })
+    if (route.path !== '/collection') navigate('/collection')
 
     try {
       let data = null
@@ -1266,7 +1302,7 @@ export default function App() {
         favorites
       }
 
-      if (hasBackend()) {
+      if (hasCompanion) {
         try {
           const res = await fetch(`${getApiBase()}/curate`, {
             method: 'POST',
@@ -1282,32 +1318,50 @@ export default function App() {
           const ct = res.headers.get('content-type') || ''
           if (!res.ok || !ct.includes('application/json')) {
             const err = ct.includes('application/json') ? await res.json().catch(() => ({})) : {}
-            throw new Error(err.detail || `Mac server returned HTTP ${res.status}`)
+            throw new Error(err.detail || `Mac companion returned HTTP ${res.status}`)
           }
           data = await res.json()
         } catch (backendErr) {
-          // Fall back to client-side engine if Gemini API key is configured
-          if (getStoredApiKey()) {
-            showNotify('Curating with Gemini AI engine...', 'info')
+          if (hasKey) {
             data = await curateStandalone(curateArgs)
           } else {
-            throw backendErr
+            throw new Error('Add a Gemini key in Settings to make mixes')
           }
         }
       } else {
         data = await curateStandalone(curateArgs)
       }
 
-      setPlaylist(data)
-      if (data.tracks && data.tracks.length > 0 && (!currentTrack || !isPlaying)) {
-        setCurrentTrack(data.tracks[0])
+      if (token !== collectionTokenRef.current) return
+      const tracks = (data?.tracks || []).filter((t) => t && (t.video_id || t.title))
+      const mix = {
+        id: `mix_${Date.now()}`,
+        kind: 'mix',
+        title: data?.playlist_title || 'Your mix',
+        subtitle: data?.subtitle || data?.vibe_description || '',
+        prompt: displayPrompt,
+        tracks,
+        createdAt: Date.now()
+      }
+      setPlaylist(mix)
+      recordMix(mix)
+      recordRecent(mix)
+      if (tracks.length && (!currentTrack || !isPlaying)) {
+        setCurrentTrack(tracks[0])
         setCurrentTrackIdx(0)
       }
-      showNotify(`Curated "${data.playlist_title}" (${data.tracks?.length || 0} tracks)`, 'success')
     } catch (e) {
-      showNotify(`Generation failed: ${e.message}`, 'error')
+      if (token !== collectionTokenRef.current) return
+      setPlaylist(null)
+      showNotify(`Couldn't make that mix: ${e.message}`, 'error', hasKey ? null : { label: 'Settings', onClick: () => navigate('/settings', { params: { section: 'ai' } }) })
+      goBack('/create')
     } finally {
-      setIsGenerating(false)
+      if (token === collectionTokenRef.current) {
+        setIsGenerating(false)
+        setCollectionLoading(false)
+      } else {
+        setIsGenerating(false)
+      }
     }
   }
 
@@ -1346,10 +1400,7 @@ export default function App() {
           setCurrentTrackIdx(0)
         }
       }
-      const label = data.active_source === 'playlist'
-        ? `Loaded playlist "${data.playlist_title}" (${data.tracks?.length || 0} tracks • 0 tokens)`
-        : `Found ${data.tracks?.length || 0} tracks for "${q}" (0 tokens)`
-      showNotify(label, 'success')
+      if (!autoPlay) showNotify(`Found ${data.tracks?.length || 0} songs for "${q}"`, 'info')
     } catch (e) {
       showNotify(`Search failed: ${e.message}`, 'error')
     } finally {
@@ -1470,14 +1521,7 @@ export default function App() {
         const synced = await handleSyncSafari(true)
         if (synced.length > 0) seeds = synced
       }
-      if (!playlist) {
-        if (hasBackend()) {
-          if (isConfigured()) {
-            handleGenerate(prompt, seeds)
-          }
-        }
-        // Standalone mobile starts clean so new users can search or choose their own vibe
-      } else if (playlist.tracks?.length > 0 && !currentTrack) {
+      if (playlist?.tracks?.length > 0 && !currentTrack) {
         setCurrentTrack(playlist.tracks[0])
         setCurrentTrackIdx(0)
       }
@@ -1515,8 +1559,6 @@ export default function App() {
 
   const handlePromptChange = (val) => {
     setPrompt(val)
-    const matching = PRESET_MODES.find((p) => p.prompt === val)
-    setActivePresetId(matching ? matching.id : null)
   }
 
   const handlePlayTrack = (track, idxOrList, customList) => {
@@ -1555,11 +1597,6 @@ export default function App() {
       else setActivePlaybackContext(playlist?.tracks || [])
     }
 
-    const isMobileDevice = typeof window !== 'undefined' && (
-      Boolean(window.Capacitor?.isNativePlatform?.()) ||
-      window.innerWidth < 768
-    )
-
     const isSame = currentTrack && (
       (currentTrack.video_id && currentTrack.video_id === track.video_id) ||
       (currentTrack.title === track.title && currentTrack.artist === track.artist)
@@ -1572,9 +1609,6 @@ export default function App() {
           currentTime: window.UpBeatControls?.getCurrentTime?.() || 0
         })
       }
-      if (isMobileDevice) {
-        setIsNowPlayingOpen(true)
-      }
       return
     }
     setCurrentTrack(track)
@@ -1583,10 +1617,6 @@ export default function App() {
     if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
       jamManager.emitPlaybackControl('SELECT_TRACK', { track, currentTime: 0 })
     }
-    if (isMobileDevice) {
-      setIsNowPlayingOpen(true)
-    }
-
     if (playbackMode === 'safari') {
       handlePushToSafari(track)
     }
@@ -1680,7 +1710,7 @@ export default function App() {
     if (jamManager.state.active && !jamManager.state.isHost) {
       jamManager.emitQueueAdd(track)
     }
-    showNotify(`Playing next: "${track.title}"`, 'info')
+    showNotify(`"${track.title}" plays next`, 'info')
   }
 
   const handleAddToQueue = (track) => {
@@ -1689,7 +1719,7 @@ export default function App() {
     if (jamManager.state.active && !jamManager.state.isHost) {
       jamManager.emitQueueAdd(track)
     }
-    showNotify(`Added "${track.title}" to queue (${queue.length + 1})`, 'info')
+    showNotify('Added to queue', 'info', { label: 'Undo', onClick: () => setQueue((q) => { const i = q.lastIndexOf(track); return i >= 0 ? q.filter((_, j) => j !== i) : q }) })
   }
 
   const handleRemoveFromQueue = (idx) => {
@@ -1719,7 +1749,7 @@ export default function App() {
           setActivePlaybackContext(newContext)
           setCurrentTrackIdx(0)
         }
-        showNotify('Shuffle On (True Fisher-Yates)', 'info')
+        showNotify('Shuffle on', 'info')
       } else {
         if (originalQueueRef.current) {
           setQueue(originalQueueRef.current)
@@ -1735,7 +1765,7 @@ export default function App() {
           }
           originalContextRef.current = null
         }
-        showNotify('Shuffle Off (Original Sequence Restored)', 'info')
+        showNotify('Shuffle off', 'info')
       }
       return nextState
     })
@@ -1743,7 +1773,7 @@ export default function App() {
 
   const handleShufflePlayBlock = async (block) => {
     if (!block) return
-    showNotify(`Shuffling "${block.title}"...`, 'info')
+
     try {
       const rawTracks = await loadBlockTracks(block)
       if (!rawTracks || rawTracks.length === 0) {
@@ -1758,13 +1788,8 @@ export default function App() {
       setQueue(shuffled.slice(1))
       setIsShuffle(true)
       setIsPlaying(true)
-      const isMobileDevice = typeof window !== 'undefined' && (
-        Boolean(window.Capacitor?.isNativePlatform?.()) ||
-        window.innerWidth < 768
-      )
-      if (isMobileDevice) setIsNowPlayingOpen(true)
       if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
-      showNotify(`Shuffle playing "${block.title}" (${shuffled.length} tracks)`, 'success')
+
     } catch (e) {
       showNotify('Error shuffling station: ' + (e?.message || 'Try again'), 'error')
     }
@@ -1781,13 +1806,8 @@ export default function App() {
     setQueue(shuffled.slice(1))
     setIsShuffle(true)
     setIsPlaying(true)
-    const isMobileDevice = typeof window !== 'undefined' && (
-      Boolean(window.Capacitor?.isNativePlatform?.()) ||
-      window.innerWidth < 768
-    )
-    if (isMobileDevice) setIsNowPlayingOpen(true)
     if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
-    showNotify(`Shuffled ${shuffled.length} tracks`, 'success')
+
   }
 
   const handleAddSeedTrack = (track) => {
@@ -1990,6 +2010,564 @@ export default function App() {
     }
   }
 
+  // =====================================================================
+  // v8: library, history, collections, search, downloads
+  // =====================================================================
+  const downloadedIds = useMemo(() => new Set(offlineTracks.map((t) => t.video_id).filter(Boolean)), [offlineTracks])
+
+  useEffect(() => saveStorage('upbeat_library_v1', savedCollections), [savedCollections])
+  useEffect(() => saveStorage('upbeat_mixes_v1', recentMixes), [recentMixes])
+  useEffect(() => saveStorage('upbeat_history_v1', playHistory), [playHistory])
+  useEffect(() => saveStorage('upbeat_recents_v1', recents), [recents])
+  useEffect(() => saveStorage('upbeat_recent_searches_v1', recentSearches), [recentSearches])
+  useEffect(() => saveStorage('upbeat_right_panel_v1', rightPanelOpen), [rightPanelOpen])
+
+  // Remember what was actually played (for History and Jump back in)
+  useEffect(() => {
+    if (!isPlaying || !currentTrack || (!currentTrack.video_id && !currentTrack.title)) return
+    setPlayHistory((prev) => [slimTrack(currentTrack), ...prev.filter((t) => !sameTrack(t, currentTrack))].slice(0, 100))
+  }, [currentTrack?.video_id, currentTrack?.title, isPlaying])
+
+  const snapshot = (c) => ({
+    id: c.id,
+    kind: c.kind,
+    title: c.title,
+    subtitle: c.subtitle || '',
+    prompt: c.prompt || '',
+    cover: c.cover || '',
+    tracks: (c.tracks || []).slice(0, 200).map(slimTrack),
+    createdAt: c.createdAt || Date.now()
+  })
+
+  const recordMix = (mix) => {
+    setRecentMixes((prev) => [snapshot(mix), ...prev.filter((m) => m.id !== mix.id)].slice(0, 20))
+  }
+
+  const recordRecent = (c) => {
+    if (!c?.id || c.id.startsWith('mix_pending')) return
+    const entry =
+      c.kind === 'liked'
+        ? { key: 'liked', kind: 'liked', title: 'Liked songs' }
+        : {
+            key: c.id,
+            kind: c.kind,
+            title: c.title,
+            cover: c.cover || '',
+            tracks: (c.tracks || []).slice(0, 4).map(slimTrack),
+            track: c.tracks?.[0] ? slimTrack(c.tracks[0]) : null,
+            collection: { ...snapshot(c), tracks: (c.tracks || []).slice(0, 80).map(slimTrack) }
+          }
+    setRecents((prev) => [entry, ...prev.filter((r) => r.key !== entry.key)].slice(0, 12))
+  }
+
+  // Show a collection that is already loaded
+  const showCollection = (c, { record = true } = {}) => {
+    collectionTokenRef.current++
+    setCollectionLoading(false)
+    setPlaylist(c)
+    if (record) recordRecent(c)
+    navigate('/collection')
+  }
+
+  // Open a collection page right away and fill it when its songs arrive
+  const loadCollection = async (base, loader) => {
+    const token = ++collectionTokenRef.current
+    setPlaylist({ ...base, tracks: [] })
+    setCollectionLoading(true)
+    navigate('/collection')
+    try {
+      const raw = await loader()
+      if (token !== collectionTokenRef.current) return
+      const tracks = (raw || []).filter(isValidMusicTrack)
+      const full = { ...base, tracks }
+      setPlaylist(full)
+      if (tracks.length) recordRecent(full)
+    } catch (e) {
+      if (token === collectionTokenRef.current) showNotify(`Couldn't load "${base.title}"`, 'error')
+    } finally {
+      if (token === collectionTokenRef.current) setCollectionLoading(false)
+    }
+  }
+
+  const playList = (tracks, { shuffle = false, from = null } = {}) => {
+    const list = (tracks || []).filter(Boolean)
+    if (!list.length) return
+    if (shuffle) {
+      const shuffled = fisherYatesShuffle(list)
+      originalContextRef.current = [...list]
+      setActivePlaybackContext(shuffled)
+      setIsShuffle(true)
+      setCurrentTrack(shuffled[0])
+      setCurrentTrackIdx(0)
+      setIsPlaying(true)
+      if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
+    } else {
+      setIsShuffle(false)
+      originalContextRef.current = null
+      if (sameTrack(currentTrack, list[0])) {
+        setActivePlaybackContext(list)
+        setCurrentTrackIdx(0)
+        setIsPlaying(true)
+      } else {
+        handlePlayTrack(list[0], 0, list)
+      }
+    }
+    setPlayingFrom(from)
+  }
+
+  const blockBase = (block) => ({
+    id: `block_${block.id}`,
+    kind: block.tier === 1 ? 'chart' : 'foryou',
+    title: block.title,
+    subtitle: block.subtitle,
+    cover: block.thumbnail || ''
+  })
+
+  const openBlock = (block) => loadCollection(blockBase(block), () => loadBlockTracks(block))
+
+  const playBlock = async (block, shuffle = false) => {
+    try {
+      const tracks = ((await loadBlockTracks(block)) || []).filter(isValidMusicTrack)
+      if (!tracks.length) return showNotify(`Couldn't load "${block.title}"`, 'error')
+      const c = { ...blockBase(block), tracks }
+      recordRecent(c)
+      playList(tracks, { shuffle, from: { id: c.id, title: c.title } })
+    } catch {
+      showNotify(`Couldn't load "${block.title}"`, 'error')
+    }
+  }
+
+  const openSearchPlaylist = (pl) =>
+    loadCollection(
+      { id: `pl_${pl.browse_id}`, kind: 'playlist', title: pl.title, subtitle: pl.subtitle || '', cover: pl.thumbnail || '' },
+      () => browsePlaylistStandalone(pl.browse_id, pl.title, pl.subtitle)
+    )
+
+  const openMood = (m) =>
+    loadCollection({ id: `mood_${m.id}`, kind: 'playlist', title: m.label, subtitle: 'Mood' }, async () => {
+      const res = await directSearchStandalone(m.query, 'playlists')
+      return res?.tracks || []
+    })
+
+  const startRadio = (track) => {
+    if (!track) return
+    loadCollection(
+      {
+        id: `radio_${track.video_id || track.title}`,
+        kind: 'radio',
+        title: `${track.title} radio`,
+        subtitle: `Songs like ${track.title}${track.artist ? ` by ${track.artist}` : ''}`,
+        cover: track.thumbnail || ''
+      },
+      async () => {
+        let related = []
+        try {
+          related = await fetchRelatedCompanionTracks([track], 25)
+        } catch {}
+        if (related.length < 5) {
+          try {
+            const r = await directSearchStandalone(`${track.artist || ''} ${track.title} radio`.trim(), 'songs')
+            related = [...related, ...(r?.song_results || r?.tracks || [])]
+          } catch {}
+        }
+        return [track, ...related.filter((t) => !sameTrack(t, track))]
+      }
+    )
+  }
+
+  const goToArtist = (name) => {
+    if (!name) return
+    setIsNowPlayingOpen(false)
+    setSearchQuery(name)
+    navigate('/search', { params: { q: name } })
+  }
+
+  const openRecent = (item) => {
+    if (item.kind === 'liked') return navigate('/liked')
+    const saved = savedCollections.find((c) => c.id === item.key)
+    if (saved) return showCollection(saved)
+    if (item.collection) return showCollection(item.collection)
+  }
+
+  // ---- search ----------------------------------------------------------
+  const searchSeqRef = useRef(0)
+  const runSearch = async (raw) => {
+    const q = (raw || '').trim()
+    if (!q) return
+    const seq = ++searchSeqRef.current
+    setIsSearching(true)
+    try {
+      const data = await directSearchStandalone(q, 'songs')
+      if (seq === searchSeqRef.current) setSearchResults(data)
+    } catch (e) {
+      if (seq === searchSeqRef.current) showNotify(`Search failed: ${e.message}`, 'error')
+    } finally {
+      if (seq === searchSeqRef.current) setIsSearching(false)
+    }
+  }
+
+  const rememberSearch = (q) => {
+    const query = (q || '').trim()
+    if (!query) return
+    setRecentSearches((prev) => [query, ...prev.filter((x) => x.toLowerCase() !== query.toLowerCase())].slice(0, 10))
+  }
+
+  useEffect(() => {
+    if (route.path !== '/search') return
+    const q = searchQuery.trim()
+    if (!q) return
+    const t = setTimeout(() => runSearch(q), 450)
+    return () => clearTimeout(t)
+  }, [searchQuery, route.path])
+
+  // Keep ?q= in the URL so Back returns to the same results
+  useEffect(() => {
+    if (route.path !== '/search') return
+    if ((route.params.q || '') === searchQuery) return
+    const t = setTimeout(() => navigate('/search', { replace: true, params: { q: searchQuery } }), 500)
+    return () => clearTimeout(t)
+  }, [searchQuery, route.path])
+
+  useEffect(() => {
+    if (route.path === '/search' && route.params.q && route.params.q !== searchQuery) setSearchQuery(route.params.q)
+  }, [route.path, route.params.q])
+
+  const submitSearch = (q) => {
+    const query = (q ?? searchQuery).trim()
+    if (!query) return
+    rememberSearch(query)
+    if (route.path !== '/search') navigate('/search', { params: { q: query } })
+    runSearch(query)
+  }
+
+  const makeMixFromQuery = (q) => {
+    rememberSearch(q)
+    handleGenerate(`A mix of songs with the sound and style of: ${q}`, undefined, undefined, { displayPrompt: q })
+  }
+
+  // ---- create ------------------------------------------------------------
+  const makeFromCreate = () => {
+    const p = prompt.trim()
+    const parts = []
+    if (p) parts.push(p)
+    if (createSeed?.type === 'track') parts.push(`Start from the sound of "${createSeed.track.title}" by ${createSeed.track.artist}.`)
+    if (createSeed?.type === 'likes' && favorites.length) {
+      parts.push(`Inspired by my liked songs: ${favorites.slice(0, 8).map((f) => `"${f.title}" by ${f.artist}`).join(', ')}.`)
+    }
+    if (discoveryLevel >= 70) parts.push('Favor lesser-known songs and deep cuts I probably have not heard.')
+    else if (discoveryLevel <= 30) parts.push('Favor well-known, familiar songs.')
+    const display = p || (createSeed?.type === 'likes' ? 'From my liked songs' : createSeed?.track ? `Like ${createSeed.track.title}` : '')
+    if (!parts.length) return
+    handleGenerate(parts.join(' '), createSeed?.type === 'likes' ? favorites : undefined, energyLevel, { displayPrompt: display })
+  }
+
+  const tweakMix = (tweak) => {
+    const c = shownCollectionRef.current
+    const base = (c?.prompt || '').split(' · ')[0] || c?.title || ''
+    if (!base) return
+    const energy = tweak === 'More energy' ? Math.min(100, energyLevel + 20) : tweak === 'Calmer' ? Math.max(0, energyLevel - 25) : energyLevel
+    handleGenerate(`${base}. Variation: ${tweak.toLowerCase()}.`, undefined, energy, { displayPrompt: `${base} · ${tweak.toLowerCase()}` })
+  }
+
+  // ---- library ---------------------------------------------------------
+  const isSavedId = (id) => savedCollections.some((c) => c.id === id)
+
+  const toggleSave = (c) => {
+    if (!c?.id || c.id.startsWith('mix_pending')) return
+    if (isSavedId(c.id)) {
+      const before = savedCollections
+      setSavedCollections((list) => list.filter((x) => x.id !== c.id))
+      showNotify('Removed from your library', 'info', { label: 'Undo', onClick: () => setSavedCollections(before) })
+    } else {
+      setSavedCollections((list) => [{ ...snapshot(c), savedAt: Date.now() }, ...list])
+      showNotify('Saved to your library', 'success')
+    }
+  }
+
+  const createPlaylist = (name, pendingTrack) => {
+    const item = { id: `user_${Date.now()}`, kind: 'user', title: name, subtitle: '', tracks: pendingTrack ? [slimTrack(pendingTrack)] : [], createdAt: Date.now() }
+    setSavedCollections((list) => [item, ...list])
+    if (pendingTrack) showNotify(`Added to ${name}`, 'success')
+    else showCollection(item, { record: false })
+  }
+
+  const addTrackToPlaylist = (pl, track) => {
+    if (!pl || !track) return
+    setSavedCollections((list) => list.map((c) => (c.id === pl.id ? { ...c, tracks: [...(c.tracks || []), slimTrack(track)] } : c)))
+    showNotify(`Added to ${pl.title}`, 'success')
+  }
+
+  const removeFromPlaylist = (id, index) => {
+    setSavedCollections((list) => list.map((c) => (c.id === id ? { ...c, tracks: c.tracks.filter((_, i) => i !== index) } : c)))
+  }
+
+  const deletePlaylist = (c) => {
+    const before = savedCollections
+    setSavedCollections((list) => list.filter((x) => x.id !== c.id))
+    goBack('/library')
+    showNotify(`Deleted "${c.title}"`, 'info', { label: 'Undo', onClick: () => setSavedCollections(before) })
+  }
+
+  // ---- downloads ---------------------------------------------------------
+  const downloadTrack = async (track) => {
+    if (!track?.video_id) return
+    if (downloadedIds.has(track.video_id)) return showNotify('Already downloaded', 'info')
+    showNotify(`Downloading "${track.title}"…`, 'info')
+    try {
+      await saveTrackOffline(track)
+      showNotify(`"${track.title}" is ready offline`, 'success')
+    } catch (e) {
+      showNotify(`Download failed: ${e?.message || 'try again'}`, 'error')
+    }
+  }
+
+  const downloadAll = async (c) => {
+    const todo = (c?.tracks || []).filter((t) => t.video_id && !downloadedIds.has(t.video_id))
+    if (!todo.length) return
+    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done: 0, total: todo.length } }))
+    let done = 0
+    let failed = 0
+    for (const t of todo) {
+      try {
+        await saveTrackOffline(t)
+      } catch {
+        failed++
+      }
+      done++
+      setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done, total: todo.length } }))
+    }
+    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: false, done, total: todo.length } }))
+    showNotify(failed ? `Downloaded ${done - failed} of ${todo.length} songs` : `"${c.title}" is ready offline`, failed ? 'error' : 'success')
+  }
+
+  const deleteDownload = async (track) => {
+    try {
+      await deleteOfflineTrack(track.video_id)
+      showNotify('Download removed', 'info')
+    } catch {}
+  }
+
+  const clearDownloads = async () => {
+    try {
+      await clearAllOfflineTracks()
+      showNotify('All downloads deleted', 'info')
+    } catch {}
+  }
+
+  const shareCollection = async (c) => {
+    const lines = (c.tracks || []).slice(0, 15).map((t, i) => `${i + 1}. ${t.title} — ${t.artist}`)
+    const text = `${c.title}${c.prompt ? ` (“${c.prompt}”)` : ''}\n\n${lines.join('\n')}\n\nMade with UpBeat`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: c.title, text })
+        return
+      }
+    } catch {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+      showNotify('Tracklist copied', 'success')
+    } catch {
+      showNotify("Couldn't share right now", 'error')
+    }
+  }
+
+  // ---- friends / jam -------------------------------------------------------
+  const openFriends = () => {
+    setInitialJamSection('friends')
+    setIsJamModalOpen(true)
+  }
+
+  const listenAlong = async (friend) => {
+    if (!friend) return
+    if (friend.activeJamCode) {
+      const ok = await jamManager.joinJam(friend.activeJamCode, googleUser)
+      if (ok) showNotify(`Listening along with ${friend.name}`, 'success')
+    } else if (friend.currentTrack) {
+      handlePlayTrack(friend.currentTrack, 0, [friend.currentTrack])
+      setPlayingFrom({ id: null, title: `${friend.name}'s pick` })
+    }
+  }
+
+  const startJamWith = (c) => {
+    playList(c.tracks, { from: { id: c.id, title: c.title } })
+    setInitialJamSection('')
+    setIsJamModalOpen(true)
+  }
+
+  // ---- what the collection page shows ---------------------------------------
+  const shownCollection = useMemo(() => {
+    if (route.path === '/liked') return { id: 'liked', kind: 'liked', title: 'Liked songs', tracks: favorites }
+    if (route.path === '/downloads') return { id: 'downloads', kind: 'downloads', title: 'Downloads', tracks: offlineTracks }
+    if (!playlist) return null
+    const savedUser = savedCollections.find((c) => c.id === playlist.id && c.kind === 'user')
+    if (savedUser) return savedUser
+    return {
+      ...playlist,
+      id: playlist.id || `legacy_${playlist.playlist_title || 'playlist'}`,
+      kind: playlist.kind || (playlist.is_direct_search ? 'songs' : 'mix'),
+      title: playlist.title || playlist.playlist_title || 'Playlist'
+    }
+  }, [route.path, favorites, offlineTracks, playlist, savedCollections])
+  const shownCollectionRef = useRef(null)
+  shownCollectionRef.current = shownCollection
+
+  useEffect(() => {
+    if (route.path === '/liked' && favorites.length) recordRecent({ id: 'liked', kind: 'liked', title: 'Liked songs' })
+  }, [route.path])
+
+  // ---- playback from any screen ---------------------------------------------
+  const ctxPlayTrack = (track, list) => {
+    const l = Array.isArray(list) && list.length ? list : [track]
+    handlePlayTrack(track, l)
+    const c = shownCollectionRef.current
+    if (['/collection', '/liked', '/downloads'].includes(route.path) && c && l === c.tracks) setPlayingFrom({ id: c.id, title: c.title })
+    else if (route.path === '/search') {
+      rememberSearch(searchQuery)
+      setPlayingFrom({ id: null, title: `Search: ${searchQuery}` })
+    } else if (route.path === '/library') setPlayingFrom({ id: null, title: 'Your library' })
+    else setPlayingFrom(null)
+  }
+
+  const upNext = useMemo(() => {
+    const ctx = activePlaybackContext || []
+    const idx = ctx.findIndex((t) => sameTrack(t, currentTrack))
+    const rest = idx >= 0 ? ctx.slice(idx + 1) : []
+    return [...queue, ...rest].slice(0, 60)
+  }, [activePlaybackContext, currentTrack, queue])
+
+  const appCtx = {
+    currentTrack,
+    isPlaying,
+    isFav: isTrackFavorite,
+    downloadedIds,
+    playTrack: ctxPlayTrack,
+    toggleFav: handleToggleFavorite,
+    playNext: handlePlayNext,
+    addToQueue: handleAddToQueue,
+    openAddToPlaylist: (t) => setAddToPlaylistTrack(t),
+    download: downloadTrack,
+    startRadio: (t) => {
+      setIsNowPlayingOpen(false)
+      startRadio(t)
+    },
+    goToArtist
+  }
+
+  // ---- navigation helpers -----------------------------------------------------
+  const TAB_FOR_PATH = { '/': 'home', '/search': 'search', '/create': 'create', '/library': 'library' }
+  const activeTabId = TAB_FOR_PATH[route.path] || lastTabRef.current
+  if (TAB_FOR_PATH[route.path]) lastTabRef.current = TAB_FOR_PATH[route.path]
+
+  const selectTab = (tab) => {
+    if (route.path === tab.path) {
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+      if (tab.id === 'search') searchInputRef.current?.focus()
+      return
+    }
+    navigate(tab.path, tab.id === 'search' && searchQuery ? { params: { q: searchQuery } } : undefined)
+  }
+
+  // Close the topmost layer first; used by Android back
+  const closeTopLayer = () => {
+    if (nameDialog) {
+      setNameDialog(null)
+      return true
+    }
+    if (addToPlaylistTrack) {
+      setAddToPlaylistTrack(null)
+      return true
+    }
+    if (isJamModalOpen) {
+      setIsJamModalOpen(false)
+      return true
+    }
+    if (showGoogleModal) {
+      setShowGoogleModal(false)
+      return true
+    }
+    if (isQueueOpen) {
+      setIsQueueOpen(false)
+      return true
+    }
+    if (isNowPlayingOpen) {
+      setIsNowPlayingOpen(false)
+      return true
+    }
+    return false
+  }
+
+  // Android hardware back: MainActivity calls this before leaving the app
+  useEffect(() => {
+    window.UpBeatHandleBack = () => {
+      if (closeTopLayer()) return true
+      if (route.path !== '/') {
+        if (canGoBack()) window.history.back()
+        else navigate('/', { replace: true })
+        return true
+      }
+      return false
+    }
+  })
+
+  // Desktop keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target?.tagName || '').toLowerCase()
+      const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        if (route.path !== '/search') navigate('/search', searchQuery ? { params: { q: searchQuery } } : undefined)
+        setTimeout(() => searchInputRef.current?.focus(), 30)
+      } else if (mod && e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        navigate('/create')
+      } else if (e.key === 'Escape' && !typing) {
+        if (isNowPlayingOpen) setIsNowPlayingOpen(false)
+        else if (isQueueOpen) setIsQueueOpen(false)
+      } else if (e.code === 'Space' && !typing && tag !== 'button' && tag !== 'a' && !mod) {
+        e.preventDefault()
+        handleTogglePlay()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  // Scroll memory per screen
+  const routeKey = `${route.path}?${new URLSearchParams(route.params).toString()}`
+  const routeKeyRef = useRef(routeKey)
+  useLayoutEffect(() => {
+    routeKeyRef.current = routeKey
+    const el = scrollRef.current
+    if (el) el.scrollTop = scrollMemoryRef.current[routeKey] || 0
+  }, [routeKey, isDesktop])
+  const onMainScroll = (e) => {
+    scrollMemoryRef.current[routeKeyRef.current] = e.currentTarget.scrollTop
+  }
+
+  useEffect(() => {
+    setIsQueueOpen(false)
+  }, [route.path])
+
+  const userTracksForFeed = useMemo(() => {
+    const out = []
+    const seen = new Set()
+    for (const t of [...favorites, ...offlineTracks, ...extractedTracks]) {
+      if (!t || !isValidMusicTrack(t)) continue
+      const key = t.video_id || `${t.title}::${t.artist}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(t)
+    }
+    return out
+  }, [favorites, offlineTracks, extractedTracks])
+
+  const userPlaylists = savedCollections.filter((c) => c.kind === 'user')
+  const friends = jamState?.friends || []
+
   const lastModelStatus = playlist
     ? {
         isFallback: Boolean(playlist.is_fallback) || (playlist.used_model && playlist.used_model !== selectedModel),
@@ -1998,165 +2576,155 @@ export default function App() {
       }
     : null
 
-  return (
-    <div className={`h-[100dvh] w-screen ytm-atmosphere ${themeInfo?.id || 'theme-dark'} bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col overflow-hidden`}>
-      {/* Subtle Antigravity Status Notification */}
-      {notification && (
-        <div className="fixed bottom-36 sm:bottom-20 left-4 right-4 sm:left-6 sm:right-auto z-50">
-          <div className={`px-3.5 py-2 rounded-lg border text-xs font-mono flex items-center gap-2 shadow-2xl backdrop-blur-md ${
-            notification.type === 'error'
-              ? 'bg-[#181012] text-[#fca5a5] border-rose-500/40'
-              : 'bg-[#131318] text-[#f4f4f5] border-sky-500/40'
-          }`}>
-            <span className={`w-2 h-2 rounded-full shrink-0 ${
-              notification.type === 'error' ? 'bg-rose-500' : 'bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.8)]'
-            }`} />
-            <span className="truncate">{notification.msg}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Top Bar */}
-      <Navbar
-        themeInfo={themeInfo}
-        themePreference={themePreference}
-        onCycleTheme={handleCycleTheme}
-        models={models}
-        selectedModel={selectedModel}
-        onSelectModel={handleSelectModel}
-        lastModelStatus={lastModelStatus}
-        safariStatus={safariStatus}
-        onSyncSafari={() => handleSyncSafari(false)}
-        onOpenSafari={handleOpenSafari}
-        onSyncFavorites={handleSyncFavorites}
-        isSyncing={isSyncing}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        extractedCount={extractedTracks.length}
-        favoritesCount={favorites.length}
-        offlineCount={offlineStats.count}
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-        showKeyModal={showKeyModal}
-        setShowKeyModal={setShowKeyModal}
-        prompt={prompt}
-        setPrompt={handlePromptChange}
-        onDirectSearch={(q) => handleDirectSearch(q, 'auto')}
-        onGenerate={(p) => handleGenerate(p)}
-        searchMode={searchMode}
-        setSearchMode={setSearchMode}
-        isGenerating={isGenerating}
-        isSearching={isSearching}
-        googleUser={googleUser}
-        onOpenGoogleModal={() => setShowGoogleModal(true)}
-        jamState={jamState}
-        onOpenJamModal={() => setIsJamModalOpen(true)}
-      />
-
-      {/* Workspace Body */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        <Sidebar
-          tasteDna={tasteDna}
-          energyLevel={energyLevel}
-          setEnergyLevel={setEnergyLevel}
-          trackCount={trackCount}
-          setTrackCount={setTrackCount}
-          activePresetId={activePresetId}
-          onSelectPreset={handleSelectPreset}
-          onNewSession={() => {
-            setPrompt('')
-            setActivePresetId(null)
-            showNotify('New session ready', 'info')
-          }}
-          extractedCount={extractedTracks.length}
-          favoritesCount={favorites.length}
-          offlineCount={offlineStats.count}
-          offlineStorageSize={offlineStats.formattedSize}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onOpenFavoritesTab={() => setActiveTab('favorites')}
-          onOpenOfflineTab={() => setActiveTab('offline')}
-          onSyncFavorites={handleSyncFavorites}
-          onSyncSafari={() => handleSyncSafari(false)}
-          isSyncing={isSyncing}
-          onOpenSafari={handleOpenSafari}
-          isOpenDesktop={isSidebarOpen}
-          isOpenMobile={isSidebarOpen}
-          onCloseMobile={() => setIsSidebarOpen(false)}
-          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-          models={models}
-          selectedModel={selectedModel}
-          onSelectModel={handleSelectModel}
-          themeInfo={themeInfo}
-          themePreference={themePreference}
-          onSelectThemePreference={handleSelectThemePreference}
-          onCycleTheme={handleCycleTheme}
-          crossfadeSec={crossfadeSec}
-          setCrossfadeSec={setCrossfadeSec}
-        />
-
-        <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent overflow-x-hidden main-content">
-          {activeTab === 'curator' ? (
-            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 flex flex-col bg-transparent gpu-scroll content-scroll-container">
-              <CuratorPrompt
-                prompt={prompt}
-                setPrompt={handlePromptChange}
-                onGenerate={(p) => handleGenerate(p)}
-                onDirectSearch={(q) => handleDirectSearch(q, 'auto')}
-                searchMode={searchMode}
-                setSearchMode={setSearchMode}
-                isGenerating={isGenerating}
-                isSearching={isSearching}
-                selectedModel={selectedModel}
+  // ---- screens ------------------------------------------------------------
+  const renderView = () => {
+    switch (route.path) {
+      case '/search':
+        return (
+          <SearchView
+            isDesktop={isDesktop}
+            query={searchQuery}
+            setQuery={setSearchQuery}
+            results={searchResults}
+            searching={isSearching}
+            recentSearches={recentSearches}
+            onClearRecent={() => setRecentSearches([])}
+            onSubmit={submitSearch}
+            onMakeMix={makeMixFromQuery}
+            onOpenPlaylist={openSearchPlaylist}
+            onMood={openMood}
+          />
+        )
+      case '/create':
+        return (
+          <CreateView
+            isDesktop={isDesktop}
+            prompt={prompt}
+            setPrompt={handlePromptChange}
+            energy={energyLevel}
+            setEnergy={setEnergyLevel}
+            discovery={discoveryLevel}
+            setDiscovery={setDiscoveryLevel}
+            length={trackCount}
+            setLength={setTrackCount}
+            seed={createSeed}
+            setSeed={setCreateSeed}
+            currentTrack={currentTrack}
+            likesCount={favorites.length}
+            needsKey={!getStoredApiKey() && !hasMacCompanion()}
+            busy={isGenerating}
+            recentMixes={recentMixes}
+            onMake={makeFromCreate}
+            onOpenMix={(m) => showCollection(savedCollections.find((c) => c.id === m.id) || m)}
+            onOpenSettings={() => navigate('/settings', { params: { section: 'ai' } })}
+          />
+        )
+      case '/library':
+        return (
+          <LibraryView
+            isDesktop={isDesktop}
+            filter={route.params.f || 'playlists'}
+            setFilter={(f) => navigate('/library', { replace: true, params: { f } })}
+            favorites={favorites}
+            offlineTracks={offlineTracks}
+            offlineStats={offlineStats}
+            saved={savedCollections}
+            history={playHistory}
+            downloadedIds={downloadedIds}
+            onOpenSaved={(c) => showCollection(c)}
+            onOpenLiked={() => navigate('/liked')}
+            onOpenDownloads={() => navigate('/downloads')}
+            onNewPlaylist={() => setNameDialog({ mode: 'create' })}
+            onDeleteDownload={deleteDownload}
+            onGoToArtist={goToArtist}
+          />
+        )
+      case '/collection':
+      case '/liked':
+      case '/downloads': {
+        const c = shownCollection
+        const isUser = c?.kind === 'user'
+        const isMix = c?.kind === 'mix'
+        const job = c ? downloadJobs[c.id] : null
+        const allDone = Boolean(c?.tracks?.length) && c.tracks.every((t) => t.video_id && downloadedIds.has(t.video_id))
+        return (
+          <CollectionView
+            collection={c}
+            loading={collectionLoading && route.path === '/collection'}
+            loadingLabel={isMix ? 'Picking songs that fit…' : 'Loading songs…'}
+            isDesktop={isDesktop}
+            isSaved={c ? isSavedId(c.id) : false}
+            canSave={Boolean(c) && !['liked', 'downloads', 'user'].includes(c.kind)}
+            onToggleSave={() => toggleSave(c)}
+            onPlay={(shuffle) => playList(c?.tracks, { shuffle, from: c ? { id: c.id, title: c.title } : null })}
+            onDownloadAll={c?.kind === 'downloads' ? null : () => downloadAll(c)}
+            downloadState={{ busy: job?.busy, done: job?.done, total: job?.total, allDone }}
+            onShare={() => shareCollection(c)}
+            onStartJam={() => startJamWith(c)}
+            onTweak={isMix ? tweakMix : null}
+            onEditPrompt={
+              isMix
+                ? () => {
+                    setPrompt((c.prompt || '').split(' · ')[0])
+                    navigate('/create')
+                  }
+                : null
+            }
+            onBack={() => goBack(lastTabRef.current === 'home' ? '/' : `/${lastTabRef.current}`)}
+            moreItems={
+              isUser
+                ? [
+                    { label: 'Rename', icon: Pencil, onClick: () => setNameDialog({ mode: 'rename', id: c.id, initial: c.title }) },
+                    { label: 'Delete playlist', icon: Trash2, danger: true, onClick: () => deletePlaylist(c) }
+                  ]
+                : []
+            }
+            trackMenuExtra={isUser ? (t, i) => [{ label: 'Remove from this playlist', icon: Trash2, danger: true, onClick: () => removeFromPlaylist(c.id, i) }] : null}
+          />
+        )
+      }
+      case '/settings':
+        return (
+          <SettingsView
+            isDesktop={isDesktop}
+            onBack={() => goBack('/')}
+            crossfade={crossfadeSec}
+            setCrossfade={setCrossfadeSec}
+            models={models}
+            selectedModel={selectedModel}
+            onSelectModel={handleSelectModel}
+            googleUser={googleUser}
+            onOpenGoogle={() => setShowGoogleModal(true)}
+            onLogout={handleGoogleLogout}
+            offlineStats={offlineStats}
+            onClearDownloads={clearDownloads}
+            playbackMode={playbackMode}
+            setPlaybackMode={hasBackend() && !isNativeApp() ? setPlaybackMode : null}
+            notify={showNotify}
+          />
+        )
+      case '/you':
+      case '/you/sources':
+        return (
+          <div className={`w-full ${isDesktop ? 'ub-under-topbar' : ''}`}>
+            {!isDesktop && (
+              <PageHeader
+                title=""
+                onBack={() => goBack('/')}
+                actions={
+                  <>
+                    <IconButton label="Friends" variant="filled" size={40} onClick={openFriends}>
+                      <Users className="w-5 h-5" />
+                    </IconButton>
+                    <IconButton label="Settings" variant="filled" size={40} onClick={() => navigate('/settings')}>
+                      <Settings className="w-5 h-5" />
+                    </IconButton>
+                  </>
+                }
               />
-              <PlaylistView
-                playlist={playlist}
-                currentTrack={currentTrack}
-                isPlaying={isPlaying}
-                selectedModel={selectedModel}
-                isResolvingBatch={isResolvingBatch}
-                isTrackFavorite={isTrackFavorite}
-                onToggleFavorite={handleToggleFavorite}
-                onPlayTrack={handlePlayTrack}
-                onPushToSafari={handlePushToSafari}
-                onPlayNext={handlePlayNext}
-                onAddToQueue={handleAddToQueue}
-                isGenerating={isGenerating}
-                isSearching={isSearching}
-                isLoadingPlaylistBrowse={isLoadingPlaylistBrowse}
-                onSelectMatchedPlaylist={handleSelectMatchedPlaylist}
-                onSelectYoutubeResults={handleSelectYoutubeResults}
-                onSelectDirectSongs={handleSelectDirectSongs}
-                onGenerateDefault={() => handleDirectSearch('Top 50 Global Daily Chart Hits', 'auto')}
-                onSelectStarter={(q, preferredMode) => {
-                  setPrompt(q)
-                  const mode = preferredMode || (/\b(chart|billboard|playlist|top \d+|daily|hits)\b/i.test(q) ? 'playlists' : 'auto')
-                  handleDirectSearch(q, mode)
-                }}
-                needsSetup={!isConfigured()}
-                onOpenSettings={() => setShowKeyModal(true)}
-                googleUser={googleUser}
-                favorites={favorites}
-                extractedTracks={extractedTracks}
-                offlineTracks={offlineTracks}
-                tasteDna={tasteDna}
-                timeInfo={themeInfo}
-                onShufflePlayBlock={handleShufflePlayBlock}
-                onShufflePlayAll={handleShufflePlayAll}
-              />
-            </div>
-          ) : activeTab === 'offline' ? (
-            <OfflineView
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              onPlayTrack={handlePlayTrack}
-              onNavigateTab={(tab) => setActiveTab(tab)}
-              onPlayNext={handlePlayNext}
-              onAddToQueue={handleAddToQueue}
-            />
-          ) : (
+            )}
             <SonicDnaView
-              mode={activeTab}
+              mode={route.path === '/you/sources' ? 'library' : 'dna'}
               currentTrack={currentTrack}
               isPlaying={isPlaying}
               tasteDna={tasteDna}
@@ -2181,278 +2749,338 @@ export default function App() {
               onSyncYouTubeLikes={() => handleSyncGoogleYouTubeLikes()}
               isSyncingLikes={isSyncingLikes}
               onClearSeeds={() => {
+                const before = extractedTracks
                 setExtractedTracks([])
-                try { localStorage.setItem('argon_seeds_v2', '[]') } catch {}
-                showNotify('Seed library cleared', 'info')
+                showNotify('Taste sources cleared', 'info', { label: 'Undo', onClick: () => setExtractedTracks(before) })
               }}
               onResetTasteDna={() => {
                 setTasteDna(null)
-                try { localStorage.removeItem('argon_dna_v2') } catch {}
-                showNotify('Sonic Taste DNA reset', 'info')
+                try {
+                  localStorage.removeItem('argon_dna_v2')
+                } catch {}
+                showNotify('Taste profile reset', 'info')
               }}
-              onCurateSimilar={(track) => {
-                const newPrompt = `Tracks with the exact musical style and atmosphere of "${track.title}" by ${track.artist}`
-                setPrompt(newPrompt)
-                setActivePresetId(null)
-                handleGenerate(newPrompt)
-              }}
+              onCurateSimilar={(track) => startRadio(track)}
             />
-          )}
-        </main>
-      </div>
-
-      {/* Bottom Transport Bar */}
-      <PlayerBar
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        setIsPlaying={setIsPlaying}
-        onTogglePlay={handleTogglePlay}
-        onNext={handleNext}
-        onPrev={handlePrev}
-        playbackMode={playbackMode}
-        setPlaybackMode={setPlaybackMode}
-        onPushToSafari={handlePushToSafari}
-        safariNowPlaying={safariNowPlaying}
-        onSafariControl={handleSafariControl}
-        onTrackResolved={handleTrackResolved}
-        isTrackFavorite={isTrackFavorite}
-        onToggleFavorite={handleToggleFavorite}
-        onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
-        queueCount={queue.length}
-        isQueueOpen={isQueueOpen}
-        isNowPlayingOpen={isNowPlayingOpen}
-        setIsNowPlayingOpen={setIsNowPlayingOpen}
-        crossfadeSec={crossfadeSec}
-        setCrossfadeSec={setCrossfadeSec}
-        isShuffle={isShuffle}
-        setIsShuffle={setIsShuffle}
-        onToggleShuffle={handleToggleShuffle}
-        onUserSeek={handleUserSeek}
-      />
-
-      {/* Live Jam Session Floating Bar, Invite Toast & Emoji Particle Stream */}
-      <JamFloatingBar
-        jamState={jamState}
-        reactions={jamReactions}
-        googleUser={googleUser}
-        onOpenJamModal={() => setIsJamModalOpen(true)}
-      />
-
-      {/* Friends & Live Jam Social Hub Modal */}
-      <JamModal
-        isOpen={isJamModalOpen}
-        onClose={() => {
-          setIsJamModalOpen(false)
-          setInitialJamCode('')
-          setInitialFriendCode('')
-          setInitialJamSection('')
-        }}
-        jamState={jamState}
-        googleUser={googleUser}
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        initialJoinCode={initialJamCode}
-        initialFriendCode={initialFriendCode}
-        initialSection={initialJamSection}
-        onPlayTrack={handlePlayTrack}
-        onNotify={(msg, type) => showNotify(msg, type || 'info')}
-      />
-
-      {/* Playback Queue Drawer */}
-      <QueueDrawer
-        isOpen={isQueueOpen}
-        onClose={() => setIsQueueOpen(false)}
-        queue={queue}
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        onPlayTrack={(track, queueIdx) => {
-          if (typeof queueIdx === 'number') {
-            setQueue((prev) => prev.filter((_, i) => i !== queueIdx))
-          }
-          handlePlayTrack(track, 0)
-        }}
-        onRemoveFromQueue={handleRemoveFromQueue}
-        onClearQueue={handleClearQueue}
-        onAddToQueue={handleAddToQueue}
-        upcomingTracks={(playlist?.tracks || []).slice(currentTrackIdx + 1)}
-      />
-
-      {/* Google & YouTube Account Auth Modal */}
-      <GoogleAuthModal
-        isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
-        googleUser={googleUser}
-        onLogin={handleGoogleLogin}
-        onLogout={handleGoogleLogout}
-        onSyncYouTubeLikes={() => handleSyncGoogleYouTubeLikes()}
-        isSyncingLikes={isSyncingLikes}
-      />
-
-      {/* Floating Pill Dock Navigation (Mobile & Mac) - Only Symbols Used */}
-      <nav className="pb-safe px-3 pt-1 pb-2 bg-gradient-to-t from-black via-black/80 to-transparent flex items-center justify-center shrink-0 z-30 select-none">
-        <div className="w-full max-w-sm sm:max-w-md floating-dock rounded-full p-1.5 px-3 flex items-center justify-around shadow-2xl">
-          {/* Curator / Home */}
-          <button
-            onClick={() => { setActiveTab('curator'); setIsSidebarOpen(false) }}
-            className={`transition-all cursor-pointer ${
-              activeTab === 'curator' && !isSidebarOpen
-                ? 'w-11 h-11 rounded-full bg-white text-black shadow-lg shadow-white/20 flex items-center justify-center scale-105'
-                : 'w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white'
-            }`}
-            title="AI Curator"
-            aria-label="AI Curator"
-          >
-            <Sparkles className="w-5 h-5" />
-          </button>
-
-          {/* Favourites */}
-          <button
-            onClick={() => { setActiveTab('favorites'); setIsSidebarOpen(false) }}
-            className={`relative transition-all cursor-pointer ${
-              activeTab === 'favorites' && !isSidebarOpen
-                ? 'w-11 h-11 rounded-full bg-white text-rose-600 shadow-lg shadow-white/20 flex items-center justify-center scale-105'
-                : 'w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white'
-            }`}
-            title="Favourites"
-            aria-label="Favourites"
-          >
-            <div className="relative">
-              <Heart className={`w-5 h-5 ${favorites.length > 0 ? 'fill-rose-500 text-rose-500' : ''}`} />
-              {favorites.length > 0 && activeTab !== 'favorites' && (
-                <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#0a0a0e]" />
-              )}
-            </div>
-          </button>
-
-          {/* Offline Downloads */}
-          <button
-            onClick={() => { setActiveTab('offline'); setIsSidebarOpen(false) }}
-            className={`relative transition-all cursor-pointer ${
-              activeTab === 'offline' && !isSidebarOpen
-                ? 'w-11 h-11 rounded-full bg-white text-emerald-600 shadow-lg shadow-white/20 flex items-center justify-center scale-105'
-                : 'w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white'
-            }`}
-            title="Offline Downloads"
-            aria-label="Offline Downloads"
-          >
-            <div className="relative">
-              <DownloadCloud className={`w-5 h-5 ${offlineStats.count > 0 ? 'text-emerald-500' : ''}`} />
-              {offlineStats.count > 0 && activeTab !== 'offline' && (
-                <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-[#0a0a0e]" />
-              )}
-            </div>
-          </button>
-
-          {/* Seeds Library */}
-          <button
-            onClick={() => { setActiveTab('library'); setIsSidebarOpen(false) }}
-            className={`transition-all cursor-pointer ${
-              activeTab === 'library' && !isSidebarOpen
-                ? 'w-11 h-11 rounded-full bg-white text-sky-600 shadow-lg shadow-white/20 flex items-center justify-center scale-105'
-                : 'w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white'
-            }`}
-            title="Seeds Library"
-            aria-label="Seeds Library"
-          >
-            <Disc className="w-5 h-5" />
-          </button>
-
-          {/* Taste Profile */}
-          <button
-            onClick={() => { setActiveTab('dna'); setIsSidebarOpen(false) }}
-            className={`transition-all cursor-pointer ${
-              activeTab === 'dna' && !isSidebarOpen
-                ? 'w-11 h-11 rounded-full bg-white text-emerald-600 shadow-lg shadow-white/20 flex items-center justify-center scale-105'
-                : 'w-10 h-10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white'
-            }`}
-            title="Sonic Profile"
-            aria-label="Sonic Profile"
-          >
-            <Dna className="w-5 h-5" />
-          </button>
-        </div>
-      </nav>
-
-      {/* Floating iOS Safari PWA Install Banner */}
-      {showIosInstallPrompt && (
-        <div className="fixed top-3 left-3 right-3 sm:left-auto sm:right-6 sm:top-5 z-50 animate-in fade-in slide-in-from-top-4 duration-200 select-none">
-          <div className="bg-[#12121a]/95 backdrop-blur-md border border-sky-500/30 rounded-2xl p-3 sm:px-4 sm:py-3 shadow-2xl flex items-center justify-between gap-3 text-white max-w-md mx-auto">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center shrink-0 text-sky-400">
-                <Share className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-semibold truncate flex items-center gap-1.5">
-                  <span>Install UpBeat on iPhone</span>
-                </div>
-                <div className="text-[11px] text-zinc-400 leading-tight">
-                  Tap <span className="text-sky-300 font-medium">Share</span> then <span className="text-sky-300 font-medium">Add to Home Screen</span> for full-screen audio
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                setShowIosInstallPrompt(false)
-                try { localStorage.setItem('upbeat_pwa_prompt_dismissed', '1') } catch {}
-              }}
-              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-              title="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
-        </div>
-      )}
+        )
+      default:
+        return (
+          <HomeView
+            isDesktop={isDesktop}
+            user={googleUser}
+            userTracks={userTracksForFeed}
+            tasteDna={tasteDna}
+            timeInfo={themeInfo}
+            recents={recents}
+            friends={friends}
+            onOpenProfile={() => navigate('/you')}
+            onOpenFriends={openFriends}
+            onOpenRecent={openRecent}
+            onOpenBlock={openBlock}
+            onPlayBlock={playBlock}
+            onMood={openMood}
+            onListenAlong={listenAlong}
+          />
+        )
+    }
+  }
 
-      {/* Floating Over-The-Air (OTA) Live Update Banner */}
-      {otaUpdate && (
-        <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-24 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200 select-none">
-          <div className="bg-[#12121a]/95 backdrop-blur-md border border-purple-500/40 rounded-2xl p-3 sm:px-4 sm:py-3 shadow-2xl flex items-center justify-between gap-3 text-white max-w-md mx-auto">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 text-purple-400">
-                <Sparkles className="w-4 h-4 animate-pulse" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-semibold truncate flex items-center gap-1.5">
-                  <span>Live Update Available</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 bg-purple-500/30 text-purple-200 rounded-full">{otaUpdate.latestVersion}</span>
-                </div>
-                <div className="text-[11px] text-zinc-400 truncate">
-                  {isApplyingOta ? 'Downloading & applying live update...' : 'No APK reinstall needed • Tap to update'}
-                </div>
-              </div>
+  const hasTrack = Boolean(currentTrack)
+  const toastBottom = isDesktop ? 104 : `calc(${hasTrack ? 140 : 76}px + var(--sab))`
+  const topInset = isNativeApp() ? 'max(var(--sat), 26px)' : 'var(--sat)'
+
+  return (
+    <AppContext.Provider value={appCtx}>
+      <div className="h-[100dvh] w-screen bg-bg text-t1 flex flex-col overflow-hidden">
+        {isDesktop ? (
+          <div className="flex-1 min-h-0 flex gap-2 p-2 pb-0 bg-black">
+            <div className="w-[280px] shrink-0 flex flex-col min-h-0">
+              <SideNav
+                activeTab={activeTabId}
+                onSelect={selectTab}
+                saved={savedCollections}
+                favoritesCount={favorites.length}
+                downloadsCount={offlineStats.count}
+                activeCollectionId={['/collection', '/liked', '/downloads'].includes(route.path) ? shownCollection?.id : null}
+                playingCollectionId={playingFrom?.id}
+                onOpenSaved={(c) => showCollection(c)}
+                onOpenLiked={() => navigate('/liked')}
+                onOpenDownloads={() => navigate('/downloads')}
+                onNewPlaylist={() => setNameDialog({ mode: 'create' })}
+                libFilter={sideLibFilter}
+                setLibFilter={setSideLibFilter}
+              />
             </div>
+            <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-w-0 rounded-[14px] bg-bg overflow-y-auto overflow-x-hidden">
+              <div className="sticky top-0 z-20 bg-[rgba(10,10,11,0.94)] backdrop-blur-md">
+                <TopBar
+                  query={searchQuery}
+                  setQuery={(v) => {
+                    setSearchQuery(v)
+                    if (route.path !== '/search' && v.trim()) navigate('/search', { params: { q: v } })
+                  }}
+                  onSearchFocus={() => {
+                    if (route.path !== '/search') navigate('/search', searchQuery ? { params: { q: searchQuery } } : undefined)
+                  }}
+                  onSearchSubmit={submitSearch}
+                  searchInputRef={searchInputRef}
+                  user={googleUser}
+                  onOpenProfile={() => navigate('/you')}
+                  onOpenSettings={() => navigate('/settings')}
+                  friends={friends}
+                  onOpenFriends={openFriends}
+                />
+              </div>
+              {renderView()}
+            </main>
+            {rightPanelOpen && (currentTrack || friends.length > 0) && (
+              <RightPanel
+                track={currentTrack}
+                contextTitle={playingFrom?.title}
+                upNext={upNext}
+                queueCount={queue.length}
+                friends={friends}
+                tab={rightTab}
+                setTab={setRightTab}
+                isFav={currentTrack ? isTrackFavorite(currentTrack) : false}
+                onToggleFav={() => currentTrack && handleToggleFavorite(currentTrack)}
+                onClose={() => setRightPanelOpen(false)}
+                onOpenLyrics={() => window.dispatchEvent(new Event('upbeat-open-lyrics'))}
+                onListenAlong={listenAlong}
+                onOpenFriends={openFriends}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: topInset }}>
+            <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+              {renderView()}
+            </main>
+          </div>
+        )}
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={async () => {
-                  setIsApplyingOta(true)
+        {/* No z-index here: the full-screen player inside must be able to cover the tab bar */}
+        <div className="relative shrink-0">
+          {!isDesktop && jamState?.active && (
+            <button
+              type="button"
+              onClick={() => setIsJamModalOpen(true)}
+              className="absolute left-3.5 -top-9 h-7 pl-2.5 pr-3 rounded-full bg-live text-[#04130D] text-[13px] font-bold flex items-center gap-1.5 shadow-lg cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Jam · {jamState.participants?.length || 1} listening
+            </button>
+          )}
+          <PlayerBar
+            isDesktop={isDesktop}
+            upNextTrack={upNext[0] || null}
+            playingFromTitle={playingFrom?.title}
+            rightPanelOpen={rightPanelOpen}
+            onToggleRightPanel={() => {
+              setRightTab('next')
+              setRightPanelOpen((o) => !o || rightTab !== 'next')
+            }}
+            jamActive={Boolean(jamState?.active)}
+            onOpenJam={() => setIsJamModalOpen(true)}
+            onGoToArtist={goToArtist}
+            onStartRadio={(t) => {
+              setIsNowPlayingOpen(false)
+              startRadio(t)
+            }}
+            onAddToPlaylist={(t) => setAddToPlaylistTrack(t)}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            onTogglePlay={handleTogglePlay}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            playbackMode={playbackMode}
+            setPlaybackMode={setPlaybackMode}
+            onPushToSafari={handlePushToSafari}
+            safariNowPlaying={safariNowPlaying}
+            onSafariControl={handleSafariControl}
+            onTrackResolved={handleTrackResolved}
+            isTrackFavorite={isTrackFavorite}
+            onToggleFavorite={handleToggleFavorite}
+            onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
+            queueCount={queue.length}
+            isQueueOpen={isQueueOpen}
+            isNowPlayingOpen={isNowPlayingOpen}
+            setIsNowPlayingOpen={setIsNowPlayingOpen}
+            crossfadeSec={crossfadeSec}
+            setCrossfadeSec={setCrossfadeSec}
+            isShuffle={isShuffle}
+            setIsShuffle={setIsShuffle}
+            onToggleShuffle={handleToggleShuffle}
+            onUserSeek={handleUserSeek}
+          />
+        </div>
+
+        {!isDesktop && <TabBar activeTab={activeTabId} onSelect={selectTab} />}
+
+        <Toast
+          notification={notification}
+          bottomOffset={toastBottom}
+          onAction={() => {
+            notification?.action?.onClick?.()
+            setNotification(null)
+          }}
+        />
+
+        {/* Jam invite banner (the old draggable widget is replaced by the Jam pill / player button) */}
+        <JamFloatingBar
+          jamState={jamState}
+          reactions={jamReactions}
+          googleUser={googleUser}
+          onOpenJamModal={() => setIsJamModalOpen(true)}
+          hideWidget
+        />
+
+        <JamModal
+          isOpen={isJamModalOpen}
+          onClose={() => {
+            setIsJamModalOpen(false)
+            setInitialJamCode('')
+            setInitialFriendCode('')
+            setInitialJamSection('')
+          }}
+          jamState={jamState}
+          googleUser={googleUser}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          initialJoinCode={initialJamCode}
+          initialFriendCode={initialFriendCode}
+          initialSection={initialJamSection}
+          onPlayTrack={handlePlayTrack}
+          onNotify={(msg, type) => showNotify(msg, type || 'info')}
+        />
+
+        <QueueDrawer
+          isOpen={isQueueOpen}
+          onClose={() => setIsQueueOpen(false)}
+          queue={queue}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          onPlayTrack={(track, queueIdx) => {
+            if (typeof queueIdx === 'number') {
+              setQueue((prev) => prev.filter((_, i) => i !== queueIdx))
+            }
+            handlePlayTrack(track, 0)
+          }}
+          onRemoveFromQueue={handleRemoveFromQueue}
+          onClearQueue={handleClearQueue}
+          onAddToQueue={handleAddToQueue}
+          upcomingTracks={upNext.slice(queue.length)}
+        />
+
+        <GoogleAuthModal
+          isOpen={showGoogleModal}
+          onClose={() => setShowGoogleModal(false)}
+          googleUser={googleUser}
+          onLogin={handleGoogleLogin}
+          onLogout={handleGoogleLogout}
+          onSyncYouTubeLikes={() => handleSyncGoogleYouTubeLikes()}
+          isSyncingLikes={isSyncingLikes}
+        />
+
+        <AddToPlaylistSheet
+          open={Boolean(addToPlaylistTrack)}
+          track={addToPlaylistTrack}
+          playlists={userPlaylists}
+          onClose={() => setAddToPlaylistTrack(null)}
+          onPick={(pl) => {
+            addTrackToPlaylist(pl, addToPlaylistTrack)
+            setAddToPlaylistTrack(null)
+          }}
+          onCreate={() => {
+            setNameDialog({ mode: 'create', pendingTrack: addToPlaylistTrack })
+            setAddToPlaylistTrack(null)
+          }}
+        />
+
+        <NameDialog
+          open={Boolean(nameDialog)}
+          title={nameDialog?.mode === 'rename' ? 'Rename playlist' : 'New playlist'}
+          confirmLabel={nameDialog?.mode === 'rename' ? 'Save' : 'Create'}
+          initial={nameDialog?.initial || ''}
+          onClose={() => setNameDialog(null)}
+          onConfirm={(name) => {
+            if (nameDialog?.mode === 'rename') {
+              setSavedCollections((list) => list.map((c) => (c.id === nameDialog.id ? { ...c, title: name } : c)))
+            } else {
+              createPlaylist(name, nameDialog?.pendingTrack)
+            }
+            setNameDialog(null)
+          }}
+        />
+
+        {showIosInstallPrompt && (
+          <div className="fixed top-3 left-3 right-3 sm:left-auto sm:right-6 sm:top-5 z-50">
+            <div className="bg-s2 ring-1 ring-white/10 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-3 max-w-md mx-auto">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-s3 flex items-center justify-center shrink-0">
+                  <Share className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold">Install UpBeat</div>
+                  <div className="text-[13px] text-t2 leading-snug">Tap Share, then “Add to Home Screen” for full-screen playback.</div>
+                </div>
+              </div>
+              <IconButton
+                label="Dismiss"
+                size={36}
+                onClick={() => {
+                  setShowIosInstallPrompt(false)
                   try {
-                    await otaUpdate.autoApply()
-                  } catch (e) {
-                    setIsApplyingOta(false)
-                    showNotify('Update failed: ' + (e?.message || 'Check connection'), 'error')
-                  }
+                    localStorage.setItem('upbeat_pwa_prompt_dismissed', '1')
+                  } catch {}
                 }}
-                disabled={isApplyingOta}
-                className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold transition-all cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5"
-              >
-                {isApplyingOta && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>{isApplyingOta ? 'Updating...' : 'Update'}</span>
-              </button>
-
-              <button
-                onClick={() => setOtaUpdate(null)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Dismiss"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </IconButton>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {otaUpdate && (
+          <div className="fixed left-3 right-3 sm:left-auto sm:right-6 z-50" style={{ bottom: isDesktop ? 104 : `calc(${hasTrack ? 148 : 84}px + var(--sab))` }}>
+            <div className="bg-s2 ring-1 ring-white/10 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-3 max-w-md mx-auto">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-accent text-on-accent flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold">Update ready · {otaUpdate.latestVersion}</div>
+                  <div className="text-[13px] text-t2 truncate">{isApplyingOta ? 'Installing…' : 'Takes a few seconds. No reinstall.'}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsApplyingOta(true)
+                    try {
+                      await otaUpdate.autoApply()
+                    } catch (e) {
+                      setIsApplyingOta(false)
+                      showNotify('Update failed: ' + (e?.message || 'check your connection'), 'error')
+                    }
+                  }}
+                  disabled={isApplyingOta}
+                  className="h-9 px-4 rounded-full bg-t1 text-[#0A0A0B] text-sm font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isApplyingOta && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isApplyingOta ? 'Updating' : 'Update'}
+                </button>
+                <IconButton label="Later" size={36} onClick={() => setOtaUpdate(null)}>
+                  <X className="w-4 h-4" />
+                </IconButton>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppContext.Provider>
   )
 }

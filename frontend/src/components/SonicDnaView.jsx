@@ -648,7 +648,7 @@ function SonicDnaView({
                   <Disc className="w-4 h-4 text-sky-400" />
                 </div>
                 <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
-                  Seeds & Library
+                  Taste sources
                 </h1>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
                   {librarySeeds.length}
@@ -657,7 +657,7 @@ function SonicDnaView({
               <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1.5 font-normal truncate">
                 <Disc className="w-3 h-3 text-sky-400 shrink-0" />
                 <span className="truncate">
-                  {librarySeeds.length} {librarySeeds.length === 1 ? 'track' : 'tracks'} • Seed tracks powering your mixes
+                  {librarySeeds.length} {librarySeeds.length === 1 ? 'track' : 'tracks'} • Songs that shape your recommendations
                 </span>
               </p>
             </div>
@@ -1046,7 +1046,7 @@ function SonicDnaView({
       <div className="px-5 py-3 sm:px-6 sm:py-3.5 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20 flex items-center justify-between gap-3 text-[var(--text-primary)]">
         <div className="flex items-center min-w-0">
           <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
-            Taste Profile
+            Your taste
           </h1>
         </div>
 
@@ -1097,7 +1097,7 @@ function SonicDnaView({
                 className="px-4 py-3 sm:py-2.5 rounded-2xl bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95"
               >
                 <Sparkles className="w-4 h-4 fill-current shrink-0" />
-                <span>Curate My DNA Mix (0 AI Tokens)</span>
+                <span>Mix from my likes</span>
               </button>
             )}
 
@@ -1107,7 +1107,7 @@ function SonicDnaView({
               className="px-4 py-3 sm:py-2.5 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--text-primary)] font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 active:scale-95"
             >
               <Compass className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
-              <span>Explore Boundaries</span>
+              <span>Start radio from a favourite</span>
             </button>
           </div>
         </div>

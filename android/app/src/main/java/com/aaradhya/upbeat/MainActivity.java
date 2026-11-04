@@ -73,6 +73,33 @@ public class MainActivity extends BridgeActivity {
         }
 
         handleCarIntent(getIntent());
+        registerBackHandler();
+    }
+
+    /**
+     * Hardware back: let the web app close its top layer or go back one screen first
+     * (window.UpBeatHandleBack). At the top level, move to the background instead of
+     * finishing, so music keeps playing.
+     */
+    private void registerBackHandler() {
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                WebView wv = (bridge != null) ? bridge.getWebView() : null;
+                if (wv == null) {
+                    moveTaskToBack(true);
+                    return;
+                }
+                wv.evaluateJavascript(
+                    "(function(){try{return !!(window.UpBeatHandleBack && window.UpBeatHandleBack());}catch(e){return false;}})()",
+                    value -> {
+                        if (!"true".equals(value)) {
+                            moveTaskToBack(true);
+                        }
+                    }
+                );
+            }
+        });
     }
 
     @Override
