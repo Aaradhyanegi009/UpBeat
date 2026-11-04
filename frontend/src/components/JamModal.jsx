@@ -7,7 +7,10 @@ import {
 import {
   jamManager,
   loadJamUserProfile,
-  normalizeFriendCode
+  normalizeRoomCode,
+  normalizeFriendCode,
+  buildJamInviteUrl,
+  buildFriendInviteUrl
 } from '../jamEngine'
 
 function formatLastSeen(ts) {
@@ -44,6 +47,8 @@ export default function JamModal({
   const [copiedFriendCode, setCopiedFriendCode] = useState(false)
   const [copiedFriendLink, setCopiedFriendLink] = useState(false)
   const [showQr, setShowQr] = useState(false)
+  const [showFriendQr, setShowFriendQr] = useState(false)
+  const [isJoining, setIsJoining] = useState(false)
   const [invitedCodes, setInvitedCodes] = useState({})
 
   useEffect(() => {
@@ -91,14 +96,20 @@ export default function JamModal({
 
   const handleJoinRoom = async (e) => {
     if (e) e.preventDefault()
-    if (!joinCodeInput.trim()) return
-    await jamManager.joinJam(joinCodeInput.trim(), googleUser)
+    if (!joinCodeInput.trim() || isJoining) return
+    setIsJoining(true)
+    try {
+      await jamManager.joinJam(joinCodeInput.trim(), googleUser)
+    } finally {
+      setIsJoining(false)
+    }
   }
 
   const handleAddFriendSubmit = (e) => {
     if (e) e.preventDefault()
     if (!friendCodeInput.trim()) return
-    const res = jamManager.sendFriendRequest(friendCodeInput.trim())
+    const clean = normalizeFriendCode(friendCodeInput.trim())
+    const res = jamManager.sendFriendRequest(clean || friendCodeInput.trim())
     if (res?.ok) {
       setFriendCodeInput('')
     }
@@ -128,26 +139,35 @@ export default function JamModal({
     }
   }
 
-  const shareJamUrl = jamState?.roomCode
-    ? `${window.location.origin}${window.location.pathname}?jam=${encodeURIComponent(jamState.roomCode)}`
-    : ''
-
-  const shareFriendUrl = myFriendCode
-    ? `${window.location.origin}${window.location.pathname}?addFriend=${encodeURIComponent(myFriendCode)}`
-    : ''
+  const shareJamUrl = jamState?.roomCode ? buildJamInviteUrl(jamState.roomCode) : ''
+  const shareFriendUrl = myFriendCode ? buildFriendInviteUrl(myFriendCode) : ''
 
   const handleCopyRoomCode = () => {
     if (!jamState?.roomCode) return
     navigator.clipboard?.writeText(jamState.roomCode).catch(() => {})
     setCopiedRoomCode(true)
     setTimeout(() => setCopiedRoomCode(false), 2000)
+    onNotify?.(`Room code ${jamState.roomCode} copied!`, 'success')
   }
 
-  const handleCopyRoomLink = () => {
+  const handleCopyRoomLink = async () => {
     if (!shareJamUrl) return
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my UpBeat Live Jam',
+          text: `Join my live listening session on UpBeat! Room: ${jamState?.roomCode}`,
+          url: shareJamUrl
+        })
+        return
+      } catch (e) {
+        if (e.name === 'AbortError') return
+      }
+    }
     navigator.clipboard?.writeText(shareJamUrl).catch(() => {})
     setCopiedRoomLink(true)
     setTimeout(() => setCopiedRoomLink(false), 2000)
+    onNotify?.('Jam invite link copied to clipboard!', 'success')
   }
 
   const handleCopyFriendCode = () => {
@@ -155,13 +175,27 @@ export default function JamModal({
     navigator.clipboard?.writeText(myFriendCode).catch(() => {})
     setCopiedFriendCode(true)
     setTimeout(() => setCopiedFriendCode(false), 2000)
+    onNotify?.(`Friend code ${myFriendCode} copied!`, 'success')
   }
 
-  const handleCopyFriendLink = () => {
+  const handleCopyFriendLink = async () => {
     if (!shareFriendUrl) return
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Connect on UpBeat',
+          text: `Add me on UpBeat to listen in real time! Friend Code: ${myFriendCode}`,
+          url: shareFriendUrl
+        })
+        return
+      } catch (e) {
+        if (e.name === 'AbortError') return
+      }
+    }
     navigator.clipboard?.writeText(shareFriendUrl).catch(() => {})
     setCopiedFriendLink(true)
     setTimeout(() => setCopiedFriendLink(false), 2000)
+    onNotify?.('Friend invite link copied to clipboard!', 'success')
   }
 
   const syncTier = jamState?.syncTier || 'LOCKED'
@@ -270,8 +304,60 @@ export default function JamModal({
             >
               {copiedFriendCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
             </button>
+            <button
+              type="button"
+              onClick={handleCopyFriendLink}
+              className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer ml-0.5 transition-colors"
+              title="Share friend invite link"
+            >
+              {copiedFriendLink ? <Check className="w-3 h-3 text-emerald-500" /> : <Share2 className="w-3 h-3" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFriendQr((p) => !p)}
+              className={`cursor-pointer ml-0.5 transition-colors ${showFriendQr ? 'text-rose-500' : 'text-slate-400 hover:text-slate-700 dark:hover:text-white'}`}
+              title="Toggle friend QR code"
+            >
+              <QrCode className="w-3 h-3" />
+            </button>
           </div>
         </div>
+
+        {/* Friend QR Code Display */}
+        {showFriendQr && shareFriendUrl && (
+          <div className="mb-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 flex flex-col items-center gap-2 shrink-0">
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                Friend Profile QR
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowFriendQr(false)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="p-2.5 bg-white rounded-2xl shadow-md">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(shareFriendUrl)}`}
+                alt="Friend QR"
+                className="w-32 h-32 rounded-lg"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400 text-center max-w-xs">
+              Scan with camera to instantly send a friend request to <strong className="text-slate-900 dark:text-white font-mono">{myFriendCode}</strong>
+            </p>
+            <button
+              type="button"
+              onClick={handleCopyFriendLink}
+              className="px-3 py-1.5 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/15 text-slate-800 dark:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {copiedFriendLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{copiedFriendLink ? 'Link Copied' : 'Copy Direct Link'}</span>
+            </button>
+          </div>
+        )}
 
         {/* Scrollable Content Body */}
         <div className="space-y-4 overflow-y-auto flex-1 content-scroll-container pr-0.5">
@@ -369,15 +455,24 @@ export default function JamModal({
                 ) : (
                   <form onSubmit={handleJoinRoom} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                        Room Code
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                          Room Code or Invite Link
+                        </label>
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500">
+                          Paste link or enter code
+                        </span>
+                      </div>
                       <input
                         type="text"
                         value={joinCodeInput}
-                        onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                        placeholder="JAM-XXXX or XXXX"
-                        maxLength={10}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          const norm = normalizeRoomCode(val)
+                          setJoinCodeInput(norm || val.toUpperCase())
+                        }}
+                        placeholder="JAM-XXXX or paste invite link"
+                        maxLength={90}
                         className="w-full bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 focus:border-rose-500 rounded-2xl px-4 py-3 text-center font-mono text-base font-bold tracking-widest uppercase text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none transition-colors"
                       />
                       {jamState?.error && (
@@ -389,11 +484,11 @@ export default function JamModal({
 
                     <button
                       type="submit"
-                      disabled={!joinCodeInput.trim()}
+                      disabled={!joinCodeInput.trim() || isJoining}
                       className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-rose-600/20"
                     >
                       <Radio className="w-4 h-4" />
-                      <span>Connect to Jam</span>
+                      <span>{isJoining ? 'Connecting...' : 'Connect to Jam'}</span>
                     </button>
                   </form>
                 )}
@@ -451,14 +546,22 @@ export default function JamModal({
                     <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex flex-col items-center gap-2">
                       <div className="p-2.5 bg-white rounded-2xl shadow-md">
                         <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(shareJamUrl)}`}
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(shareJamUrl)}`}
                           alt="Jam QR"
-                          className="w-28 h-28 rounded-lg"
+                          className="w-32 h-32 rounded-lg"
                         />
                       </div>
-                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        Scan with camera to join {jamState.roomCode}
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400 text-center">
+                        Scan with camera to instantly join <strong className="text-slate-900 dark:text-white font-mono">{jamState.roomCode}</strong>
                       </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyRoomLink}
+                        className="px-3 py-1.5 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/15 text-slate-800 dark:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        {copiedRoomLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
+                        <span>{copiedRoomLink ? 'Link Copied' : 'Copy Direct Link'}</span>
+                      </button>
                     </div>
                   )}
 
@@ -621,9 +724,13 @@ export default function JamModal({
                 <input
                   type="text"
                   value={friendCodeInput}
-                  onChange={(e) => setFriendCodeInput(e.target.value.toUpperCase())}
-                  placeholder="Enter Friend Code (e.g. UP-7K4M9P)"
-                  maxLength={12}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    const norm = normalizeFriendCode(val)
+                    setFriendCodeInput(norm || val.toUpperCase())
+                  }}
+                  placeholder="Enter Friend Code or paste link"
+                  maxLength={90}
                   className="flex-1 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2 text-xs font-mono font-bold uppercase text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none transition-colors"
                 />
                 <button
@@ -727,14 +834,32 @@ export default function JamModal({
                 </div>
 
                 {friends.length === 0 ? (
-                  <div className="p-6 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 text-center space-y-1.5">
+                  <div className="p-6 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 text-center space-y-2.5">
                     <UserCheck className="w-7 h-7 text-slate-400 dark:text-zinc-500 mx-auto opacity-60" />
                     <div className="text-xs font-bold text-slate-900 dark:text-white">
                       No friends added yet
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
-                      Share your code <span className="font-mono font-bold text-slate-900 dark:text-white">{myFriendCode}</span> with friends to listen together.
+                      Share your code <span className="font-mono font-bold text-slate-900 dark:text-white">{myFriendCode}</span> or send your invite link to listen together.
                     </p>
+                    <div className="flex items-center justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCopyFriendLink}
+                        className="px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                      >
+                        {copiedFriendLink ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                        <span>{copiedFriendLink ? 'Link Copied' : 'Share Link'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowFriendQr((p) => !p)}
+                        className="px-3 py-1.5 rounded-full bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/15 text-slate-700 dark:text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        <span>Show QR</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-2">

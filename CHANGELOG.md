@@ -4,6 +4,25 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.0.2] - 2026-11-04
+
+### 🚀 Direct QR & Link Auto-Join, 1-Click Profile QR & Native Sharing
+- **Direct QR Code & Link Auto-Joining (`App.jsx`, `jamEngine.js`)**:
+  - Scanning a Jam QR code or opening an invite link (`?jam=JAM-XXXX`, `#jam=JAM-XXXX`, or `?join=XXXX`) now **automatically joins the session and immediately synchronizes playback** with zero manual code typing or form submission.
+  - Added reactive deep-link listeners across page load, `popstate`, `hashchange`, and macOS native scheme messages (`upbeat://jam?code=JAM-XXXX`).
+  - Added intelligent URL parameter sanitization (`window.history.replaceState`) after connection handshakes.
+- **Direct Friend Adding via Link & QR (`App.jsx`, `JamModal.jsx`)**:
+  - Opening a friend invite link (`?addFriend=UP-XXXXXX` or `#addFriend=UP-XXXXXX`) automatically sends the friend request and opens the Friends tab.
+  - Added dedicated Friend Profile QR Code popover in `JamModal.jsx` so friends nearby can scan each other's phone/screen with their camera and connect instantly.
+- **Smart Link & Code Input Normalization (`jamEngine.js`)**:
+  - Enhanced `normalizeRoomCode` and `normalizeFriendCode` to safely parse and extract codes even when full URLs (`https://.../?jam=JAM-XXXX`) are pasted directly into the input fields, preventing string mangling.
+- **1-Tap Share Sheet & Clipboard Integration (`JamModal.jsx`, `JamFloatingBar.jsx`)**:
+  - Added 1-tap `navigator.share` integration with automatic fallback to clipboard copy across both the active Jam Hub and the movable floating Jam widget.
+- **macOS Native URL Scheme Support (`macos/Info.plist`, `macos/UpBeatApp.swift`)**:
+  - Registered `upbeat://` custom protocol in `Info.plist` and added `application(_:open:)` URL forwarding to WKWebView for instant native deep linking.
+
+---
+
 ## [v7.0.1] - 2026-11-04
 
 ### 💎 Studio UI Refinement: Movable Jam Widget, Removed Emoji Avatar Row & Pure Minimalist Aesthetic

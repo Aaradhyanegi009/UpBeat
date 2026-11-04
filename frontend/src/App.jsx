@@ -11,7 +11,14 @@ import QueueDrawer from './components/QueueDrawer'
 import GoogleAuthModal from './components/GoogleAuthModal'
 import JamModal from './components/JamModal'
 import JamFloatingBar from './components/JamFloatingBar'
-import { jamManager, evaluateAudioDrift, normalizeRoomCode, normalizeFriendCode, renderEmoji } from './jamEngine'
+import {
+  jamManager,
+  evaluateAudioDrift,
+  normalizeRoomCode,
+  normalizeFriendCode,
+  extractDeepLinkParams,
+  renderEmoji
+} from './jamEngine'
 import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges } from './offlineStorage'
 import { initOtaUpdater } from './otaUpdater'
 import { getDayNightThemeInfo, getThemeInfo, getNextThemePreference, applyThemeToDocument } from './utils/themeCycle'
@@ -231,6 +238,10 @@ export default function App() {
   })
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [notification, setNotification] = useState(null)
+  const showNotify = useCallback((msg, type = 'info') => {
+    setNotification({ msg, type })
+    setTimeout(() => setNotification(null), 3200)
+  }, [])
   const [offlineTracks, setOfflineTracks] = useState([])
   const [offlineStats, setOfflineStats] = useState({ count: 0, totalBytes: 0, formattedSize: '0 B' })
   const [activePlaybackContext, setActivePlaybackContext] = useState(null)
@@ -285,38 +296,76 @@ export default function App() {
   isPlayingRef.current = isPlaying
   queueRef.current = queue
 
-  // Subscribe to Jam Engine state & detect ?jam=XXXX or ?addFriend=UP-XXXXXX invite links on startup
+  // Direct Join & Social Invite Deep-Link handler
+  const handleDeepLinkUrl = useCallback(async (rawUrl = '') => {
+    const { jamCode, friendCode } = extractDeepLinkParams(rawUrl)
+
+    if (jamCode && jamCode.length >= 6) {
+      try {
+        const cleanUrl = window.location.pathname
+        window.history.replaceState({}, document.title, cleanUrl)
+      } catch {}
+
+      setInitialJamCode(jamCode)
+      showNotify(`Connecting to Live Jam (${jamCode})...`, 'info')
+      const ok = await jamManager.joinJam(jamCode, googleUser)
+      if (ok) {
+        showNotify(`Connected to Jam ${jamCode}! Audio syncing.`, 'success')
+      }
+    } else if (friendCode && friendCode.length >= 7) {
+      try {
+        const cleanUrl = window.location.pathname
+        window.history.replaceState({}, document.title, cleanUrl)
+      } catch {}
+
+      setInitialFriendCode(friendCode)
+      setInitialJamSection('friends')
+      setIsJamModalOpen(true)
+      const res = jamManager.sendFriendRequest(friendCode)
+      if (res && res.ok && res.status === 'sent') {
+        showNotify(`Sent friend request to ${friendCode}!`, 'success')
+      } else if (res && res.status === 'already_friends') {
+        showNotify(`Already connected with ${friendCode}`, 'info')
+      } else if (res && res.status === 'accepted') {
+        showNotify(`Accepted friend request from ${friendCode}!`, 'success')
+      }
+    }
+  }, [googleUser, showNotify])
+
+  // Subscribe to Jam Engine state & reactively handle deep links
   useEffect(() => {
     const unsub = jamManager.subscribe((nextState) => {
       setJamState(nextState)
     })
 
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const jamParam = params.get('jam')
-      const friendParam = params.get('addFriend')
-      if (jamParam) {
-        const cleanCode = normalizeRoomCode(jamParam)
-        if (cleanCode && cleanCode !== 'JAM-') {
-          setInitialJamCode(cleanCode)
-          setIsJamModalOpen(true)
-          const cleanUrl = window.location.pathname + window.location.hash
-          window.history.replaceState({}, document.title, cleanUrl)
-        }
-      } else if (friendParam) {
-        const cleanFriend = normalizeFriendCode(friendParam)
-        if (cleanFriend && cleanFriend !== 'UP-') {
-          setInitialFriendCode(cleanFriend)
-          setInitialJamSection('friends')
-          setIsJamModalOpen(true)
-          const cleanUrl = window.location.pathname + window.location.hash
-          window.history.replaceState({}, document.title, cleanUrl)
-        }
-      }
-    } catch {}
+    // Auto-join or add friend immediately on initial load
+    handleDeepLinkUrl()
 
-    return () => unsub()
-  }, [])
+    // Listen to browser navigation, hash changes, and macOS deep-link events
+    const onPop = () => handleDeepLinkUrl()
+    const onHash = () => handleDeepLinkUrl()
+    const onCustomDeepLink = (e) => {
+      if (e?.detail) handleDeepLinkUrl(e.detail)
+    }
+    const onPostMsg = (e) => {
+      if (e?.data?.type === 'UPBEAT_DEEP_LINK' && e.data.url) {
+        handleDeepLinkUrl(e.data.url)
+      }
+    }
+
+    window.addEventListener('popstate', onPop)
+    window.addEventListener('hashchange', onHash)
+    window.addEventListener('upbeat-deep-link', onCustomDeepLink)
+    window.addEventListener('message', onPostMsg)
+
+    return () => {
+      unsub()
+      window.removeEventListener('popstate', onPop)
+      window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('upbeat-deep-link', onCustomDeepLink)
+      window.removeEventListener('message', onPostMsg)
+    }
+  }, [handleDeepLinkUrl])
 
   // Bind Jam Engine synchronization & control handlers
   useEffect(() => {
@@ -569,10 +618,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
-  const showNotify = (msg, type = 'info') => {
-    setNotification({ msg, type })
-    setTimeout(() => setNotification(null), 3200)
-  }
 
   // Persist to localStorage
   useEffect(() => {

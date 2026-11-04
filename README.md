@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.0.1)
+# 🎵 UpBeat (v7.0.2)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -10,8 +10,10 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 
 ##  Features & Highlights
 
-###  Real-Time Friends & Live P2P Jam Social Engine (v7.0.1)
-- **Movable Floating Jam Widget**: Drag anywhere on screen so it never obstructs audio playback or seek controls; tap to expand the sleek glass room menu or full Jam Hub.
+###  Real-Time Friends & Live P2P Jam Social Engine (v7.0.2)
+- **Direct QR Code & Link Auto-Join**: Friends can scan a QR code with their camera or tap an invite link (`?jam=JAM-XXXX` or `#jam=JAM-XXXX`) to automatically connect and sync audio in real time with zero code typing.
+- **1-Click Profile QR & Friend Links**: Share profile links (`?addFriend=UP-XXXXXX`) or show your personal QR code for instant zero-friction friend requests.
+- **Movable Floating Jam Widget**: Drag anywhere on screen so it never obstructs audio playback or seek controls; tap to expand the sleek glass room menu or full Jam Hub with quick link sharing.
 - **Pure Studio Aesthetic & Zero Emojis**: Fully aligned with UpBeat's minimalist design language, typography, and letter avatars without tacky cartoon emojis.
 - **Persistent Friend Code (`UP-XXXXXX`) & Live Activity Feed**: Every user gets a shareable Friend ID with an always-on WebRTC + `BroadcastChannel` presence mesh. Add friends, accept/decline requests, and see when friends are **Online — Listening to *[Song Title] - [Artist]*** (with 1-click **Listen Along**) or **In Studio**.
 - **1-Click Jam Invites & Synchronized Listening (`JAM-XXXX`)**: Send instant live Jam invites to online friends with an interactive floating glass Join banner. Features NTP clock calibration and 3-tier acoustic drift compensation (`< 150ms` locked, `150ms–850ms` micro-speed ramping, `>= 850ms` hard seek).

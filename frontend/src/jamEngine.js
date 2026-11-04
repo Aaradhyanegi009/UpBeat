@@ -48,7 +48,11 @@ function generateFriendCode() {
 
 export function normalizeRoomCode(raw) {
   if (!raw) return ''
-  const cleaned = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const str = String(raw).trim()
+  // Extract room code if full URL or deep link is pasted
+  const urlMatch = str.match(/(?:jam|join|room|code)[=:]([A-Za-z0-9-]+)/i)
+  const candidate = urlMatch ? urlMatch[1] : str
+  const cleaned = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '')
   const stripped = cleaned.startsWith('JAM') ? cleaned.slice(3) : cleaned
   if (!stripped) return ''
   return `JAM-${stripped.slice(0, 6)}`
@@ -56,10 +60,97 @@ export function normalizeRoomCode(raw) {
 
 export function normalizeFriendCode(raw) {
   if (!raw) return ''
-  const cleaned = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const str = String(raw).trim()
+  // Extract friend code if full URL or deep link is pasted
+  const urlMatch = str.match(/(?:addFriend|friend|user)[=:]([A-Za-z0-9-]+)/i)
+  const candidate = urlMatch ? urlMatch[1] : str
+  const cleaned = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '')
   const stripped = cleaned.startsWith('UP') ? cleaned.slice(2) : cleaned
   if (!stripped) return ''
   return `UP-${stripped.slice(0, 6)}`
+}
+
+export function getAppBaseUrl() {
+  if (typeof window === 'undefined') return 'https://upbeat-music.vercel.app/'
+  try {
+    const origin = window.location.origin
+    // If running in live web deployment (Vercel, custom domain, or local LAN IP), use origin
+    if (origin && !origin.includes('127.0.0.1') && !origin.includes('localhost') && !origin.startsWith('file:') && !origin.startsWith('capacitor:')) {
+      return `${origin}${window.location.pathname}`
+    }
+    // Saved preference or default to production web URL
+    const savedWeb = localStorage.getItem('upbeat_jam_share_origin')
+    if (savedWeb && savedWeb.startsWith('http')) {
+      return savedWeb.replace(/\/+$/, '') + '/'
+    }
+    return 'https://upbeat-music.vercel.app/'
+  } catch {
+    return 'https://upbeat-music.vercel.app/'
+  }
+}
+
+export function buildJamInviteUrl(roomCode) {
+  const norm = normalizeRoomCode(roomCode)
+  if (!norm) return ''
+  const base = getAppBaseUrl()
+  const sep = base.includes('?') ? '&' : '?'
+  return `${base}${sep}jam=${encodeURIComponent(norm)}`
+}
+
+export function buildFriendInviteUrl(friendCode) {
+  const norm = normalizeFriendCode(friendCode)
+  if (!norm) return ''
+  const base = getAppBaseUrl()
+  const sep = base.includes('?') ? '&' : '?'
+  return `${base}${sep}addFriend=${encodeURIComponent(norm)}`
+}
+
+export function extractDeepLinkParams(urlStr = '') {
+  try {
+    let search = ''
+    let hash = ''
+    if (urlStr) {
+      const normalizedUrl = String(urlStr).replace(/^upbeat:\/\//i, 'http://upbeat.local/')
+      const u = new URL(normalizedUrl, 'http://upbeat.local')
+      search = u.search
+      hash = u.hash
+    } else if (typeof window !== 'undefined') {
+      search = window.location.search
+      hash = window.location.hash
+    }
+
+    const searchParams = new URLSearchParams(search)
+    let hashParams = new URLSearchParams()
+    if (hash && hash.includes('=')) {
+      const cleanHash = hash.replace(/^[#/?]+/, '')
+      hashParams = new URLSearchParams(cleanHash)
+    }
+
+    const jamRaw =
+      searchParams.get('jam') ||
+      searchParams.get('join') ||
+      searchParams.get('room') ||
+      searchParams.get('code') ||
+      hashParams.get('jam') ||
+      hashParams.get('join') ||
+      hashParams.get('room') ||
+      hashParams.get('code')
+
+    const friendRaw =
+      searchParams.get('addFriend') ||
+      searchParams.get('friend') ||
+      searchParams.get('user') ||
+      hashParams.get('addFriend') ||
+      hashParams.get('friend') ||
+      hashParams.get('user')
+
+    return {
+      jamCode: jamRaw ? normalizeRoomCode(jamRaw) : null,
+      friendCode: friendRaw ? normalizeFriendCode(friendRaw) : null
+    }
+  } catch {
+    return { jamCode: null, friendCode: null }
+  }
 }
 
 function getPeerIdFromCode(roomCode) {

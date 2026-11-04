@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Radio, Users, Check, Copy, ExternalLink, X, LogOut, ChevronRight, Sparkles } from 'lucide-react'
-import { jamManager } from '../jamEngine'
+import { Radio, Users, Check, Copy, Share2, ExternalLink, X, LogOut, ChevronRight, Sparkles } from 'lucide-react'
+import { jamManager, buildJamInviteUrl } from '../jamEngine'
 
 export default function JamFloatingBar({
   jamState,
@@ -23,6 +23,7 @@ export default function JamFloatingBar({
 
   const [isExpanded, setIsExpanded] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   const isDraggingRef = useRef(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
@@ -104,6 +105,27 @@ export default function JamFloatingBar({
     navigator.clipboard?.writeText(jamState.roomCode).catch(() => {})
     setCopiedCode(true)
     setTimeout(() => setCopiedCode(false), 2000)
+  }
+
+  const handleShareLink = async (e) => {
+    e?.stopPropagation?.()
+    if (!jamState?.roomCode) return
+    const url = buildJamInviteUrl(jamState.roomCode)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my UpBeat Live Jam',
+          text: `Join my live listening session on UpBeat! Room: ${jamState.roomCode}`,
+          url
+        })
+        return
+      } catch (err) {
+        if (err.name === 'AbortError') return
+      }
+    }
+    navigator.clipboard?.writeText(url).catch(() => {})
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
   }
 
   const participants = jamState?.participants || []
@@ -219,6 +241,14 @@ export default function JamFloatingBar({
                     title="Copy room code"
                   >
                     {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShareLink}
+                    className="p-1 rounded-md text-slate-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Share invite link"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
                   </button>
                   <button
                     type="button"
