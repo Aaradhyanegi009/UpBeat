@@ -1920,7 +1920,7 @@ export default function App() {
     if (!jamManager.state.active || remoteJamGuardRef.current) return
     if (jamManager.state.isHost) {
       jamManager.broadcastHostSync({ currentTime: targetSec })
-    } else if (jamManager.state.djMode === 'open') {
+    } else if (jamManager.state.djMode !== 'host_only') {
       jamManager.emitPlaybackControl('SEEK', { currentTime: targetSec })
     }
   }
@@ -2844,6 +2844,8 @@ export default function App() {
             timeInfo={themeInfo}
             recents={recents}
             friends={friends}
+            incomingCount={jamState?.incomingRequests?.length || 0}
+            jamActive={Boolean(jamState?.active)}
             onOpenProfile={() => navigate('/you')}
             onOpenFriends={openFriends}
             onOpenRecent={openRecent}
@@ -2899,6 +2901,8 @@ export default function App() {
                   onOpenProfile={() => navigate('/you')}
                   onOpenSettings={() => navigate('/settings')}
                   friends={friends}
+                  incomingCount={jamState?.incomingRequests?.length || 0}
+                  jamActive={Boolean(jamState?.active)}
                   onOpenFriends={openFriends}
                 />
               </div>

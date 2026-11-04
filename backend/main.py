@@ -56,8 +56,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="6.3.2",
-    description="UpBeat v6.3.2 - Hybrid Rediscover Favorites Mix & Cyclic Made For You Rotation Engine"
+    version="7.2.0",
+    description="UpBeat v7.2.0 - v8 UI Redesign, 4-Layer Hybrid Jam & Friends Engine"
 )
 
 app.add_middleware(
@@ -99,7 +99,7 @@ class CurateRequest(BaseModel):
     seed_tracks: List[Dict[str, Any]] = Field(default_factory=list)
     mood_prompt: str = Field("Focused late night session")
     energy_level: int = Field(78, ge=0, le=100)
-    count: int = Field(8, ge=3, le=25)
+    count: int = Field(20, ge=3, le=50)
     model_name: str = Field("gemini-4-argon")
 
 

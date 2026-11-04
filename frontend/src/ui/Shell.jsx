@@ -143,7 +143,7 @@ function SideItem({ onClick, art, title, sub, active, playing }) {
 }
 
 /** Desktop: bar at the top of the centre column. */
-export function TopBar({ query, setQuery, onSearchFocus, onSearchSubmit, searchInputRef, user, onOpenProfile, onOpenSettings, friends = [], onOpenFriends }) {
+export function TopBar({ query, setQuery, onSearchFocus, onSearchSubmit, searchInputRef, user, onOpenProfile, onOpenSettings, friends = [], incomingCount = 0, jamActive = false, onOpenFriends }) {
   const online = friends.filter((f) => f.online)
   const compact = !useMediaQuery('(min-width: 1280px)')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -206,11 +206,20 @@ export function TopBar({ query, setQuery, onSearchFocus, onSearchSubmit, searchI
             ))}
           </span>
         ) : (
-          <span className="w-[30px] h-[30px] rounded-full bg-s3 flex items-center justify-center">
+          <span className="relative w-[30px] h-[30px] rounded-full bg-s3 flex items-center justify-center">
             <Users className="w-4 h-4" />
+            {(jamActive || incomingCount > 0) && (
+              <span className={`absolute -right-0.5 -bottom-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[#1C1C1F] ${jamActive ? 'bg-live' : 'bg-accent'}`} />
+            )}
           </span>
         )}
-        {online.length > 0 ? `${online.length} friend${online.length > 1 ? 's' : ''} online` : 'Friends'}
+        {jamActive
+          ? 'Jam · live'
+          : incomingCount > 0
+          ? `${incomingCount} request${incomingCount > 1 ? 's' : ''}`
+          : online.length > 0
+          ? `${online.length} friend${online.length > 1 ? 's' : ''} online`
+          : 'Friends'}
       </button>
       <IconButton label="Settings" variant="filled" size={44} onClick={onOpenSettings}>
         <Settings className="w-5 h-5" />

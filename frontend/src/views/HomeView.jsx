@@ -26,6 +26,8 @@ export default function HomeView({
   timeInfo,
   recents = [],
   friends = [],
+  incomingCount = 0,
+  jamActive = false,
   onOpenProfile,
   onOpenFriends,
   onOpenRecent,
@@ -83,7 +85,9 @@ export default function HomeView({
             </IconButton>
             <IconButton label={onlineCount ? `Friends, ${onlineCount} online` : 'Friends'} variant="filled" onClick={onOpenFriends} className="relative">
               <Users className="w-5 h-5" />
-              {onlineCount > 0 && <span className="absolute right-2 bottom-2 w-2.5 h-2.5 rounded-full bg-live ring-2 ring-[#1C1C1F]" />}
+              {(onlineCount > 0 || jamActive || incomingCount > 0) && (
+                <span className={`absolute right-2 bottom-2 w-2.5 h-2.5 rounded-full ring-2 ring-[#1C1C1F] ${jamActive || onlineCount > 0 ? 'bg-live' : 'bg-accent'}`} />
+              )}
             </IconButton>
           </div>
         </div>

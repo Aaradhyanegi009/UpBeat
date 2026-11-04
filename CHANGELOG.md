@@ -4,6 +4,20 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.2.0] - 2026-11-04
+
+### 🎨 Full UI/UX Redesign + Vercel Multi-Service Deployment Fix + 4-Layer Social & Jam Engine
+- **Resolved Vercel `[MISSING_SERVICES]` Build & Deployment Failure (`vercel.json`)**:
+  - Restored the multi-service declaration (`services.backend` FastAPI + `services.frontend` Vite) in `vercel.json` so Vercel's build pipeline compiles both the Vite frontend and FastAPI backend cleanly.
+- **Merged New UI/UX Redesign (`Shell.jsx`, `Panels.jsx`, `HomeView.jsx`, `CreateView.jsx`, `SearchView.jsx`, `LibraryView.jsx`, `CollectionView.jsx`, `Lyrics.jsx`, `Onboarding.jsx`)**:
+  - Unified 4-tab navigation (**Home**, **Search**, **Create**, **Library**), desktop 3-column workspace with live Right Panel (**Up next**, **Lyrics**, **Friends**), interactive AI Mix **Tweak** chips, inline & full-screen synced Lyrics with lyric card sharing, and first-run taste Onboarding.
+- **Fixed New UI Integration Bugs (`App.jsx`, `backend/main.py`, `Shell.jsx`, `HomeView.jsx`)**:
+  - Expanded `CurateRequest.count` upper bound in `backend/main.py` from `25` to `50` so 30-song mixes in `CreateView` no longer fail validation (`HTTP 422`).
+  - Fixed Open Party Jam seek check in `App.jsx` (`djMode !== 'host_only'` instead of `djMode === 'open'`).
+  - Added live Jam and incoming Friend Request badges to `TopBar` and `HomeView`.
+
+---
+
 ## [v7.0.3] - 2026-11-04
 
 ### 🔥 4-Layer Hybrid Jam & Friends Transport Overhaul (100% Reliable Add Friend & Live Jam Sync)
