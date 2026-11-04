@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.2.2)
+# 🎵 UpBeat (v7.3.0)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,12 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 ---
 
 ##  Features & Highlights
+
+###  High-Res Dynamic Thumbnails, Collapsible Sidebar Slider & Native Profile Upload (v7.3.0)
+- **Original Dark-Squircle UpBeat Music Logo**: Restored the exact original dark squircle icon with the white outlined beamed eighth note (`♫`) across the sidebar, top bar, and native app.
+- **High-Resolution & Dynamically Rotating Track Thumbnails**: Upgraded all homepage cards (`Made for you`, `Top charts`, and `FeaturedCard`) to 1280×720 HD (`maxresdefault.jpg`) and 1080×1080 album artwork with automatic multi-stage fallback, plus live rotation every 18 seconds through fresh track thumbnails from each mix and chart.
+- **Collapsible Left Sidebar Slider (macOS Native App & Desktop)**: Added an interactive vertical slider rail and quick Hide/Open controls (`⌘B` / `⌘\`) to slide the left navigation sidebar closed or resize it on demand.
+- **Native macOS & Web Profile Photo Picker**: Fixed profile picture upload in both the macOS native app (`WKUIDelegate` `NSOpenPanel` + `/api/profile/pick-photo` Finder integration with `sips` HEIC/JPEG conversion) and browsers, plus drag-and-drop, clipboard paste, image URL, and quick preset avatars.
 
 ###  Pure Music Guard & Live Moods Engine (v7.2.2)
 - **Strict Non-Music & View-Count Elimination**: Purged YouTube view counts (`203k`, `969k`) and non-music videos (vlogs, comedy, gaming, puppets, podcasts) from Safari tab extraction, search, seed lists, and AI mixes.

@@ -272,19 +272,30 @@ export default function App() {
   const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
 
   const handleSaveProfile = (updatedProfile) => {
-    setGoogleUser(updatedProfile)
+    const profileWithFlag = {
+      ...updatedProfile,
+      customPicture: Boolean(updatedProfile.picture)
+    }
+    setGoogleUser(profileWithFlag)
     try {
-      localStorage.setItem('upbeat_google_user', JSON.stringify(updatedProfile))
+      localStorage.setItem('upbeat_google_user', JSON.stringify(profileWithFlag))
       localStorage.setItem(
         'upbeat_jam_profile',
         JSON.stringify({
-          name: updatedProfile.name,
-          picture: updatedProfile.picture,
+          name: profileWithFlag.name,
+          picture: profileWithFlag.picture,
           avatar: '🎧'
         })
       )
     } catch {}
-    jamManager.refreshProfile(updatedProfile)
+    if (hasBackend()) {
+      fetch(`${getApiBase()}/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileWithFlag)
+      }).catch(() => {})
+    }
+    jamManager.refreshProfile(profileWithFlag)
     jamManager.broadcastPresenceStatus()
     showNotify('Profile updated', 'success')
   }
@@ -292,6 +303,49 @@ export default function App() {
   // ---- v8 shell state -------------------------------------------------
   const route = useRoute()
   const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const [leftNavOpen, setLeftNavOpen] = useState(() => loadStorage('upbeat_left_nav_open_v1', true))
+  const [leftNavWidth, setLeftNavWidth] = useState(() => {
+    const w = Number(loadStorage('upbeat_left_nav_width_v1', 280))
+    return w >= 210 && w <= 380 ? w : 280
+  })
+  const [isDraggingLeftNav, setIsDraggingLeftNav] = useState(false)
+
+  useEffect(() => saveStorage('upbeat_left_nav_open_v1', leftNavOpen), [leftNavOpen])
+  useEffect(() => saveStorage('upbeat_left_nav_width_v1', leftNavWidth), [leftNavWidth])
+
+  const handleStartLeftNavSlider = useCallback((e) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startOpen = leftNavOpen
+    const startW = startOpen ? leftNavWidth : 0
+    let moved = false
+    setIsDraggingLeftNav(true)
+
+    const onMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX
+      if (Math.abs(dx) > 4) moved = true
+      if (!moved) return
+      const nextW = startW + dx
+      if (nextW < 135) {
+        setLeftNavOpen(false)
+      } else {
+        setLeftNavOpen(true)
+        setLeftNavWidth(Math.max(210, Math.min(380, Math.round(nextW))))
+      }
+    }
+
+    const onUp = () => {
+      setIsDraggingLeftNav(false)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      if (!moved) {
+        setLeftNavOpen((v) => !v)
+      }
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [leftNavOpen, leftNavWidth])
   const [searchQuery, setSearchQuery] = useState(() => route.params?.q || '')
   const [searchResults, setSearchResults] = useState(null)
   const [recentSearches, setRecentSearches] = useState(() => loadStorage('upbeat_recent_searches_v1', []))
@@ -764,15 +818,29 @@ export default function App() {
     }
   }, [])
 
-  // Auto-sync authentic Google avatar from active YouTube Music Safari session
+  // Auto-sync saved local profile or authentic Google avatar from active YouTube Music Safari session
   useEffect(() => {
     if (hasBackend()) {
+      fetch(`${getApiBase()}/profile`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((saved) => {
+          if (saved && (saved.name || saved.picture)) {
+            setGoogleUser((prev) => {
+              if (prev?.picture && (prev.customPicture || prev.picture.startsWith('data:'))) return prev
+              return { ...(prev || {}), ...saved }
+            })
+          }
+        })
+        .catch(() => {})
+
       fetch(`${getApiBase()}/safari/profile`)
         .then((r) => r.json())
         .then((data) => {
           if (data?.picture) {
             setGoogleUser((prev) => {
               if (!prev) return prev
+              // Never overwrite a custom user-uploaded avatar
+              if (prev.customPicture || prev.picture?.startsWith('data:')) return prev
               if (prev.picture !== data.picture) {
                 return { ...prev, picture: data.picture }
               }
@@ -2574,6 +2642,9 @@ export default function App() {
       } else if (mod && e.key.toLowerCase() === 'n') {
         e.preventDefault()
         navigate('/create')
+      } else if (mod && (e.key.toLowerCase() === 'b' || e.key === '\\')) {
+        e.preventDefault()
+        setLeftNavOpen((v) => !v)
       } else if (e.key === 'Escape' && !typing) {
         if (isNowPlayingOpen) setIsNowPlayingOpen(false)
         else if (isQueueOpen) setIsQueueOpen(false)
@@ -2890,8 +2961,14 @@ export default function App() {
     <AppContext.Provider value={appCtx}>
       <div className="h-[100dvh] w-screen bg-bg text-t1 flex flex-col overflow-hidden">
         {isDesktop ? (
-          <div className="flex-1 min-h-0 flex gap-2 p-2 pb-0 bg-black">
-            <div className="w-[280px] shrink-0 flex flex-col min-h-0">
+          <div className="flex-1 min-h-0 flex p-2 pb-0 bg-black relative">
+            {/* Collapsible Left SideNav with smooth slide transition */}
+            <div
+              className={`shrink-0 flex flex-col min-h-0 overflow-hidden ${
+                isDraggingLeftNav ? '' : 'transition-all duration-300 ease-out'
+              } ${leftNavOpen ? 'opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}
+              style={{ width: leftNavOpen ? leftNavWidth : 0 }}
+            >
               <SideNav
                 activeTab={activeTabId}
                 onSelect={selectTab}
@@ -2906,8 +2983,32 @@ export default function App() {
                 onNewPlaylist={() => setNameDialog({ mode: 'create' })}
                 libFilter={sideLibFilter}
                 setLibFilter={setSideLibFilter}
+                onCollapseSidebar={() => setLeftNavOpen(false)}
               />
             </div>
+
+            {/* Interactive Vertical Slider Handle (Drag to resize/close or click to slide open/shut) */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={leftNavOpen ? 'Slide or click to close sidebar' : 'Slide or click to open sidebar'}
+              title={leftNavOpen ? 'Drag or click slider to close sidebar (⌘B)' : 'Drag or click slider to open sidebar (⌘B)'}
+              onMouseDown={handleStartLeftNavSlider}
+              className={`shrink-0 z-30 flex items-center justify-center group select-none cursor-col-resize ${
+                leftNavOpen ? 'w-3 mx-0.5' : 'w-3.5 mr-1'
+              }`}
+            >
+              <div
+                className={` rounded-full transition-all duration-200 flex items-center justify-center ${
+                  isDraggingLeftNav
+                    ? 'w-1.5 h-24 bg-accent shadow-[0_0_12px_rgba(56,189,248,0.6)]'
+                    : leftNavOpen
+                      ? 'w-1.5 h-14 bg-white/15 group-hover:bg-accent group-hover:h-20'
+                      : 'w-1.5 h-20 bg-white/30 group-hover:bg-accent group-hover:h-24 shadow-md'
+                }`}
+              />
+            </div>
+
             <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-w-0 rounded-[14px] bg-bg ub-ambient-surface overflow-y-auto overflow-x-hidden">
               <div
                 className="sticky top-0 z-20 backdrop-blur-md transition-colors duration-700"
@@ -2935,6 +3036,8 @@ export default function App() {
                   incomingCount={jamState?.incomingRequests?.length || 0}
                   jamActive={Boolean(jamState?.active)}
                   onOpenFriends={openFriends}
+                  sidebarOpen={leftNavOpen}
+                  onToggleSidebar={() => setLeftNavOpen((v) => !v)}
                 />
               </div>
               {renderView()}

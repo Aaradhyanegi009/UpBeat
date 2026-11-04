@@ -6,24 +6,88 @@ import { Music, MoreHorizontal, ChevronLeft, Heart, CircleCheck } from 'lucide-r
 /* Artwork                                                             */
 /* ------------------------------------------------------------------ */
 
-// YouTube "hqdefault" thumbnails are letterboxed; "mqdefault" is 16:9 without bars
-// and crops cleanly to a square. Non-YouTube art (e.g. YT Music squares) is used as-is.
-export function artUrl(track, hi = false) {
-  if (!track) return ''
-  const thumb = track.thumbnail || track.cover || ''
-  const vid = track.video_id
-  if (thumb && !/i\.ytimg\.com\/vi\//.test(thumb)) return thumb
-  const id = vid || (thumb.match(/\/vi\/([A-Za-z0-9_-]{11})\//) || [])[1]
-  if (id) return `https://i.ytimg.com/vi/${id}/${hi ? 'hq720' : 'mqdefault'}.jpg`
-  return thumb
+export function extractYouTubeId(trackOrUrl) {
+  if (!trackOrUrl) return ''
+  if (typeof trackOrUrl === 'string') {
+    const m = trackOrUrl.match(/\/vi(?:_webp)?\/([A-Za-z0-9_-]{11})\//)
+    return m ? m[1] : ''
+  }
+  const vid = trackOrUrl.video_id || ''
+  if (/^[A-Za-z0-9_-]{11}$/.test(vid)) return vid
+  const thumb = trackOrUrl.thumbnail || trackOrUrl.cover || ''
+  const m = thumb.match(/\/vi(?:_webp)?\/([A-Za-z0-9_-]{11})\//)
+  return m ? m[1] : ''
 }
 
-export function Art({ track, src, className = '', round = false, hi = false, style }) {
-  const primary = src || artUrl(track, hi)
-  const [attempt, setAttempt] = useState(0) // 0 = primary, 1 = standard size, 2 = give up
-  useEffect(() => setAttempt(0), [primary])
-  const url = attempt === 0 ? primary : attempt === 1 && hi && track ? artUrl(track, false) : ''
+export function upgradeArtResolution(url = '', hi = true) {
+  if (!url || typeof url !== 'string') return ''
+  if (url.startsWith('data:')) return url
+  const ytMatch = url.match(/\/vi(?:_webp)?\/([A-Za-z0-9_-]{11})\//)
+  if (ytMatch && ytMatch[1]) {
+    return `https://i.ytimg.com/vi/${ytMatch[1]}/${hi ? 'maxresdefault' : 'hqdefault'}.jpg`
+  }
+  if (/googleusercontent\.com|ggpht\.com/i.test(url)) {
+    const target = hi ? '=w1080-h1080-l95-rj' : '=w544-h544-l90-rj'
+    if (/=w\d+-h\d+[^&\s]*/.test(url)) {
+      return url.replace(/=w\d+-h\d+[^&\s]*/, target)
+    }
+    if (/=s\d+[^&\s]*/.test(url)) {
+      return url.replace(/=s\d+[^&\s]*/, target)
+    }
+  }
+  return url
+}
+
+// High-resolution artwork resolver: defaults to HD maxresdefault / 1080x1080 cover art.
+export function artUrl(track, hi = true) {
+  if (!track) return ''
+  if (typeof track === 'string') return upgradeArtResolution(track, hi)
+  const thumb = track.thumbnail || track.cover || ''
+  const vid = extractYouTubeId(track)
+  if (thumb && !/i\.ytimg\.com\/vi/.test(thumb)) {
+    return upgradeArtResolution(thumb, hi)
+  }
+  if (vid) return `https://i.ytimg.com/vi/${vid}/${hi ? 'maxresdefault' : 'hqdefault'}.jpg`
+  return upgradeArtResolution(thumb, hi)
+}
+
+export function buildArtCandidates(track, src, hi = true) {
+  const raw = src || (typeof track === 'string' ? track : track?.thumbnail || track?.cover || '')
+  const ytId = extractYouTubeId(src || track)
+  const list = []
+  const push = (u) => {
+    if (u && !list.includes(u)) list.push(u)
+  }
+  if (raw && !/i\.ytimg\.com\/vi/.test(raw)) {
+    push(upgradeArtResolution(raw, hi))
+    if (raw !== upgradeArtResolution(raw, hi)) push(raw)
+  }
+  if (ytId) {
+    if (hi) {
+      push(`https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`)
+      push(`https://i.ytimg.com/vi/${ytId}/hq720.jpg`)
+      push(`https://i.ytimg.com/vi/${ytId}/sddefault.jpg`)
+    }
+    push(`https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`)
+    push(`https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`)
+  } else if (raw) {
+    push(raw)
+  }
+  return list
+}
+
+export function Art({ track, src, className = '', round = false, hi = true, style }) {
+  const candidates = buildArtCandidates(track, src, hi)
+  const primaryKey = candidates.join('|')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => setAttempt(0), [primaryKey])
+  const url = candidates[attempt] || ''
   const failed = !url
+
+  const stepDown = () => {
+    setAttempt((a) => (a + 1 < candidates.length ? a + 1 : candidates.length))
+  }
+
   return (
     <div
       className={`relative overflow-hidden bg-s2 shrink-0 ${round ? 'rounded-full' : 'rounded-xl'} ${className}`}
@@ -36,8 +100,14 @@ export function Art({ track, src, className = '', round = false, hi = false, sty
           loading="lazy"
           decoding="async"
           draggable={false}
-          onError={() => setAttempt((a) => (a === 0 && hi && track ? 1 : 2))}
-          className="absolute inset-0 w-full h-full object-cover"
+          onLoad={(e) => {
+            // YouTube returns a 120x90 grey placeholder when maxresdefault/sddefault does not exist
+            if (e.currentTarget?.naturalWidth && e.currentTarget.naturalWidth <= 120 && attempt + 1 < candidates.length) {
+              stepDown()
+            }
+          }}
+          onError={stepDown}
+          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-t3">
@@ -53,7 +123,7 @@ export function Collage({ tracks = [], className = '', cover }) {
   const seen = new Set()
   const picks = []
   for (const t of tracks) {
-    const u = artUrl(t)
+    const u = artUrl(t, true)
     if (u && !seen.has(u)) {
       seen.add(u)
       picks.push(t)
@@ -61,12 +131,12 @@ export function Collage({ tracks = [], className = '', cover }) {
     if (picks.length === 4) break
   }
   if (picks.length < 4) {
-    return <Art track={picks[0]} src={picks[0] ? undefined : cover} className={className} />
+    return <Art track={picks[0]} src={picks[0] ? undefined : cover} hi className={className} />
   }
   return (
     <div className={`grid grid-cols-2 overflow-hidden rounded-xl shrink-0 bg-s2 ${className}`}>
       {picks.map((t, i) => (
-        <Art key={i} track={t} className="!rounded-none w-full h-full" />
+        <Art key={i} track={t} hi className="!rounded-none w-full h-full" />
       ))}
     </div>
   )
@@ -81,15 +151,31 @@ export function LikedTile({ className = '' }) {
 }
 
 export function Avatar({ name = '', picture = '', size = 40, live = false, className = '' }) {
+  const [imgErr, setImgErr] = useState(false)
+  useEffect(() => {
+    setImgErr(false)
+  }, [picture])
+
   const letter = (name || 'U').trim()[0]?.toUpperCase() || 'U'
   const palette = ['#F2C6B4', '#A8D5C2', '#C9C3F0', '#F3D98B', '#B9D7F2']
   const bg = palette[(letter.charCodeAt(0) || 0) % palette.length]
+  const showPic = Boolean(picture && !imgErr)
+
   return (
     <span
-      className={`relative inline-flex items-center justify-center rounded-full shrink-0 font-extrabold text-[#0A0A0B] ${className}`}
-      style={{ width: size, height: size, background: picture ? undefined : bg, fontSize: Math.round(size * 0.4) }}
+      className={`relative inline-flex items-center justify-center rounded-full shrink-0 font-extrabold text-[#0A0A0B] overflow-hidden ${className}`}
+      style={{ width: size, height: size, background: showPic ? '#18181B' : bg, fontSize: Math.round(size * 0.4) }}
     >
-      {picture ? <img src={picture} alt="" className="w-full h-full rounded-full object-cover" /> : letter}
+      {showPic ? (
+        <img
+          src={picture}
+          alt={name || 'Avatar'}
+          onError={() => setImgErr(true)}
+          className="w-full h-full rounded-full object-cover"
+        />
+      ) : (
+        letter
+      )}
       {live && (
         <span className="absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full bg-live ring-[2.5px] ring-[#0A0A0B]" />
       )}

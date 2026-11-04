@@ -4,6 +4,24 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.3.0] - 2026-11-05
+
+### ✨ Original Dark-Squircle UpBeat Logo + High-Res Dynamic Rotating Thumbnails + Native Profile Photo Picker + Collapsible Sidebar Slider
+- **Exact Original Dark-Squircle UpBeat Logo (`Shell.jsx`)**:
+  - Replaced the white-background filled music icon with the exact original dark-squircle + white outlined beamed eighth note (`♫`) logo (`/icon-192.png` with matching outlined SVG fallback).
+- **Fixed Profile Picture Upload on macOS Native App & Web (`ProfileEditModal.jsx`, `macos/UpBeatApp.swift`, `backend/main.py`, `App.jsx`)**:
+  - Implemented `WKUIDelegate.webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:)` using `NSOpenPanel` in `macos/UpBeatApp.swift` so `<input type="file">` opens the native macOS file sheet inside `UpBeat.app`.
+  - Added `/api/profile/pick-photo` (`osascript` + `sips` JPEG conversion supporting `.heic`, `.png`, `.jpg`, `.webp`), `GET /api/profile`, and `POST /api/profile` in `backend/main.py`.
+  - Updated `ProfileEditModal.jsx` to sync state whenever `isOpen` or `user` changes, use direct `<label htmlFor="...">` file input activation, and support Mac Finder picker, drag-and-drop, clipboard image paste, image URLs, and 1-click preset avatars.
+  - Prevented `/api/safari/profile` from overwriting custom user-uploaded avatars.
+- **High-Resolution (`maxresdefault` / 1080p) & Dynamically Updating Track Thumbnails (`primitives.jsx`, `standaloneApi.js`, `HomeView.jsx`)**:
+  - Upgraded `artUrl` and `<Art />` to default to high-resolution 1280×720 (`maxresdefault.jpg` / `hq720.jpg` / `sddefault.jpg`) and `=w1080-h1080-l95-rj` Google/YTM cover art, with automatic `naturalWidth <= 120` placeholder detection and multi-stage step-down fallback.
+  - Added `thumbnailPool` to all `Made for you` and `Top charts` blocks and live background track thumbnail enrichment in `HomeView.jsx`, dynamically rotating card artwork every 18 seconds and on every refresh.
+- **Slide-to-Close Left Sidebar for Mac Native App & Desktop (`App.jsx`, `Shell.jsx`)**:
+  - Added an interactive vertical slider rail between `SideNav` and `<main>` (drag left to close, drag to resize `210px–380px`, or click the slider pill handle to toggle), a `Hide` button in the `SideNav` header, an `UpBeat` open pill in `TopBar` when collapsed, and `⌘B` / `⌘\` keyboard shortcuts.
+
+---
+
 ## [v7.2.2] - 2026-11-05
 
 ### 🛡️ Pure Music Guard + Live Moods Auto-Refresh + Local Storage Profile Photo + Studio Monochrome Mark

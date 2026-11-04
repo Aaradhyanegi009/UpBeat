@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         if let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !ver.isEmpty {
             return ver
         }
-        return "7.2.0"
+        return "7.3.0"
     }()
     let githubRepo = "AaradhyaNegi009/UpBeat"
 
@@ -810,6 +810,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
                 guard let self = self else { return }
                 self.ensureBackendAndLoad()
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.allowedFileTypes = ["png", "jpg", "jpeg", "webp", "gif", "heic", "heif", "tiff", "bmp", "svg"]
+        panel.message = "Choose a profile picture for UpBeat"
+        panel.prompt = "Select Photo"
+
+        if let win = self.window {
+            panel.beginSheetModal(for: win) { response in
+                if response == .OK {
+                    completionHandler(panel.urls)
+                } else {
+                    completionHandler(nil)
+                }
+            }
+        } else {
+            let response = panel.runModal()
+            if response == .OK {
+                completionHandler(panel.urls)
+            } else {
+                completionHandler(nil)
             }
         }
     }

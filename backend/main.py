@@ -58,8 +58,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="7.2.2",
-    description="UpBeat v7.2.2 - Pure Music Guard, Live Moods Auto-Refresh, Local Profile Photo Storage & Studio Monochrome Mark"
+    version="7.3.0",
+    description="UpBeat v7.3.0 - Original Dark Squircle Music Logo, Native macOS/Web Profile Photo Upload, High-Res Dynamic Rotating Thumbnails & Collapsible Left Sidebar Slider"
 )
 
 app.add_middleware(
@@ -995,6 +995,89 @@ def jam_room_poll_endpoint(roomCode: str = "", since: int = 0):
         "serverTs": now_ms,
         "packets": packets
     }
+
+
+# ==============================================================================
+# USER PROFILE & NATIVE PHOTO PICKER ENDPOINTS (v7.3.0)
+# ==============================================================================
+PROFILE_FILE = os.path.join(DOWNLOADS_DIR, "user_profile.json")
+
+
+@app.get("/api/profile")
+def get_user_profile_endpoint():
+    if os.path.exists(PROFILE_FILE):
+        try:
+            with open(PROFILE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+@app.post("/api/profile")
+async def save_user_profile_endpoint(request: Request):
+    try:
+        payload = await request.json()
+        if isinstance(payload, dict):
+            with open(PROFILE_FILE, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+            return {"ok": True, "profile": payload}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": False}
+
+
+@app.post("/api/profile/pick-photo")
+def pick_profile_photo_native_endpoint():
+    """
+    Opens a native macOS file chooser dialog via osascript and returns a
+    downscaled 320x320 JPEG base64 data URL (supporting PNG, JPG, HEIC, WEBP, etc.).
+    """
+    import base64
+    import subprocess
+    import tempfile
+
+    script = (
+        'POSIX path of (choose file of type {"public.image"} '
+        'with prompt "Select a profile photo for UpBeat:")'
+    )
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            return {"ok": False, "cancelled": True}
+        chosen_path = (proc.stdout or "").strip()
+        if not chosen_path or not os.path.exists(chosen_path):
+            return {"ok": False, "cancelled": True}
+
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp_jpg = tmp.name
+
+        try:
+            # Use macOS sips to convert any image (including HEIC/PNG/TIFF) to max 320px JPEG
+            sips_proc = subprocess.run(
+                ["sips", "-s", "format", "jpeg", "-s", "formatOptions", "85", "-Z", "320", chosen_path, "--out", tmp_jpg],
+                capture_output=True,
+                timeout=15,
+            )
+            target_file = tmp_jpg if (sips_proc.returncode == 0 and os.path.exists(tmp_jpg) and os.path.getsize(tmp_jpg) > 0) else chosen_path
+            with open(target_file, "rb") as img_f:
+                raw_bytes = img_f.read()
+            b64 = base64.b64encode(raw_bytes).decode("ascii")
+            mime = "image/jpeg" if target_file == tmp_jpg else "image/png"
+            return {"ok": True, "dataUrl": f"data:{mime};base64,{b64}"}
+        finally:
+            if os.path.exists(tmp_jpg):
+                try:
+                    os.remove(tmp_jpg)
+                except Exception:
+                    pass
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")

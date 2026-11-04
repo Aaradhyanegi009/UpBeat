@@ -2133,16 +2133,27 @@ export async function buildHybridRediscoverBlock({
   }
 
   // Determine dynamic cover thumbnail based on lead track (avoiding collision with adjacent cards)
-  let chosenThumb = ''
+  const thumbPool = []
   for (const t of interleaved) {
-    const candidateThumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+    const candidateThumb = t.video_id
+      ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg`
+      : t.thumbnail || ''
+    if (candidateThumb && !thumbPool.includes(candidateThumb)) {
+      thumbPool.push(candidateThumb)
+    }
+  }
+
+  let chosenThumb = ''
+  const startIdx = thumbPool.length ? rotationIndex % thumbPool.length : 0
+  for (let i = 0; i < thumbPool.length; i++) {
+    const candidateThumb = thumbPool[(startIdx + i) % thumbPool.length]
     if (candidateThumb && !usedCoverUrls.has(candidateThumb)) {
       chosenThumb = candidateThumb
       break
     }
   }
   if (!chosenThumb) {
-    chosenThumb = interleaved[0]?.thumbnail || 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg'
+    chosenThumb = thumbPool[0] || interleaved[0]?.thumbnail || 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'
   }
   usedCoverUrls.add(chosenThumb)
 
@@ -2158,9 +2169,45 @@ export async function buildHybridRediscoverBlock({
     query: `${anchorArtist} ${leadSongTitle} favorites radio mix`,
     preloadedTracks: interleaved,
     thumbnail: chosenThumb,
+    thumbnailPool: thumbPool.length ? thumbPool : [chosenThumb],
     color: 'from-purple-600/40 to-black',
     isHybridRediscover: true
   }
+}
+
+const CHART_THUMB_POOLS = {
+  us: [
+    'https://i.ytimg.com/vi/eVli-tstM5E/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/V9PVRfjEBTI/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/UNZqm3dxd2w/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/H5v3kku4y6Q/maxresdefault.jpg'
+  ],
+  india: [
+    'https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/RLzC55ai0eo/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/VAdGW7QDJiU/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/VuG7ge_8I2Y/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/SlPhMPnQ58k/maxresdefault.jpg'
+  ],
+  japan: [
+    'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/dy90tA3TT1c/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/mLW35YMzELE/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/by4SYYWlhEs/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/x8VYWazR5mE/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/GJI4Gv7NbmE/maxresdefault.jpg'
+  ],
+  viral: [
+    'https://i.ytimg.com/vi/LK7-_dgAVQE/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/k3g_WjLCsXM/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/XTp5jaRU3Ws/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/nCD2hj6zJEc/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/muds1gFUTN8/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/6d5SS0gS5bU/maxresdefault.jpg'
+  ]
 }
 
 export function getInitialDiscoveryBlocks() {
@@ -2176,7 +2223,8 @@ export function getInitialDiscoveryBlocks() {
       badge: 'US Chart',
       browse_id: 'VLPL4fGSI40qSUHnL3G30wzCvhLqLqBw8Fw_',
       query: 'Billboard Hot 100 US top daily chart hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/eVli-tstM5E/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.us[cursor % CHART_THUMB_POOLS.us.length],
+      thumbnailPool: CHART_THUMB_POOLS.us,
       color: 'from-blue-600/40 to-black'
     },
     {
@@ -2187,7 +2235,8 @@ export function getInitialDiscoveryBlocks() {
       badge: 'India Chart',
       browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
       query: 'Trending 20 India top daily chart hit songs playlist',
-      thumbnail: 'https://i.ytimg.com/vi/BddP6PYo2gs/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.india[cursor % CHART_THUMB_POOLS.india.length],
+      thumbnailPool: CHART_THUMB_POOLS.india,
       color: 'from-amber-600/40 to-black'
     },
     {
@@ -2198,7 +2247,8 @@ export function getInitialDiscoveryBlocks() {
       badge: 'Japan Chart',
       browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
       query: 'Tokyo Hot 100 J-Pop anime daily top chart hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.japan[cursor % CHART_THUMB_POOLS.japan.length],
+      thumbnailPool: CHART_THUMB_POOLS.japan,
       color: 'from-rose-600/40 to-black'
     },
     {
@@ -2209,7 +2259,8 @@ export function getInitialDiscoveryBlocks() {
       badge: 'Trending Heat',
       browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
       query: 'viral trending songs reels Bollywood Punjabi indie hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/LK7-_dgAVQE/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.viral[cursor % CHART_THUMB_POOLS.viral.length],
+      thumbnailPool: CHART_THUMB_POOLS.viral,
       color: 'from-emerald-600/40 to-black'
     },
     ...starterCycle,
@@ -2221,7 +2272,13 @@ export function getInitialDiscoveryBlocks() {
       subtitle: 'Shuffled favorites & related radio',
       badge: 'Rediscover',
       query: 'Post Malone Sunflower Lukas Graham 7 Years radio playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg',
+      thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg'
+      ],
       color: 'from-purple-600/40 to-black',
       isHybridRediscover: true
     }
@@ -2260,7 +2317,7 @@ export async function fetchListenTogetherFeed({
     (t) => t?.title && t?.artist && !DEFAULT_SEED_IDS.has(t?.video_id) && isValidMusicTrack(t)
   )
 
-  // Map each unique clean artist to their tracks and artwork
+  // Map each unique clean artist to their tracks and high-res artwork pool
   const artistMap = new Map()
   for (const t of validUserTracks) {
     const rawArtist = (t.artist || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim()
@@ -2273,12 +2330,15 @@ export async function fetchListenTogetherFeed({
       !NON_MUSIC_REGEX.test(cleanArt)
     ) {
       const key = cleanArt.toLowerCase()
-      const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+      const thumb = t.video_id
+        ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg`
+        : t.thumbnail || ''
       if (!artistMap.has(key)) {
-        artistMap.set(key, { name: cleanArt, tracks: [], thumb })
+        artistMap.set(key, { name: cleanArt, tracks: [], thumb, thumbs: [] })
       }
       const entry = artistMap.get(key)
       entry.tracks.push(t)
+      if (thumb && !entry.thumbs.includes(thumb)) entry.thumbs.push(thumb)
       if (!entry.thumb && thumb) entry.thumb = thumb
     }
   }
@@ -2306,7 +2366,7 @@ export async function fetchListenTogetherFeed({
     timeSlotColor = 'from-slate-700/40 to-black'
   }
 
-  // Tier 1 — 4 Mandatory Regional & Viral Chart Blocks
+  // Tier 1 — 4 Mandatory Regional & Viral Chart Blocks with rotating high-res thumbnail pools
   const tier1Blocks = [
     {
       id: 'block_us_top_daily',
@@ -2316,7 +2376,8 @@ export async function fetchListenTogetherFeed({
       badge: 'US Chart',
       browse_id: 'VLPL4fGSI40qSUHnL3G30wzCvhLqLqBw8Fw_',
       query: 'Billboard Hot 100 US top daily chart hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/eVli-tstM5E/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.us[cursor % CHART_THUMB_POOLS.us.length],
+      thumbnailPool: CHART_THUMB_POOLS.us,
       color: 'from-blue-600/40 to-black'
     },
     {
@@ -2327,7 +2388,8 @@ export async function fetchListenTogetherFeed({
       badge: 'India Chart',
       browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
       query: 'Trending 20 India top daily chart hit songs playlist',
-      thumbnail: 'https://i.ytimg.com/vi/BddP6PYo2gs/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.india[cursor % CHART_THUMB_POOLS.india.length],
+      thumbnailPool: CHART_THUMB_POOLS.india,
       color: 'from-amber-600/40 to-black'
     },
     {
@@ -2338,7 +2400,8 @@ export async function fetchListenTogetherFeed({
       badge: 'Japan Chart',
       browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
       query: 'Tokyo Hot 100 J-Pop anime daily top chart hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.japan[cursor % CHART_THUMB_POOLS.japan.length],
+      thumbnailPool: CHART_THUMB_POOLS.japan,
       color: 'from-rose-600/40 to-black'
     },
     {
@@ -2349,7 +2412,8 @@ export async function fetchListenTogetherFeed({
       badge: 'Trending Heat',
       browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
       query: 'viral trending songs reels Bollywood Punjabi indie hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/LK7-_dgAVQE/hqdefault.jpg',
+      thumbnail: CHART_THUMB_POOLS.viral[cursor % CHART_THUMB_POOLS.viral.length],
+      thumbnailPool: CHART_THUMB_POOLS.viral,
       color: 'from-emerald-600/40 to-black'
     }
   ]
@@ -2380,29 +2444,49 @@ export async function fetchListenTogetherFeed({
 
     const currentMood = MOOD_VIBE_PRESETS[cursor % MOOD_VIBE_PRESETS.length]
 
-    const pickUniqueCover = (preferredThumb, fallbackArtist) => {
-      if (preferredThumb && !usedCoverUrls.has(preferredThumb)) {
-        usedCoverUrls.add(preferredThumb)
-        return preferredThumb
+    const allUserThumbs = validUserTracks
+      .map((t) => (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg` : t.thumbnail || ''))
+      .filter(Boolean)
+
+    const buildPoolForArtists = (...artList) => {
+      const pool = []
+      for (const a of artList) {
+        for (const th of a?.thumbs || []) {
+          if (th && !pool.includes(th)) pool.push(th)
+        }
+      }
+      for (const th of allUserThumbs) {
+        if (pool.length >= 8) break
+        if (th && !pool.includes(th)) pool.push(th)
+      }
+      return pool
+    }
+
+    const pickUniqueCover = (pool, fallbackArtist) => {
+      for (let i = 0; i < (pool?.length || 0); i++) {
+        const candidate = pool[(cursor + i) % pool.length]
+        if (candidate && !usedCoverUrls.has(candidate)) {
+          usedCoverUrls.add(candidate)
+          return candidate
+        }
       }
       if (fallbackArtist?.thumb && !usedCoverUrls.has(fallbackArtist.thumb)) {
         usedCoverUrls.add(fallbackArtist.thumb)
         return fallbackArtist.thumb
       }
-      for (const t of validUserTracks) {
-        const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
+      for (const thumb of allUserThumbs) {
         if (thumb && !usedCoverUrls.has(thumb)) {
           usedCoverUrls.add(thumb)
           return thumb
         }
       }
-      return 'https://i.ytimg.com/vi/ApXoWvfEYVU/hqdefault.jpg'
+      return 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'
     }
 
-    const topUserTrackThumb = validUserTracks[cursor % validUserTracks.length]?.thumbnail ||
-      (validUserTracks[cursor % validUserTracks.length]?.video_id
-        ? `https://i.ytimg.com/vi/${validUserTracks[cursor % validUserTracks.length].video_id}/hqdefault.jpg`
-        : a0.thumb)
+    const pool0 = buildPoolForArtists(a0, a1)
+    const pool1 = buildPoolForArtists(a2, a3)
+    const pool2 = buildPoolForArtists(a4, a0)
+    const pool3 = buildPoolForArtists(a1, a3, a4)
 
     tier2Blocks = [
       {
@@ -2412,7 +2496,8 @@ export async function fetchListenTogetherFeed({
         subtitle: `Featuring ${a0.name}, ${a1.name} & similar hits`,
         badge: 'Artist Mix',
         query: `${a0.name} ${a1.name} best hit songs playlist`,
-        thumbnail: pickUniqueCover(a0.thumb || topUserTrackThumb, a0),
+        thumbnail: pickUniqueCover(pool0, a0),
+        thumbnailPool: pool0,
         color: 'from-rose-600/40 to-black'
       },
       {
@@ -2422,7 +2507,8 @@ export async function fetchListenTogetherFeed({
         subtitle: `Curated mix inspired by your listening library`,
         badge: 'Artist Mix',
         query: `${a2.name} ${a3.name} top hits playlist`,
-        thumbnail: pickUniqueCover(a2.thumb || a1.thumb, a2),
+        thumbnail: pickUniqueCover(pool1, a2),
+        thumbnailPool: pool1,
         color: 'from-indigo-600/40 to-black'
       },
       {
@@ -2432,7 +2518,8 @@ export async function fetchListenTogetherFeed({
         subtitle: `${archetype} • ${currentMood.desc}`,
         badge: 'Vibe Mix',
         query: `${a4.name} ${currentMood.query}`,
-        thumbnail: pickUniqueCover(a4.thumb, a4),
+        thumbnail: pickUniqueCover(pool2, a4),
+        thumbnailPool: pool2,
         color: currentMood.color
       },
       {
@@ -2442,7 +2529,8 @@ export async function fetchListenTogetherFeed({
         subtitle: `Synchronized with ${timeSlotSubtitle}`,
         badge: 'Time Flow',
         query: `${timeSlotQuery} ${a0.name}`,
-        thumbnail: pickUniqueCover(topUserTrackThumb, a0),
+        thumbnail: pickUniqueCover(pool3, a0),
+        thumbnailPool: pool3,
         color: timeSlotColor
       },
       rediscoverBlock

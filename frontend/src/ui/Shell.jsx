@@ -1,8 +1,35 @@
 import React, { useEffect, useState } from 'react'
-import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings } from 'lucide-react'
+import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Avatar, IconButton, LikedTile, Collage, Chip } from './primitives'
 import { SearchField } from '../views/SearchView'
 import { useMediaQuery } from './router'
+
+/** Exact original UpBeat dark-squircle + white outlined beamed eighth note logo */
+export function UpBeatLogo({ size = 32, className = '' }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  return (
+    <span
+      className={`relative inline-flex items-center justify-center rounded-[9px] bg-gradient-to-b from-[#1C1E26] to-[#0B0C10] border border-white/15 shadow-md overflow-hidden shrink-0 ${className}`}
+      style={{ width: size, height: size }}
+    >
+      {!imgFailed ? (
+        <img
+          src="/icon-192.png"
+          alt="UpBeat"
+          onError={() => setImgFailed(true)}
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
+      ) : (
+        <svg viewBox="0 0 24 24" className="w-[62%] h-[62%] text-white" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+      )}
+    </span>
+  )
+}
 
 export const TABS = [
   { id: 'home', path: '/', label: 'Home', icon: House },
@@ -39,16 +66,43 @@ export function TabBar({ activeTab, onSelect }) {
 }
 
 /** Desktop: left column with navigation and the library list. */
-export function SideNav({ activeTab, onSelect, saved = [], favoritesCount = 0, downloadsCount = 0, activeCollectionId, playingCollectionId, onOpenSaved, onOpenLiked, onOpenDownloads, onNewPlaylist, libFilter, setLibFilter }) {
+export function SideNav({
+  activeTab,
+  onSelect,
+  saved = [],
+  favoritesCount = 0,
+  downloadsCount = 0,
+  activeCollectionId,
+  playingCollectionId,
+  onOpenSaved,
+  onOpenLiked,
+  onOpenDownloads,
+  onNewPlaylist,
+  libFilter,
+  setLibFilter,
+  onCollapseSidebar
+}) {
   const items = saved.filter((c) => libFilter === 'all' || (libFilter === 'mixes' ? ['mix', 'foryou'].includes(c.kind) : !['mix', 'foryou'].includes(c.kind)))
   return (
-    <div className="flex flex-col gap-2 min-h-0 flex-1">
+    <div className="flex flex-col gap-2 min-h-0 flex-1 select-none">
       <div className="rounded-[14px] bg-bg p-3 shrink-0">
-        <div className="flex items-center gap-2.5 px-2.5 pt-1 pb-3.5 text-xl font-extrabold tracking-[-0.02em]">
-          <span className="w-[30px] h-[30px] rounded-[9px] bg-white text-[#0A0A0B] dark:bg-white dark:text-[#0A0A0B] flex items-center justify-center shadow-xs">
-            <Music className="w-4 h-4 fill-current" strokeWidth={2.5} aria-hidden="true" />
-          </span>
-          UpBeat
+        <div className="flex items-center justify-between gap-2 px-2 pt-1 pb-3.5">
+          <div className="flex items-center gap-2.5 text-xl font-extrabold tracking-[-0.02em]">
+            <UpBeatLogo size={32} />
+            <span>UpBeat</span>
+          </div>
+          {onCollapseSidebar && (
+            <button
+              type="button"
+              onClick={onCollapseSidebar}
+              title="Close sidebar (⌘B)"
+              aria-label="Close sidebar"
+              className="h-8 px-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-t2 hover:text-t1 inline-flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer active:scale-95"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+              <span className="hidden xl:inline text-[11px]">Hide</span>
+            </button>
+          )}
         </div>
         <nav aria-label="Main" className="flex flex-col gap-0.5">
           {TABS.filter((t) => t.id !== 'library').map((t) => {
@@ -143,7 +197,22 @@ function SideItem({ onClick, art, title, sub, active, playing }) {
 }
 
 /** Desktop: bar at the top of the centre column. */
-export function TopBar({ query, setQuery, onSearchFocus, onSearchSubmit, searchInputRef, user, onOpenProfile, onOpenSettings, friends = [], incomingCount = 0, jamActive = false, onOpenFriends }) {
+export function TopBar({
+  query,
+  setQuery,
+  onSearchFocus,
+  onSearchSubmit,
+  searchInputRef,
+  user,
+  onOpenProfile,
+  onOpenSettings,
+  friends = [],
+  incomingCount = 0,
+  jamActive = false,
+  onOpenFriends,
+  sidebarOpen = true,
+  onToggleSidebar
+}) {
   const online = friends.filter((f) => f.online)
   const compact = !useMediaQuery('(min-width: 1280px)')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -160,6 +229,19 @@ export function TopBar({ query, setQuery, onSearchFocus, onSearchSubmit, searchI
 
   return (
     <div className="flex items-center gap-3 px-7 py-4">
+      {!sidebarOpen && onToggleSidebar && (
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          title="Open sidebar (⌘B)"
+          aria-label="Open sidebar"
+          className="h-9 pl-1.5 pr-3 rounded-full bg-s2 hover:bg-s3 flex items-center gap-2 text-sm font-extrabold tracking-tight text-t1 transition-all cursor-pointer shrink-0 shadow-sm"
+        >
+          <UpBeatLogo size={26} />
+          <span>UpBeat</span>
+          <PanelLeftOpen className="w-4 h-4 text-t2 ml-0.5" />
+        </button>
+      )}
       <IconButton label="Back" variant="filled" size={36} onClick={() => window.history.back()}>
         <ChevronLeft className="w-5 h-5" />
       </IconButton>

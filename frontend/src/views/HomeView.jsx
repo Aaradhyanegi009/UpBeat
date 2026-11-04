@@ -42,11 +42,58 @@ export default function HomeView({
   const [activeMood, setActiveMood] = useState('for_you')
   const [blocks, setBlocks] = useState(() => getInitialDiscoveryBlocks())
   const [refreshing, setRefreshing] = useState(false)
+  const [thumbTick, setThumbTick] = useState(0)
+  const [liveThumbPools, setLiveThumbPools] = useState({})
+  const enrichedBlockIdsRef = useRef(new Set())
 
   // Mood-specific live data state
   const [moodData, setMoodData] = useState({})
   const [moodLoading, setMoodLoading] = useState(false)
   const autoRefreshTimerRef = useRef(null)
+
+  // Rotate card thumbnails dynamically every 18 seconds to fresh high-res track covers
+  useEffect(() => {
+    const t = setInterval(() => {
+      setThumbTick((prev) => prev + 1)
+    }, 18000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Background enrich discovery & chart blocks with live high-res track thumbnails from their query
+  useEffect(() => {
+    let cancelled = false
+    const toEnrich = blocks.filter((b) => b?.id && b?.query && !enrichedBlockIdsRef.current.has(`${b.id}:${b.query}`))
+    if (!toEnrich.length) return undefined
+
+    ;(async () => {
+      for (const b of toEnrich) {
+        if (cancelled) break
+        const key = `${b.id}:${b.query}`
+        enrichedBlockIdsRef.current.add(key)
+        try {
+          const res = await directSearchStandalone(b.query, 'songs')
+          if (cancelled) break
+          const valid = (res?.tracks || res?.song_results || []).filter(isValidMusicTrack)
+          const thumbs = []
+          for (const tr of valid) {
+            const hiUrl = artUrl(tr, true)
+            if (hiUrl && !thumbs.includes(hiUrl)) thumbs.push(hiUrl)
+            if (thumbs.length >= 10) break
+          }
+          if (thumbs.length > 0) {
+            setLiveThumbPools((prev) => ({
+              ...prev,
+              [b.id]: thumbs
+            }))
+          }
+        } catch {}
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [blocks])
 
   // Load / update personalized discovery blocks
   useEffect(() => {
@@ -62,6 +109,7 @@ export default function HomeView({
   // "For you" live refresh / rotation function
   const refreshForYou = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true)
+    setThumbTick((prev) => prev + 1)
     try {
       const fresh = await fetchListenTogetherFeed({
         userTracks,
@@ -147,6 +195,42 @@ export default function HomeView({
   const listening = friends.filter((f) => f.online && f.currentTrack)
   const onlineCount = friends.filter((f) => f.online).length
 
+  // Resolve a high-res, dynamically rotating cover thumbnail for each block
+  const blockThumbMap = useMemo(() => {
+    const used = new Set()
+    const out = {}
+    const all = [featured, ...moreForYou, ...charts].filter(Boolean)
+    all.forEach((b, idx) => {
+      const pool = []
+      const addUrl = (u) => {
+        const hi = artUrl(u, true)
+        if (hi && !pool.includes(hi)) pool.push(hi)
+      }
+      for (const u of liveThumbPools[b.id] || []) addUrl(u)
+      for (const u of b.thumbnailPool || []) addUrl(u)
+      for (const t of b.preloadedTracks || []) addUrl(t)
+      if (b.thumbnail) addUrl(b.thumbnail)
+
+      let chosen = ''
+      if (pool.length > 0) {
+        const start = (thumbTick + idx) % pool.length
+        for (let i = 0; i < pool.length; i++) {
+          const cand = pool[(start + i) % pool.length]
+          if (!used.has(cand)) {
+            chosen = cand
+            break
+          }
+        }
+        if (!chosen) chosen = pool[start]
+      } else {
+        chosen = artUrl({ thumbnail: b.thumbnail }, true)
+      }
+      if (chosen) used.add(chosen)
+      out[b.id] = chosen
+    })
+    return out
+  }, [featured, moreForYou, charts, liveThumbPools, thumbTick])
+
   const activeMoodObj = MOODS.find((m) => m.id === activeMood)
   const activeMoodContent = activeMood !== 'for_you' ? moodData[activeMood] : null
 
@@ -191,6 +275,7 @@ export default function HomeView({
           {featured && (
             <FeaturedCard
               block={featured}
+              thumbSrc={blockThumbMap[featured.id]}
               isDesktop={isDesktop}
               onOpen={() => onOpenBlock(featured)}
               onPlay={() => onPlayBlock(featured, false)}
@@ -266,7 +351,7 @@ export default function HomeView({
                     key={b.id}
                     title={b.title}
                     subtitle={b.subtitle}
-                    src={artUrl({ thumbnail: b.thumbnail })}
+                    src={blockThumbMap[b.id] || artUrl({ thumbnail: b.thumbnail }, true)}
                     onOpen={() => onOpenBlock(b)}
                     onPlay={() => onPlayBlock(b, false)}
                   />
@@ -285,7 +370,7 @@ export default function HomeView({
                     title={b.title}
                     subtitle={b.subtitle}
                     label={chartLabel(b)}
-                    src={artUrl({ thumbnail: b.thumbnail })}
+                    src={blockThumbMap[b.id] || artUrl({ thumbnail: b.thumbnail }, true)}
                     onOpen={() => onOpenBlock(b)}
                     onPlay={() => onPlayBlock(b, false)}
                   />
@@ -464,8 +549,8 @@ function CardRow({ isDesktop, children }) {
   )
 }
 
-function FeaturedCard({ block, isDesktop, onOpen, onPlay, onShuffle }) {
-  const img = artUrl({ thumbnail: block.thumbnail })
+function FeaturedCard({ block, thumbSrc, isDesktop, onOpen, onPlay, onShuffle }) {
+  const img = thumbSrc || artUrl({ thumbnail: block.thumbnail }, true)
   return (
     <div
       className={`relative overflow-hidden rounded-3xl bg-s1 mt-5 cursor-pointer ${isDesktop ? 'h-[248px]' : 'h-[208px]'}`}
@@ -475,12 +560,12 @@ function FeaturedCard({ block, isDesktop, onOpen, onPlay, onShuffle }) {
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
       aria-label={`Open ${block.title}`}
     >
-      <img src={img} alt="" className="absolute inset-[-60px] w-[calc(100%+120px)] h-[calc(100%+120px)] max-w-none object-cover blur-[36px] saturate-[1.2] brightness-[0.8]" />
+      <Art src={img} hi className="!rounded-none ! absolute inset-[-60px] w-[calc(100%+120px)] h-[calc(100%+120px)] max-w-none blur-[36px] saturate-[1.2] brightness-[0.8]" />
       <div className="absolute inset-0 bg-gradient-to-r from-[rgba(10,10,11,0.92)] via-[rgba(10,10,11,0.6)] to-[rgba(10,10,11,0.25)]" />
-      <img
+      <Art
         src={img}
-        alt=""
-        className={`absolute rounded-2xl object-cover shadow-[0_16px_40px_rgba(0,0,0,0.5)] ${isDesktop ? 'right-8 top-7 w-48 h-48' : 'right-5 top-6 w-[116px] h-[116px]'}`}
+        hi
+        className={`!absolute !rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.5)] ${isDesktop ? 'right-8 top-7 w-48 h-48' : 'right-5 top-6 w-[116px] h-[116px]'}`}
       />
       <div className={`absolute inset-0 flex flex-col ${isDesktop ? 'p-7 pr-64' : 'p-5 pr-[150px]'}`}>
         <span className="text-xs font-bold tracking-[0.1em] uppercase text-t2 inline-flex items-center gap-1.5">
