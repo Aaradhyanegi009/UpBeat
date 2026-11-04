@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Camera, Trash2, Check, User, FolderOpen, Link2 } from 'lucide-react'
+import { X, Camera, Trash2, Check, User, FolderOpen, Link2, Settings } from 'lucide-react'
 import { Avatar, IconButton } from '../ui/primitives'
 import { hasBackend, getApiBase } from '../standaloneApi'
+import { navigate } from '../ui/router'
 
 const PRESET_AVATARS = [
   {
@@ -62,8 +63,30 @@ export default function ProfileEditModal({ isOpen, onClose, user, onSave, onNoti
       setPicture(user?.picture || '')
       setUrlInput('')
       setShowUrlField(false)
+      setIsProcessing(false)
     }
   }, [isOpen, user])
+
+  // Listen for native macOS photo selection events from UpBeatApp.swift
+  useEffect(() => {
+    const onNativeSelected = (e) => {
+      const dataUrl = e.detail?.dataUrl
+      if (dataUrl) {
+        setPicture(dataUrl)
+        setIsProcessing(false)
+        onNotify?.('Photo selected — click Save changes to apply', 'info')
+      }
+    }
+    const onNativeCancelled = () => {
+      setIsProcessing(false)
+    }
+    window.addEventListener('upbeat-native-photo-selected', onNativeSelected)
+    window.addEventListener('upbeat-native-photo-cancelled', onNativeCancelled)
+    return () => {
+      window.removeEventListener('upbeat-native-photo-selected', onNativeSelected)
+      window.removeEventListener('upbeat-native-photo-cancelled', onNativeCancelled)
+    }
+  }, [onNotify])
 
   if (!isOpen) return null
 
@@ -136,44 +159,18 @@ export default function ProfileEditModal({ isOpen, onClose, user, onSave, onNoti
     e.target.value = ''
   }
 
-  // Native macOS Finder fallback for UpBeat.app / local Mac server
-  const handlePickViaMacFinder = async () => {
-    if (!hasBackend()) {
-      fileInputRef.current?.click()
-      return
-    }
-    setIsProcessing(true)
-    try {
-      const res = await fetch(`${getApiBase()}/profile/pick-photo`, { method: 'POST' })
-      if (res.ok) {
-        const data = await res.json()
-        if (data?.ok && data.dataUrl) {
-          setPicture(data.dataUrl)
-          onNotify?.('Photo loaded from Finder — click Save changes to apply', 'info')
-          setIsProcessing(false)
-          return
-        }
-        if (data?.cancelled) {
-          setIsProcessing(false)
-          return
-        }
+  // Unified photo picker: triggers native macOS NSOpenPanel in UpBeat.app or standard file input in browser
+  const handleChoosePhoto = () => {
+    if (typeof window !== 'undefined' && window.webkit?.messageHandlers?.upbeatNative) {
+      setIsProcessing(true)
+      try {
+        window.webkit.messageHandlers.upbeatNative.postMessage({ action: 'pickProfilePhoto' })
+        return
+      } catch (err) {
+        console.warn('Native message handler error, falling back to input:', err)
       }
-      // Fallback to standard browser file input if backend was not on macOS
-      fileInputRef.current?.click()
-    } catch {
-      fileInputRef.current?.click()
-    } finally {
-      setIsProcessing(false)
     }
-  }
-
-  const isMacNativeWebView = typeof window !== 'undefined' && Boolean(window.webkit?.messageHandlers?.upbeatNative)
-
-  const handlePrimaryUploadClick = (e) => {
-    if (isMacNativeWebView && hasBackend()) {
-      e.preventDefault()
-      handlePickViaMacFinder()
-    }
+    fileInputRef.current?.click()
   }
 
   const handleDrop = (e) => {
@@ -270,40 +267,30 @@ export default function ProfileEditModal({ isOpen, onClose, user, onSave, onNoti
 
           {/* Avatar Preview & Storage Upload */}
           <div className="flex flex-col items-center gap-3">
-            <label
-              htmlFor="upbeat-profile-photo-input"
-              onClick={handlePrimaryUploadClick}
-              title="Choose photo from device (or drag & drop image here)"
+            <button
+              type="button"
+              onClick={handleChoosePhoto}
+              disabled={isProcessing}
+              title="Choose photo from device, gallery, or Finder (or drag & drop here)"
               className="relative group cursor-pointer rounded-full"
             >
               <Avatar name={name || 'You'} picture={picture} size={96} className="shadow-lg ring-2 ring-white/15" />
               <span className="absolute inset-0 rounded-full bg-black/55 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1 transition-opacity text-white">
                 <Camera className="w-6 h-6" />
-                <span className="text-[11px] font-bold">{isProcessing ? 'Loading…' : 'Change'}</span>
+                <span className="text-[11px] font-bold">{isProcessing ? 'Opening…' : 'Change'}</span>
               </span>
-            </label>
+            </button>
 
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <label
-                htmlFor="upbeat-profile-photo-input"
-                onClick={handlePrimaryUploadClick}
-                className="h-8 px-3.5 rounded-full bg-white/10 hover:bg-white/15 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              <button
+                type="button"
+                onClick={handleChoosePhoto}
+                disabled={isProcessing}
+                className="h-8 px-3.5 rounded-full bg-white/10 hover:bg-white/15 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Camera className="w-3.5 h-3.5" />
-                <span>{isProcessing ? 'Loading photo…' : picture ? 'Replace photo' : 'Upload photo'}</span>
-              </label>
-
-              {hasBackend() && !isMacNativeWebView && (
-                <button
-                  type="button"
-                  onClick={handlePickViaMacFinder}
-                  disabled={isProcessing}
-                  className="h-8 px-3 rounded-full bg-white/[0.07] hover:bg-white/15 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <FolderOpen className="w-3.5 h-3.5" />
-                  <span>Finder</span>
-                </button>
-              )}
+                <span>{isProcessing ? 'Opening file…' : picture ? 'Replace photo' : 'Upload photo'}</span>
+              </button>
 
               <button
                 type="button"
@@ -385,7 +372,22 @@ export default function ProfileEditModal({ isOpen, onClose, user, onSave, onNoti
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/[0.08]">
+          <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between text-xs text-white/50">
+            <span>Audio & app preferences</span>
+            <button
+              type="button"
+              onClick={() => {
+                onClose()
+                navigate('/settings')
+              }}
+              className="inline-flex items-center gap-1.5 text-white/80 hover:text-white font-semibold cursor-pointer transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Open Settings →</span>
+            </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-1">
             <button
               type="button"
               onClick={onClose}

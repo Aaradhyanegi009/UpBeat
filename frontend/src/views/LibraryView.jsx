@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, Search, Heart, Download, Sparkles, Users, Pin, Trash2, X, Music, History, CircleCheck, Radio } from 'lucide-react'
+import { Plus, Search, Heart, Download, Sparkles, Users, Pin, Trash2, X, Music, History, CircleCheck, Radio, Settings } from 'lucide-react'
 import { Chip, ChipRow, IconButton, LikedTile, Collage, EmptyState, Art, Avatar } from '../ui/primitives'
 import { SongRow, primaryArtist } from '../ui/AppContext'
+import { navigate } from '../ui/router'
 
 export const LIBRARY_FILTERS = [
   { id: 'playlists', label: 'Playlists' },
@@ -72,6 +73,11 @@ export default function LibraryView({
           <IconButton label="New playlist" variant="filled" onClick={onNewPlaylist}>
             <Plus className="w-5 h-5" />
           </IconButton>
+          {!isDesktop && (
+            <IconButton label="Settings" variant="filled" onClick={() => navigate('/settings')}>
+              <Settings className="w-5 h-5" />
+            </IconButton>
+          )}
         </div>
       </div>
 

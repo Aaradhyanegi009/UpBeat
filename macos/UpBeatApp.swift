@@ -1,6 +1,7 @@
 import Cocoa
 import WebKit
 import MediaPlayer
+import UniformTypeIdentifiers
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate {
     var window: NSWindow!
@@ -22,7 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         if let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !ver.isEmpty {
             return ver
         }
-        return "7.3.0"
+        return "7.3.1"
     }()
     let githubRepo = "AaradhyaNegi009/UpBeat"
 
@@ -212,11 +213,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         guard message.name == "upbeatNative",
               let body = message.body as? [String: Any] else { return }
 
-        if let action = body["action"] as? String, action == "retryBackend" {
-            DispatchQueue.main.async { [weak self] in
-                self?.ensureBackendAndLoad()
+        if let action = body["action"] as? String {
+            if action == "retryBackend" {
+                DispatchQueue.main.async { [weak self] in
+                    self?.ensureBackendAndLoad()
+                }
+                return
+            } else if action == "pickProfilePhoto" {
+                DispatchQueue.main.async { [weak self] in
+                    self?.presentNativeProfilePhotoPicker()
+                }
+                return
             }
-            return
         }
 
         let isPlaying = (body["isPlaying"] as? Bool) ?? false
@@ -814,25 +822,104 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         }
     }
 
+    func presentNativeProfilePhotoPicker() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = [.image]
+        } else {
+            panel.allowedFileTypes = ["png", "jpg", "jpeg", "webp", "gif", "heic", "heif", "tiff", "bmp"]
+        }
+        panel.message = "Choose a profile picture for UpBeat"
+        panel.prompt = "Choose Photo"
+        panel.level = .modalPanel
+        NSApp.activate(ignoringOtherApps: true)
+
+        panel.begin { [weak self] response in
+            guard let self = self else { return }
+            guard response == .OK, let fileURL = panel.url else {
+                DispatchQueue.main.async {
+                    self.webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('upbeat-native-photo-cancelled'));", completionHandler: nil)
+                }
+                return
+            }
+
+            var finalDataUrl: String? = nil
+            if let image = NSImage(contentsOf: fileURL) {
+                let maxDim: CGFloat = 320
+                var w = image.size.width
+                var h = image.size.height
+                if w > h {
+                    if w > maxDim {
+                        h = (h * maxDim) / w
+                        w = maxDim
+                    }
+                } else {
+                    if h > maxDim {
+                        w = (w * maxDim) / h
+                        h = maxDim
+                    }
+                }
+                let newSize = NSSize(width: max(1, w), height: max(1, h))
+                let rep = NSBitmapImageRep(
+                    bitmapDataPlanes: nil,
+                    pixelsWide: Int(newSize.width),
+                    pixelsHigh: Int(newSize.height),
+                    bitsPerSample: 8,
+                    samplesPerPixel: 4,
+                    hasAlpha: true,
+                    isPlanar: false,
+                    colorSpaceName: .deviceRGB,
+                    bytesPerRow: 0,
+                    bitsPerPixel: 0
+                )
+                if let rep = rep {
+                    NSGraphicsContext.saveGraphicsState()
+                    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+                    image.draw(in: NSRect(origin: .zero, size: newSize), from: NSRect(origin: .zero, size: image.size), operation: .copy, fraction: 1.0)
+                    NSGraphicsContext.restoreGraphicsState()
+                    if let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.88]) {
+                        finalDataUrl = "data:image/jpeg;base64,\(jpegData.base64EncodedString())"
+                    }
+                }
+            }
+
+            if finalDataUrl == nil, let raw = try? Data(contentsOf: fileURL) {
+                let mime = fileURL.pathExtension.lowercased() == "png" ? "image/png" : "image/jpeg"
+                finalDataUrl = "data:\(mime);base64,\(raw.base64EncodedString())"
+            }
+
+            if let dataUrl = finalDataUrl {
+                DispatchQueue.main.async {
+                    let payload: [String: String] = ["dataUrl": dataUrl]
+                    if let json = try? JSONSerialization.data(withJSONObject: payload),
+                       let jsonStr = String(data: json, encoding: .utf8) {
+                        let js = "window.dispatchEvent(new CustomEvent('upbeat-native-photo-selected', { detail: \(jsonStr) }));"
+                        self.webView.evaluateJavaScript(js, completionHandler: nil)
+                    }
+                }
+            }
+        }
+    }
+
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        panel.allowedFileTypes = ["png", "jpg", "jpeg", "webp", "gif", "heic", "heif", "tiff", "bmp", "svg"]
+        if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = [.image]
+        } else {
+            panel.allowedFileTypes = ["png", "jpg", "jpeg", "webp", "gif", "heic", "heif", "tiff", "bmp", "svg"]
+        }
         panel.message = "Choose a profile picture for UpBeat"
         panel.prompt = "Select Photo"
+        panel.level = .modalPanel
+        NSApp.activate(ignoringOtherApps: true)
 
-        if let win = self.window {
-            panel.beginSheetModal(for: win) { response in
-                if response == .OK {
-                    completionHandler(panel.urls)
-                } else {
-                    completionHandler(nil)
-                }
-            }
-        } else {
-            let response = panel.runModal()
+        panel.begin { response in
             if response == .OK {
                 completionHandler(panel.urls)
             } else {

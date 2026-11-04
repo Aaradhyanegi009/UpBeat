@@ -2942,6 +2942,7 @@ export default function App() {
             isPlaying={isPlaying}
             onOpenProfile={() => setIsProfileEditOpen(true)}
             onOpenFriends={openFriends}
+            onOpenSettings={() => navigate('/settings')}
             onOpenRecent={openRecent}
             onOpenBlock={openBlock}
             onPlayBlock={playBlock}

@@ -4,6 +4,23 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.3.1] - 2026-11-05
+
+### ⏱️ 30-Minute Calm Refresh Cycle + Native Swift NSOpenPanel Photo Picker + Restored Mobile Settings
+- **30-Minute Calm Refresh & Rotation Cycle (`HomeView.jsx`)**:
+  - Replaced the rapid 18s thumbnail cycle and 75s mood auto-refresh with a smooth, stable **30-minute interval** (`THIRTY_MINUTES_MS = 1,800,000 ms`).
+  - Homepage mixes and card artwork now remain steady and comfortable to use, updating quietly every 30 minutes (or on demand whenever tapping "New picks" or a mood chip).
+- **Native Swift NSOpenPanel Profile Photo Picker (`UpBeatApp.swift`, `ProfileEditModal.jsx`)**:
+  - Implemented `presentNativeProfilePhotoPicker()` using native macOS `NSOpenPanel` (`level = .modalPanel`, `NSApp.activate(ignoringOtherApps: true)`) triggered directly via `window.webkit.messageHandlers.upbeatNative.postMessage({ action: 'pickProfilePhoto' })`.
+  - Image scaling is performed natively in Swift using `NSImage` and `NSBitmapImageRep` to generate a lightweight 320×320 JPEG data URL, dispatched directly back to the modal via `upbeat-native-photo-selected`.
+  - Replaced label-hijacking `e.preventDefault()` with unified `handleChoosePhoto`, providing instant native file/gallery selection on macOS native app, mobile Android, and web browsers.
+- **Restored Mobile Settings Option (`HomeView.jsx`, `LibraryView.jsx`, `App.jsx`, `ProfileEditModal.jsx`)**:
+  - Restored the Settings gear button in the mobile top header on the **Home** view (alongside Profile Avatar and Friends counter).
+  - Added the Settings button to the mobile **Library** view header as well.
+  - Added a quick "Audio & app preferences — Open Settings →" shortcut inside `ProfileEditModal`.
+
+---
+
 ## [v7.3.0] - 2026-11-05
 
 ### ✨ Original Dark-Squircle UpBeat Logo + High-Res Dynamic Rotating Thumbnails + Native Profile Photo Picker + Collapsible Sidebar Slider

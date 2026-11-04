@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Play, Users, RefreshCw, Sparkles, Shuffle, Search, Music, Disc } from 'lucide-react'
+import { Play, Users, RefreshCw, Sparkles, Shuffle, Search, Music, Disc, Settings } from 'lucide-react'
 import { navigate } from '../ui/router'
 import { Art, Avatar, Chip, ChipRow, IconButton, LikedTile, SectionHeader, Collage, Spinner, artUrl, TrackRow } from '../ui/primitives'
 import { MediaCard } from '../ui/AppContext'
 import { getInitialDiscoveryBlocks, fetchListenTogetherFeed, advanceRotationCursor, directSearchStandalone, isValidMusicTrack } from '../standaloneApi'
+
+const THIRTY_MINUTES_MS = 30 * 60 * 1000 // 30 minutes stable refresh cycle
 
 export const MOODS = [
   { id: 'chill', label: 'Chill', query: 'Chill relaxing mellow acoustic songs playlist', color: 'from-teal-600/40 to-black' },
@@ -32,6 +34,7 @@ export default function HomeView({
   isPlaying = false,
   onOpenProfile,
   onOpenFriends,
+  onOpenSettings,
   onOpenRecent,
   onOpenBlock,
   onPlayBlock,
@@ -51,11 +54,11 @@ export default function HomeView({
   const [moodLoading, setMoodLoading] = useState(false)
   const autoRefreshTimerRef = useRef(null)
 
-  // Rotate card thumbnails dynamically every 18 seconds to fresh high-res track covers
+  // Rotate card thumbnails dynamically every 30 minutes to fresh high-res track covers
   useEffect(() => {
     const t = setInterval(() => {
       setThumbTick((prev) => prev + 1)
-    }, 18000)
+    }, THIRTY_MINUTES_MS)
     return () => clearInterval(t)
   }, [])
 
@@ -157,7 +160,7 @@ export default function HomeView({
     }
   }, [moodData])
 
-  // Constantly refresh and update the active section on a 75-second interval
+  // Automatically refresh and update the active section on a 30-minute interval
   useEffect(() => {
     if (autoRefreshTimerRef.current) clearInterval(autoRefreshTimerRef.current)
 
@@ -167,7 +170,7 @@ export default function HomeView({
       } else {
         refreshMood(activeMood, true)
       }
-    }, 75000)
+    }, THIRTY_MINUTES_MS)
 
     return () => {
       if (autoRefreshTimerRef.current) clearInterval(autoRefreshTimerRef.current)
@@ -242,14 +245,14 @@ export default function HomeView({
             <Avatar name={user?.name || 'You'} picture={user?.picture} size={40} />
           </button>
           <div className="flex items-center gap-2">
-            <IconButton label="Search" variant="filled" onClick={() => navigate('/search')}>
-              <Search className="w-5 h-5" />
-            </IconButton>
             <IconButton label={onlineCount ? `Friends, ${onlineCount} online` : 'Friends'} variant="filled" onClick={onOpenFriends} className="relative">
               <Users className="w-5 h-5" />
               {(onlineCount > 0 || jamActive || incomingCount > 0) && (
                 <span className={`absolute right-2 bottom-2 w-2.5 h-2.5 rounded-full ring-2 ring-[#1C1C1F] ${jamActive || onlineCount > 0 ? 'bg-live' : 'bg-accent'}`} />
               )}
+            </IconButton>
+            <IconButton label="Settings" variant="filled" onClick={onOpenSettings || (() => navigate('/settings'))}>
+              <Settings className="w-5 h-5" />
             </IconButton>
           </div>
         </div>

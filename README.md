@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.3.0)
+# 🎵 UpBeat (v7.3.1)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -10,7 +10,12 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 
 ##  Features & Highlights
 
-###  High-Res Dynamic Thumbnails, Collapsible Sidebar Slider & Native Profile Upload (v7.3.0)
+###  30-Minute Calm Refresh, Native macOS Photo Picker & Mobile Settings (v7.3.1)
+- **30-Minute Calm Refresh & Rotation Cycle**: Replaced fast 18s/75s shifts with a balanced, pleasant 30-minute interval so homepage mixes and artwork feel constantly refreshed and updated without rapid, distracting shifts while browsing.
+- **Native Swift NSOpenPanel Profile Photo Picker (macOS Native App & Web)**: Fixed profile picture uploading in `UpBeat.app` using native `NSOpenPanel` (`level = .modalPanel`, `NSApp.activate`) and WebKit script message handlers with automatic 320×320 JPEG downscaling, plus file picker, drag-and-drop, clipboard paste, and URL on web.
+- **Restored Mobile Settings Option**: Brought back the Settings gear icon in the mobile top header on both **Home** and **Library** views, alongside the Profile Avatar and Friends counter, plus a quick link inside the profile editor.
+
+###  High-Res Dynamic Thumbnails, Collapsible Sidebar Slider & Studio Mark (v7.3.0)
 - **Original Dark-Squircle UpBeat Music Logo**: Restored the exact original dark squircle icon with the white outlined beamed eighth note (`♫`) across the sidebar, top bar, and native app.
 - **High-Resolution & Dynamically Rotating Track Thumbnails**: Upgraded all homepage cards (`Made for you`, `Top charts`, and `FeaturedCard`) to 1280×720 HD (`maxresdefault.jpg`) and 1080×1080 album artwork with automatic multi-stage fallback, plus live rotation every 18 seconds through fresh track thumbnails from each mix and chart.
 - **Collapsible Left Sidebar Slider (macOS Native App & Desktop)**: Added an interactive vertical slider rail and quick Hide/Open controls (`⌘B` / `⌘\`) to slide the left navigation sidebar closed or resize it on demand.

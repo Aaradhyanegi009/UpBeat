@@ -58,8 +58,8 @@ except ImportError:
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="7.3.0",
-    description="UpBeat v7.3.0 - Original Dark Squircle Music Logo, Native macOS/Web Profile Photo Upload, High-Res Dynamic Rotating Thumbnails & Collapsible Left Sidebar Slider"
+    version="7.3.1",
+    description="UpBeat v7.3.1 - 30-Minute Stable Refresh Cycle, Native Swift NSOpenPanel Profile Photo Picker & Restored Mobile Settings"
 )
 
 app.add_middleware(
@@ -1038,8 +1038,11 @@ def pick_profile_photo_native_endpoint():
     import tempfile
 
     script = (
-        'POSIX path of (choose file of type {"public.image"} '
-        'with prompt "Select a profile photo for UpBeat:")'
+        'tell application "System Events"\n'
+        '  activate\n'
+        '  set f to choose file of type {"public.image"} with prompt "Select a profile photo for UpBeat:"\n'
+        '  return POSIX path of f\n'
+        'end tell'
     )
     try:
         proc = subprocess.run(
