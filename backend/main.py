@@ -861,7 +861,7 @@ def search_lyrics_endpoint(q: str = "", track_name: str = "", artist_name: str =
     """
     Server-side proxy for LRCLIB time-synced lyrics search.
     """
-    headers = {"User-Agent": "UpBeat/5.0.0 (https://upbeat.app)"}
+    headers = {"User-Agent": "UpBeat/7.0.3 (https://upbeat.app)"}
     params: Dict[str, str] = {}
     if q:
         params["q"] = q
@@ -878,6 +878,121 @@ def search_lyrics_endpoint(q: str = "", track_name: str = "", artist_name: str =
     except Exception as e:
         print(f"Lyrics proxy error: {e}")
     return []
+
+
+# ==============================================================================
+# REAL-TIME JAM & FRIENDS SOCIAL RELAY ENDPOINTS (v7.0.3)
+# ==============================================================================
+_SOCIAL_MAILBOX: Dict[str, List[Dict[str, Any]]] = {}
+_SOCIAL_PRESENCE: Dict[str, Dict[str, Any]] = {}
+_JAM_ROOMS: Dict[str, List[Dict[str, Any]]] = {}
+
+
+class SocialSendRequest(BaseModel):
+    targetFriendCode: str
+    packet: Dict[str, Any]
+
+
+class SocialPollRequest(BaseModel):
+    friendCode: str
+    summary: Optional[Dict[str, Any]] = None
+    friendCodes: List[str] = []
+    since: int = 0
+
+
+class JamRoomSendRequest(BaseModel):
+    roomCode: str
+    packet: Dict[str, Any]
+
+
+@app.post("/api/jam/social/send")
+def jam_social_send_endpoint(req: SocialSendRequest):
+    now_ms = int(time.time() * 1000)
+    target = (req.targetFriendCode or "").strip().upper()
+    if not target:
+        return {"ok": False}
+
+    pkt = dict(req.packet or {})
+    pkt["_serverTs"] = now_ms
+    sender = pkt.get("from")
+    if isinstance(sender, dict) and sender.get("friendCode"):
+        s_code = str(sender["friendCode"]).strip().upper()
+        _SOCIAL_PRESENCE[s_code] = {**sender, "lastSeen": now_ms}
+
+    box = _SOCIAL_MAILBOX.setdefault(target, [])
+    # Prune messages older than 12 hours
+    cutoff = now_ms - (12 * 3600 * 1000)
+    box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
+
+    pkt_id = pkt.get("_packetId")
+    if not pkt_id or not any(m.get("_packetId") == pkt_id for m in box):
+        box.append(pkt)
+        if len(box) > 150:
+            del box[:-150]
+
+    return {"ok": True, "serverTs": now_ms}
+
+
+@app.post("/api/jam/social/poll")
+def jam_social_poll_endpoint(req: SocialPollRequest):
+    now_ms = int(time.time() * 1000)
+    my_code = (req.friendCode or "").strip().upper()
+    if my_code and isinstance(req.summary, dict):
+        _SOCIAL_PRESENCE[my_code] = {**req.summary, "friendCode": my_code, "lastSeen": now_ms}
+
+    box = _SOCIAL_MAILBOX.get(my_code, [])
+    since_ts = int(req.since or 0)
+    packets = [m for m in box if m.get("_serverTs", 0) > since_ts]
+
+    presence_list = []
+    for fc in (req.friendCodes or []):
+        clean_fc = str(fc).strip().upper()
+        pres = _SOCIAL_PRESENCE.get(clean_fc)
+        if pres and (now_ms - pres.get("lastSeen", 0) < 45000):
+            presence_list.append({**pres, "online": True})
+
+    return {
+        "ok": True,
+        "serverTs": now_ms,
+        "packets": packets,
+        "presence": presence_list
+    }
+
+
+@app.post("/api/jam/room/send")
+def jam_room_send_endpoint(req: JamRoomSendRequest):
+    now_ms = int(time.time() * 1000)
+    room = (req.roomCode or "").strip().upper()
+    if not room:
+        return {"ok": False}
+
+    pkt = dict(req.packet or {})
+    pkt["_serverTs"] = now_ms
+
+    events = _JAM_ROOMS.setdefault(room, [])
+    cutoff = now_ms - (2 * 3600 * 1000)
+    events[:] = [e for e in events if e.get("_serverTs", 0) > cutoff]
+
+    pkt_id = pkt.get("_packetId")
+    if not pkt_id or not any(e.get("_packetId") == pkt_id for e in events):
+        events.append(pkt)
+        if len(events) > 200:
+            del events[:-200]
+
+    return {"ok": True, "serverTs": now_ms}
+
+
+@app.get("/api/jam/room/poll")
+def jam_room_poll_endpoint(roomCode: str = "", since: int = 0):
+    now_ms = int(time.time() * 1000)
+    room = (roomCode or "").strip().upper()
+    events = _JAM_ROOMS.get(room, [])
+    packets = [e for e in events if e.get("_serverTs", 0) > since]
+    return {
+        "ok": True,
+        "serverTs": now_ms,
+        "packets": packets
+    }
 
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")

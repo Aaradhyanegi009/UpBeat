@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { X, Copy, Check, Share2, QrCode, UserPlus, Trash2, LogOut, Radio, Users, Crown, Play } from 'lucide-react'
-import { jamManager, loadJamUserProfile, normalizeFriendCode, buildJamInviteUrl, buildFriendInviteUrl } from '../jamEngine'
+import { jamManager, loadJamUserProfile, normalizeFriendCode, normalizeRoomCode, buildJamInviteUrl, buildFriendInviteUrl } from '../jamEngine'
 import { Avatar, Art, Chip, IconButton, ActionMenu, Spinner } from '../ui/primitives'
 
 function lastSeen(ts) {
@@ -345,8 +345,15 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                     <input
                       id="jam-code"
                       value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                      placeholder="JAM-XXXX"
+                      onChange={(e) => {
+                        const val = e.target.value
+                        if (val.includes('?') || val.includes('=') || val.includes('http') || val.includes('upbeat://')) {
+                          setJoinCode(normalizeRoomCode(val))
+                        } else {
+                          setJoinCode(val.toUpperCase())
+                        }
+                      }}
+                      placeholder="JAM-XXXX or paste link"
                       autoComplete="off"
                       spellCheck={false}
                       className="flex-1 min-w-0 h-12 rounded-xl bg-s3 px-4 text-base font-bold tracking-[0.06em] placeholder:text-t3 placeholder:font-semibold focus:outline-none focus:ring-1 focus:ring-white/25"
@@ -425,8 +432,15 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                 <input
                   id="friend-code"
                   value={friendCode}
-                  onChange={(e) => setFriendCode(e.target.value.toUpperCase())}
-                  placeholder="Add a friend: UP-XXXXXX"
+                  onChange={(e) => {
+                    const val = e.target.value
+                    if (val.includes('?') || val.includes('=') || val.includes('http') || val.includes('upbeat://')) {
+                      setFriendCode(normalizeFriendCode(val))
+                    } else {
+                      setFriendCode(val.toUpperCase())
+                    }
+                  }}
+                  placeholder="Add a friend: UP-XXXXXX or paste link"
                   autoComplete="off"
                   spellCheck={false}
                   className="flex-1 min-w-0 h-12 rounded-xl bg-s2 px-4 text-[15px] font-semibold placeholder:text-t3 focus:outline-none focus:ring-1 focus:ring-white/25"
@@ -460,10 +474,27 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
 
               {outgoing.length > 0 && (
                 <section>
-                  <h3 className="text-sm font-bold text-t2 mb-1.5">Waiting for reply</h3>
+                  <h3 className="text-sm font-bold text-t2 mb-1.5">Sent requests ({outgoing.length})</h3>
                   {outgoing.map((r) => (
-                    <div key={r.friendCode} className="flex items-center gap-3 h-12">
-                      <span className="flex-1 text-[15px] font-semibold tabular-nums">{r.name && r.name !== r.friendCode ? `${r.name} · ` : ''}{r.friendCode}</span>
+                    <div key={r.friendCode} className="flex items-center gap-3 min-h-[56px] py-1.5">
+                      <Avatar name={r.name || r.friendCode} size={38} live={r.online} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[15px] font-bold truncate tabular-nums">
+                          {r.name && r.name !== r.friendCode ? `${r.name} · ${r.friendCode}` : r.friendCode}
+                        </div>
+                        <div className="text-xs text-t2">
+                          {r.online ? 'Online · Request delivered, awaiting accept' : 'Request sent · Waiting for friend to accept'}
+                        </div>
+                      </div>
+                      <Chip
+                        variant="ghost"
+                        onClick={() => {
+                          jamManager.sendFriendRequest(r.friendCode)
+                          onNotify?.(`Resent request to ${r.friendCode}`, 'info')
+                        }}
+                      >
+                        Resend
+                      </Chip>
                       <Chip variant="ghost" onClick={() => jamManager.cancelOutgoingRequest(r.friendCode)}>
                         Cancel
                       </Chip>
@@ -473,14 +504,18 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
               )}
 
               <section>
-                <h3 className="text-sm font-bold text-t2 mb-1.5">Friends</h3>
+                <h3 className="text-sm font-bold text-t2 mb-1.5">Friends ({sortedFriends.length})</h3>
                 {sortedFriends.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 rounded-2xl bg-s2 flex items-center justify-center text-t2 mx-auto mb-3">
-                      <Users className="w-6 h-6" />
+                  outgoing.length === 0 && incoming.length === 0 ? (
+                    <div className="text-center py-8">
+                      <div className="w-12 h-12 rounded-2xl bg-s2 flex items-center justify-center text-t2 mx-auto mb-3">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm text-t2 max-w-xs mx-auto">Share your code or QR. When friends add you, you’ll see what they’re playing here.</p>
                     </div>
-                    <p className="text-sm text-t2 max-w-xs mx-auto">Share your code or QR. When friends add you, you’ll see what they’re playing here.</p>
-                  </div>
+                  ) : (
+                    <p className="text-xs text-t2 py-2">Friends will appear here as soon as your request is accepted.</p>
+                  )
                 ) : (
                   sortedFriends.map((f) => (
                     <div key={f.friendCode} className="flex items-center gap-3 min-h-[60px] py-1.5">

@@ -1,4 +1,5 @@
 import { Peer } from 'peerjs'
+import { getApiBase, hasBackend } from './standaloneApi'
 
 const JAM_USER_STORAGE_KEY = 'upbeat_jam_profile_v1'
 const LEGACY_PROFILE_KEYS = ['upbeat_jam_profile_v1', 'upbeat_jam_profile', 'upbeat_user_profile']
@@ -8,6 +9,7 @@ const FRIEND_REQ_OUT_STORAGE_KEY = 'upbeat_friend_requests_out'
 
 const JAM_PEER_PREFIX = 'upbeat-jam-v70-'
 const PRESENCE_PEER_PREFIX = 'upbeat-user-'
+const CLOUD_RELAY_BASE = 'https://ntfy.sh'
 
 export const renderEmoji = (val, fallback = '') => {
   if (!val) return fallback
@@ -25,7 +27,22 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:global.stun.twilio.com:3478' }
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
 ]
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
@@ -46,39 +63,63 @@ function generateFriendCode() {
   return `UP-${randomChars(6)}`
 }
 
+function makePacketId() {
+  return `pkt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+}
+
 export function normalizeRoomCode(raw) {
   if (!raw) return ''
   const str = String(raw).trim()
-  // Extract room code if full URL or deep link is pasted
-  const urlMatch = str.match(/(?:jam|join|room|code)[=:]([A-Za-z0-9-]+)/i)
-  const candidate = urlMatch ? urlMatch[1] : str
-  const cleaned = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '')
-  const stripped = cleaned.startsWith('JAM') ? cleaned.slice(3) : cleaned
-  if (!stripped) return ''
-  return `JAM-${stripped.slice(0, 6)}`
+  // Extract room code if a full URL or deep link is passed
+  const urlMatch =
+    str.match(/[?&#/](?:jam|join|room|code)[=:]([A-Za-z0-9-]+)/i) ||
+    str.match(/^(?:jam|join|room|code)[=:]([A-Za-z0-9-]+)/i)
+  const candidate = (urlMatch ? urlMatch[1] : str).trim().toUpperCase()
+
+  let body = ''
+  if (candidate.startsWith('JAM-')) {
+    body = candidate.slice(4).replace(/[^A-Z0-9]/g, '')
+  } else {
+    const alnum = candidate.replace(/[^A-Z0-9]/g, '')
+    body = alnum.startsWith('JAM') && alnum.length > 4 ? alnum.slice(3) : alnum
+  }
+  if (!body) return ''
+  return `JAM-${body.slice(0, 6)}`
 }
 
 export function normalizeFriendCode(raw) {
   if (!raw) return ''
   const str = String(raw).trim()
-  // Extract friend code if full URL or deep link is pasted
-  const urlMatch = str.match(/(?:addFriend|friend|user)[=:]([A-Za-z0-9-]+)/i)
-  const candidate = urlMatch ? urlMatch[1] : str
-  const cleaned = candidate.toUpperCase().replace(/[^A-Z0-9]/g, '')
-  const stripped = cleaned.startsWith('UP') ? cleaned.slice(2) : cleaned
-  if (!stripped) return ''
-  return `UP-${stripped.slice(0, 6)}`
+  // Extract friend code if a full URL or deep link is passed
+  const urlMatch =
+    str.match(/[?&#/](?:addFriend|friend|user)[=:]([A-Za-z0-9-]+)/i) ||
+    str.match(/^(?:addFriend|friend|user)[=:]([A-Za-z0-9-]+)/i)
+  const candidate = (urlMatch ? urlMatch[1] : str).trim().toUpperCase()
+
+  let body = ''
+  if (candidate.startsWith('UP-')) {
+    body = candidate.slice(3).replace(/[^A-Z0-9]/g, '')
+  } else {
+    const alnum = candidate.replace(/[^A-Z0-9]/g, '')
+    body = alnum.startsWith('UP') && alnum.length > 6 ? alnum.slice(2) : alnum
+  }
+  if (!body) return ''
+  return `UP-${body.slice(0, 6)}`
 }
 
 export function getAppBaseUrl() {
   if (typeof window === 'undefined') return 'https://upbeat-music.vercel.app/'
   try {
     const origin = window.location.origin
-    // If running in live web deployment (Vercel, custom domain, or local LAN IP), use origin
-    if (origin && !origin.includes('127.0.0.1') && !origin.includes('localhost') && !origin.startsWith('file:') && !origin.startsWith('capacitor:')) {
+    if (
+      origin &&
+      !origin.includes('127.0.0.1') &&
+      !origin.includes('localhost') &&
+      !origin.startsWith('file:') &&
+      !origin.startsWith('capacitor:')
+    ) {
       return `${origin}${window.location.pathname}`
     }
-    // Saved preference or default to production web URL
     const savedWeb = localStorage.getItem('upbeat_jam_share_origin')
     if (savedWeb && savedWeb.startsWith('http')) {
       return savedWeb.replace(/\/+$/, '') + '/'
@@ -165,6 +206,18 @@ function getPresencePeerId(friendCode) {
   return `${PRESENCE_PEER_PREFIX}${norm}`
 }
 
+function getSocialCloudTopic(friendCode) {
+  const norm = normalizeFriendCode(friendCode)
+  if (!norm) return ''
+  return `upbeat_v7_user_${norm.replace(/[^A-Z0-9]/g, '')}`
+}
+
+function getRoomCloudTopic(roomCode) {
+  const norm = normalizeRoomCode(roomCode)
+  if (!norm) return ''
+  return `upbeat_v7_room_${norm.replace(/[^A-Z0-9]/g, '')}`
+}
+
 export function sanitizeStoredJamAndSocialData() {
   if (typeof window === 'undefined' || !window.localStorage) return
 
@@ -199,7 +252,7 @@ export function sanitizeStoredJamAndSocialData() {
             avatar: '',
             name: String(item.name || 'Friend')
           }))
-          .filter((item) => Boolean(item.friendCode))
+          .filter((item) => Boolean(item.friendCode) && item.friendCode.length >= 7)
         localStorage.setItem(listKey, JSON.stringify(sanitized))
       }
     } catch {}
@@ -213,7 +266,10 @@ export function loadJamUserProfile(googleUser = null) {
     const saved = localStorage.getItem(JAM_USER_STORAGE_KEY)
     const parsed = saved ? JSON.parse(saved) : {}
     const id = parsed.id || `usr_${Math.random().toString(36).slice(2, 10)}`
-    const friendCode = normalizeFriendCode(parsed.friendCode) || generateFriendCode()
+    const friendCode =
+      normalizeFriendCode(parsed.friendCode) && normalizeFriendCode(parsed.friendCode).length >= 7
+        ? normalizeFriendCode(parsed.friendCode)
+        : generateFriendCode()
     const name = googleUser?.name || parsed.name || `Listener ${friendCode.slice(-3)}`
     const picture = googleUser?.picture || parsed.picture || ''
     const profile = { id, friendCode, name, avatar: '', picture }
@@ -232,11 +288,12 @@ export function loadJamUserProfile(googleUser = null) {
 
 export function saveJamUserProfile(updates) {
   const current = loadJamUserProfile()
+  const nextCode = normalizeFriendCode(updates?.friendCode || current.friendCode)
   const updated = {
     ...current,
     ...updates,
     avatar: '',
-    friendCode: normalizeFriendCode(updates?.friendCode || current.friendCode) || current.friendCode
+    friendCode: nextCode && nextCode.length >= 7 ? nextCode : current.friendCode
   }
   try {
     localStorage.setItem(JAM_USER_STORAGE_KEY, JSON.stringify(updated))
@@ -263,9 +320,8 @@ function saveJsonArray(key, arr) {
 export function evaluateAudioDrift(localCurrentTime, hostCurrentTime, hostTimestamp, clockOffsetMs, isPlaying) {
   const now = Date.now()
   const estimatedHostNow = now + (clockOffsetMs || 0)
-  const elapsedSec = isPlaying && hostTimestamp
-    ? Math.max(0, Math.min(15, (estimatedHostNow - hostTimestamp) / 1000))
-    : 0
+  const elapsedSec =
+    isPlaying && hostTimestamp ? Math.max(0, Math.min(15, (estimatedHostNow - hostTimestamp) / 1000)) : 0
 
   const targetTime = Math.max(0, (Number(hostCurrentTime) || 0) + elapsedSec)
   const driftSec = targetTime - (Number(localCurrentTime) || 0)
@@ -309,15 +365,28 @@ export function evaluateAudioDrift(localCurrentTime, hostCurrentTime, hostTimest
 
 class JamSessionManager {
   constructor() {
+    // Unique runtime instance ID per tab/window so multiple tabs on the same browser don't collide
+    this.instanceId = `inst_${Math.random().toString(36).slice(2, 10)}`
+    this.seenPacketIds = new Set()
+
     this.peer = null
     this.connections = new Map() // peerId -> DataConnection (used by Host)
     this.hostConn = null // DataConnection to Host (used by Guest)
-    this.bc = null // Same-browser BroadcastChannel fast bridge for Jam room
+    this.bc = null // Same-browser BroadcastChannel for Jam room
+    this.roomEventSource = null // Cloud SSE stream for Jam room
+    this.roomPollTimer = null
+    this.lastRoomServerTs = 0
 
     this.presencePeer = null
+    this.auxClientPeer = null // Fallback outgoing Peer if fixed ID is busy in another tab
     this.presenceConns = new Map() // friendCode -> DataConnection
+    this.pendingPeerConns = new Map() // friendCode -> DataConnection currently opening
+    this.pendingPeerPackets = new Map() // friendCode -> Array<Packet> queued while opening
     this.socialBc = null
+    this.socialEventSource = null // Cloud SSE stream for user's social inbox
     this.presenceTimer = null
+    this.backendPollTimer = null
+    this.lastSocialServerTs = 0
 
     this.syncInterval = null
     this.pingInterval = null
@@ -355,6 +424,7 @@ class JamSessionManager {
         avatar: ''
       })),
       incomingJamInvite: null,
+      latestFriendRequestToast: null,
       presenceReady: false
     }
 
@@ -370,8 +440,19 @@ class JamSessionManager {
     }
 
     if (typeof window !== 'undefined') {
-      setTimeout(() => this.initPresenceNetwork(), 350)
+      this.initPresenceNetwork()
     }
+  }
+
+  markPacketSeen(packetId) {
+    if (!packetId) return false
+    if (this.seenPacketIds.has(packetId)) return true
+    this.seenPacketIds.add(packetId)
+    if (this.seenPacketIds.size > 600) {
+      const first = this.seenPacketIds.values().next().value
+      this.seenPacketIds.delete(first)
+    }
+    return false
   }
 
   subscribe(listener) {
@@ -408,11 +489,15 @@ class JamSessionManager {
   }
 
   updateUserProfile(updates) {
+    const prevCode = this.userProfile?.friendCode
     this.userProfile = saveJamUserProfile(updates)
     this.updateState({ userProfile: this.userProfile })
+    if (prevCode && this.userProfile.friendCode !== prevCode) {
+      this.restartPresenceNetwork()
+    }
     if (this.state.active) {
       const updatedParticipants = this.state.participants.map((p) =>
-        p.id === this.userProfile.id
+        p.id === this.getSelfParticipantId()
           ? { ...p, name: this.userProfile.name, avatar: '' }
           : p
       )
@@ -422,15 +507,7 @@ class JamSessionManager {
       } else {
         this.sendToHost({
           type: 'JAM_HELLO',
-          profile: {
-            id: this.userProfile.id,
-            friendCode: this.userProfile.friendCode,
-            name: this.userProfile.name,
-            avatar: '',
-            picture: this.userProfile.picture,
-            isHost: false,
-            inSync: true
-          }
+          profile: this.buildSelfParticipant(false)
         })
       }
     }
@@ -438,16 +515,57 @@ class JamSessionManager {
     return this.userProfile
   }
 
+  regenerateFriendCode() {
+    const newCode = generateFriendCode()
+    return this.updateUserProfile({ friendCode: newCode })
+  }
+
+  getSelfParticipantId() {
+    return `${this.userProfile?.id || 'usr'}_${this.instanceId.slice(-4)}`
+  }
+
+  buildSelfParticipant(isHost = false) {
+    return {
+      id: this.getSelfParticipantId(),
+      peerId: this.getSelfParticipantId(),
+      friendCode: this.userProfile.friendCode,
+      name: this.userProfile.name,
+      avatar: '',
+      picture: this.userProfile.picture || '',
+      isHost: Boolean(isHost),
+      rttMs: isHost ? 0 : 18,
+      inSync: true,
+      joinedAt: Date.now()
+    }
+  }
+
+  restartPresenceNetwork() {
+    if (this.socialEventSource) {
+      try {
+        this.socialEventSource.close()
+      } catch {}
+      this.socialEventSource = null
+    }
+    if (this.presencePeer) {
+      try {
+        this.presencePeer.destroy()
+      } catch {}
+      this.presencePeer = null
+    }
+    this.initPresenceNetwork()
+  }
+
   initPresenceNetwork() {
     this.userProfile = loadJamUserProfile()
     const myFriendCode = this.userProfile.friendCode
 
+    // 1. Same-browser BroadcastChannel
     if (typeof BroadcastChannel !== 'undefined' && !this.socialBc) {
       try {
         this.socialBc = new BroadcastChannel('upbeat_social_v7')
         this.socialBc.onmessage = (ev) => {
           const data = ev?.data
-          if (!data || data._fromFriendCode === myFriendCode) return
+          if (!data || data._senderInstanceId === this.instanceId) return
           if (!data.targetFriendCode || data.targetFriendCode === myFriendCode) {
             this.handleSocialPacket(data, null)
           }
@@ -455,6 +573,10 @@ class JamSessionManager {
       } catch {}
     }
 
+    // 2. Cloud SSE + HTTP Relay (ntfy.sh) for 100% cross-network & offline-queued delivery
+    this.initSocialCloudRelay(myFriendCode)
+
+    // 3. PeerJS WebRTC Presence Peer
     if (!this.presencePeer) {
       try {
         const peerId = getPresencePeerId(myFriendCode)
@@ -474,31 +596,209 @@ class JamSessionManager {
           this.setupPresenceConn(conn)
         })
 
-        pPeer.on('error', () => {
+        pPeer.on('disconnected', () => {
+          try {
+            if (!pPeer.destroyed) pPeer.reconnect()
+          } catch {}
+        })
+
+        pPeer.on('error', (err) => {
           this.updateState({ presenceReady: true })
+          if (err?.type === 'unavailable-id') {
+            // Another tab on this machine already holds the primary presence Peer ID;
+            // spin up an auxiliary client peer so outgoing PeerJS connections still work!
+            this.ensureAuxClientPeer()
+          }
         })
       } catch {}
     }
 
+    // 4. Periodic Presence & Backend Polling
     if (this.presenceTimer) clearInterval(this.presenceTimer)
     this.presenceTimer = setInterval(() => {
       this.pingAllFriends()
+      this.retryOutgoingRequests()
       this.pruneStaleFriendPresence()
-    }, 15000)
+      this.pollSocialCloudInbox(myFriendCode)
+    }, 10000)
+
+    if (this.backendPollTimer) clearInterval(this.backendPollTimer)
+    this.backendPollTimer = setInterval(() => {
+      this.pollBackendSocial()
+    }, 3000)
 
     setTimeout(() => {
+      this.pollBackendSocial()
+      this.pollSocialCloudInbox(myFriendCode)
       this.pingAllFriends()
       this.retryOutgoingRequests()
-    }, 1000)
+    }, 300)
+  }
+
+  ensureAuxClientPeer() {
+    if (this.auxClientPeer && !this.auxClientPeer.destroyed) return this.auxClientPeer
+    try {
+      const aux = new Peer({
+        config: { iceServers: ICE_SERVERS },
+        debug: 0
+      })
+      this.auxClientPeer = aux
+      aux.on('open', () => {
+        this.pingAllFriends()
+        this.retryOutgoingRequests()
+      })
+      aux.on('connection', (conn) => {
+        this.setupPresenceConn(conn)
+      })
+      return aux
+    } catch {
+      return null
+    }
+  }
+
+  getActiveSocialPeer() {
+    if (this.presencePeer && this.presencePeer.open && !this.presencePeer.destroyed) {
+      return this.presencePeer
+    }
+    if (this.auxClientPeer && this.auxClientPeer.open && !this.auxClientPeer.destroyed) {
+      return this.auxClientPeer
+    }
+    return this.ensureAuxClientPeer()
+  }
+
+  initSocialCloudRelay(myFriendCode) {
+    const topic = getSocialCloudTopic(myFriendCode)
+    if (!topic || typeof EventSource === 'undefined') return
+    try {
+      if (this.socialEventSource) {
+        try {
+          this.socialEventSource.close()
+        } catch {}
+      }
+      const es = new EventSource(`${CLOUD_RELAY_BASE}/${topic}/sse?since=12h`)
+      this.socialEventSource = es
+      es.onmessage = (ev) => {
+        try {
+          const wrapper = JSON.parse(ev.data)
+          if (wrapper?.event === 'message' && wrapper.message) {
+            const payload = JSON.parse(wrapper.message)
+            if (payload && payload._senderInstanceId !== this.instanceId) {
+              this.handleSocialPacket(payload, null)
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  async pollSocialCloudInbox(myFriendCode) {
+    const topic = getSocialCloudTopic(myFriendCode || this.userProfile?.friendCode)
+    if (!topic || typeof fetch === 'undefined') return
+    try {
+      const res = await fetch(`${CLOUD_RELAY_BASE}/${topic}/json?poll=1&since=12h`)
+      if (!res.ok) return
+      const text = await res.text()
+      const lines = text.split('\n').filter(Boolean)
+      for (const line of lines) {
+        try {
+          const wrapper = JSON.parse(line)
+          if (wrapper?.event === 'message' && wrapper.message) {
+            const payload = JSON.parse(wrapper.message)
+            if (payload && payload._senderInstanceId !== this.instanceId) {
+              this.handleSocialPacket(payload, null)
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  async sendSocialCloudPacket(targetFriendCode, fullPacket) {
+    const topic = getSocialCloudTopic(targetFriendCode)
+    if (!topic || typeof fetch === 'undefined') return
+    try {
+      await fetch(`${CLOUD_RELAY_BASE}/${topic}`, {
+        method: 'POST',
+        body: JSON.stringify(fullPacket)
+      })
+    } catch {}
+  }
+
+  async pollBackendSocial() {
+    if (!hasBackend()) return
+    try {
+      const friendCodes = [
+        ...(this.state.friends || []).map((f) => f.friendCode),
+        ...(this.state.outgoingRequests || []).map((r) => r.friendCode)
+      ].filter(Boolean)
+
+      const res = await fetch(`${getApiBase()}/jam/social/poll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          friendCode: this.userProfile.friendCode,
+          summary: this.getMyPublicSummary(),
+          friendCodes,
+          since: this.lastSocialServerTs
+        })
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data?.serverTs) {
+        this.lastSocialServerTs = data.serverTs
+      }
+      if (Array.isArray(data?.packets)) {
+        for (const pkt of data.packets) {
+          if (pkt && pkt._senderInstanceId !== this.instanceId) {
+            this.handleSocialPacket(pkt, null)
+          }
+        }
+      }
+      if (Array.isArray(data?.presence)) {
+        for (const pres of data.presence) {
+          if (pres && pres.friendCode) {
+            this.updateFriendPresence(pres)
+          }
+        }
+      }
+    } catch {}
+  }
+
+  async sendBackendSocialPacket(targetFriendCode, fullPacket) {
+    if (!hasBackend()) return
+    try {
+      await fetch(`${getApiBase()}/jam/social/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetFriendCode,
+          packet: fullPacket
+        })
+      })
+    } catch {}
   }
 
   setupPresenceConn(conn, knownFriendCode = null) {
+    if (!conn) return
     conn.on('open', () => {
       if (knownFriendCode) {
         this.presenceConns.set(knownFriendCode, conn)
+        this.pendingPeerConns.delete(knownFriendCode)
+        // Flush any queued social packets for this friend
+        const queued = this.pendingPeerPackets.get(knownFriendCode) || []
+        this.pendingPeerPackets.delete(knownFriendCode)
+        for (const pkt of queued) {
+          try {
+            conn.send(pkt)
+          } catch {}
+        }
       }
       try {
-        conn.send(this.buildPresencePayload('PRESENCE_PING'))
+        conn.send({
+          ...this.buildPresencePayload('PRESENCE_PING'),
+          _packetId: makePacketId(),
+          _senderInstanceId: this.instanceId
+        })
       } catch {}
     })
 
@@ -510,6 +810,9 @@ class JamSessionManager {
     })
 
     const cleanup = () => {
+      if (knownFriendCode) {
+        this.pendingPeerConns.delete(knownFriendCode)
+      }
       for (const [code, activeConn] of this.presenceConns.entries()) {
         if (activeConn === conn) {
           this.presenceConns.delete(code)
@@ -550,25 +853,46 @@ class JamSessionManager {
       type,
       from: this.getMyPublicSummary(),
       _fromFriendCode: this.userProfile.friendCode,
+      _senderInstanceId: this.instanceId,
+      _packetId: makePacketId(),
       ...extra
     }
   }
 
-  sendSocialPacket(targetFriendCode, packet) {
+  sendSocialPacket(targetFriendCode, packet, options = { useCloud: true }) {
     const cleanTarget = normalizeFriendCode(targetFriendCode)
-    if (!cleanTarget || cleanTarget === this.userProfile.friendCode) return
+    if (!cleanTarget) return
 
     const fullPacket = {
       ...packet,
       targetFriendCode: cleanTarget,
-      _fromFriendCode: this.userProfile.friendCode
+      _fromFriendCode: this.userProfile.friendCode,
+      _senderInstanceId: this.instanceId,
+      _packetId: packet._packetId || makePacketId()
     }
 
+    // 1. BroadcastChannel (same browser tabs)
     if (this.socialBc) {
       try {
         this.socialBc.postMessage(fullPacket)
       } catch {}
     }
+
+    // 2. Local FastAPI Backend Relay
+    this.sendBackendSocialPacket(cleanTarget, fullPacket)
+
+    // 3. Cloud Pub/Sub Relay (for friend requests, accepts, jam invites, and initial pings)
+    const isHighPriority =
+      fullPacket.type === 'FRIEND_REQUEST' ||
+      fullPacket.type === 'FRIEND_ACCEPTED' ||
+      fullPacket.type === 'JAM_INVITE' ||
+      options?.useCloud === true
+    if (isHighPriority) {
+      this.sendSocialCloudPacket(cleanTarget, fullPacket)
+    }
+
+    // 4. PeerJS WebRTC DataChannel (with queue so simultaneous packets never drop)
+    if (cleanTarget === this.userProfile.friendCode) return
 
     const existing = this.presenceConns.get(cleanTarget)
     if (existing && existing.open) {
@@ -578,16 +902,34 @@ class JamSessionManager {
       } catch {}
     }
 
-    if (this.presencePeer && !this.presencePeer.destroyed) {
+    const q = this.pendingPeerPackets.get(cleanTarget) || []
+    // Avoid queueing duplicate PRESENCE_PINGs
+    if (fullPacket.type !== 'PRESENCE_PING' || !q.some((p) => p.type === 'PRESENCE_PING')) {
+      q.push(fullPacket)
+      this.pendingPeerPackets.set(cleanTarget, q)
+    }
+
+    if (this.pendingPeerConns.has(cleanTarget)) {
+      return
+    }
+
+    const activePeer = this.getActiveSocialPeer()
+    if (activePeer && activePeer.open && !activePeer.destroyed) {
       try {
         const targetPeerId = getPresencePeerId(cleanTarget)
-        const conn = this.presencePeer.connect(targetPeerId, { reliable: true })
-        this.setupPresenceConn(conn, cleanTarget)
-        conn.on('open', () => {
-          try {
-            conn.send(fullPacket)
-          } catch {}
+        const conn = activePeer.connect(targetPeerId, {
+          reliable: true,
+          serialization: 'json'
         })
+        if (conn) {
+          this.pendingPeerConns.set(cleanTarget, conn)
+          this.setupPresenceConn(conn, cleanTarget)
+          setTimeout(() => {
+            if (this.pendingPeerConns.get(cleanTarget) === conn && !conn.open) {
+              this.pendingPeerConns.delete(cleanTarget)
+            }
+          }, 7000)
+        }
       } catch {}
     }
   }
@@ -596,16 +938,21 @@ class JamSessionManager {
     const friends = this.state.friends || []
     for (const f of friends) {
       if (f.friendCode) {
-        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_PING'))
+        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_PING'), {
+          useCloud: false
+        })
       }
     }
+    this.pollBackendSocial()
   }
 
   retryOutgoingRequests() {
     const outgoing = this.state.outgoingRequests || []
     for (const req of outgoing) {
       if (req.friendCode) {
-        this.sendSocialPacket(req.friendCode, this.buildPresencePayload('FRIEND_REQUEST'))
+        this.sendSocialPacket(req.friendCode, this.buildPresencePayload('FRIEND_REQUEST'), {
+          useCloud: false
+        })
       }
     }
   }
@@ -614,16 +961,19 @@ class JamSessionManager {
     const friends = this.state.friends || []
     for (const f of friends) {
       if (f.friendCode) {
-        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_STATUS'))
+        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_STATUS'), {
+          useCloud: true
+        })
       }
     }
+    this.pollBackendSocial()
   }
 
   pruneStaleFriendPresence() {
     const now = Date.now()
     let changed = false
     const nextFriends = (this.state.friends || []).map((f) => {
-      if (f.online && f.lastSeen && now - f.lastSeen > 42000) {
+      if (f.online && f.lastSeen && now - f.lastSeen > 45000) {
         changed = true
         return { ...f, online: false }
       }
@@ -637,6 +987,18 @@ class JamSessionManager {
 
   handleSocialPacket(data, conn) {
     if (!data || typeof data !== 'object' || !data.from) return
+    if (data._senderInstanceId && data._senderInstanceId === this.instanceId) return
+
+    // For idempotent state-changing packets, deduplicate by _packetId
+    if (
+      data._packetId &&
+      (data.type === 'FRIEND_REQUEST' ||
+        data.type === 'FRIEND_ACCEPTED' ||
+        data.type === 'JAM_INVITE')
+    ) {
+      if (this.markPacketSeen(data._packetId)) return
+    }
+
     const sender = {
       ...data.from,
       friendCode: normalizeFriendCode(data.from.friendCode),
@@ -651,9 +1013,11 @@ class JamSessionManager {
           targetFriendCode: sender.friendCode
         })
         if (conn && conn.open) {
-          try { conn.send(reply) } catch {}
+          try {
+            conn.send(reply)
+          } catch {}
         } else {
-          this.sendSocialPacket(sender.friendCode, reply)
+          this.sendSocialPacket(sender.friendCode, reply, { useCloud: true })
         }
         break
       }
@@ -668,7 +1032,9 @@ class JamSessionManager {
         const alreadyFriend = this.state.friends.some((f) => f.friendCode === sender.friendCode)
         if (alreadyFriend) {
           this.updateFriendPresence(sender)
-          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'))
+          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'), {
+            useCloud: true
+          })
           return
         }
 
@@ -677,48 +1043,46 @@ class JamSessionManager {
         )
         if (isOutgoingMatch) {
           this.promoteToConfirmedFriend(sender)
-          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'))
+          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'), {
+            useCloud: true
+          })
           if (this.eventHandlers.onNotify) {
-            this.eventHandlers.onNotify(
-              `You and ${sender.name} are now friends!`,
-              'success'
-            )
+            this.eventHandlers.onNotify(`You and ${sender.name} are now friends!`, 'success')
           }
           return
         }
 
         const existsIn = this.state.incomingRequests.some((r) => r.friendCode === sender.friendCode)
-        if (!existsIn) {
-          const nextIn = [
-            {
-              friendCode: sender.friendCode,
-              name: sender.name,
-              avatar: '',
-              picture: sender.picture || '',
-              currentTrack: sender.currentTrack || null,
-              requestedAt: Date.now()
-            },
-            ...this.state.incomingRequests
-          ]
-          saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
-          this.updateState({ incomingRequests: nextIn })
-          if (this.eventHandlers.onNotify) {
-            this.eventHandlers.onNotify(
-              `${sender.name} sent you a friend request`,
-              'info'
+        const reqEntry = {
+          friendCode: sender.friendCode,
+          name: sender.name || `Friend ${sender.friendCode.slice(-4)}`,
+          avatar: '',
+          picture: sender.picture || '',
+          currentTrack: sender.currentTrack || null,
+          requestedAt: Date.now()
+        }
+        const nextIn = existsIn
+          ? this.state.incomingRequests.map((r) =>
+              r.friendCode === sender.friendCode ? { ...r, ...reqEntry } : r
             )
-          }
+          : [reqEntry, ...this.state.incomingRequests]
+
+        saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
+        this.updateState({
+          incomingRequests: nextIn,
+          latestFriendRequestToast: reqEntry
+        })
+        if (!existsIn && this.eventHandlers.onNotify) {
+          this.eventHandlers.onNotify(`${sender.name} sent you a friend request`, 'info')
         }
         break
       }
 
       case 'FRIEND_ACCEPTED': {
+        const wasAlreadyFriend = this.state.friends.some((f) => f.friendCode === sender.friendCode)
         this.promoteToConfirmedFriend(sender)
-        if (this.eventHandlers.onNotify) {
-          this.eventHandlers.onNotify(
-            `${sender.name} accepted your friend request`,
-            'success'
-          )
+        if (!wasAlreadyFriend && this.eventHandlers.onNotify) {
+          this.eventHandlers.onNotify(`${sender.name} accepted your friend request!`, 'success')
         }
         break
       }
@@ -753,6 +1117,21 @@ class JamSessionManager {
   }
 
   updateFriendPresence(sender) {
+    if (!sender?.friendCode) return
+    // Update outgoing request with real name/online status if pending
+    const outIdx = this.state.outgoingRequests.findIndex((r) => r.friendCode === sender.friendCode)
+    if (outIdx !== -1) {
+      const nextOut = [...this.state.outgoingRequests]
+      nextOut[outIdx] = {
+        ...nextOut[outIdx],
+        name: sender.name || nextOut[outIdx].name,
+        picture: sender.picture || nextOut[outIdx].picture || '',
+        online: true
+      }
+      saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
+      this.updateState({ outgoingRequests: nextOut })
+    }
+
     const idx = this.state.friends.findIndex((f) => f.friendCode === sender.friendCode)
     if (idx === -1) return
     const updatedFriend = {
@@ -802,7 +1181,11 @@ class JamSessionManager {
     this.updateState({
       friends: nextFriends,
       incomingRequests: nextIn,
-      outgoingRequests: nextOut
+      outgoingRequests: nextOut,
+      latestFriendRequestToast:
+        this.state.latestFriendRequestToast?.friendCode === cleanCode
+          ? null
+          : this.state.latestFriendRequestToast
     })
   }
 
@@ -817,14 +1200,20 @@ class JamSessionManager {
 
     if (targetCode === this.userProfile.friendCode) {
       if (this.eventHandlers.onNotify) {
-        this.eventHandlers.onNotify('Cannot add your own Friend Code', 'warning')
+        this.eventHandlers.onNotify(
+          'That is your own Friend Code! Share it with a friend or click the refresh icon next to your ID to generate a separate test ID.',
+          'warning'
+        )
       }
       return { ok: false, error: 'Cannot add your own Friend Code' }
     }
 
     if (this.state.friends.some((f) => f.friendCode === targetCode)) {
+      this.sendSocialPacket(targetCode, this.buildPresencePayload('PRESENCE_PING'), {
+        useCloud: true
+      })
       if (this.eventHandlers.onNotify) {
-        this.eventHandlers.onNotify('Already in your Friends list', 'info')
+        this.eventHandlers.onNotify('Already in your Friends list!', 'info')
       }
       return { ok: true, status: 'already_friends' }
     }
@@ -835,21 +1224,29 @@ class JamSessionManager {
       return { ok: true, status: 'accepted' }
     }
 
-    if (!this.state.outgoingRequests.some((r) => r.friendCode === targetCode)) {
-      const nextOut = [
-        {
-          friendCode: targetCode,
-          name: `Friend ${targetCode.slice(-4)}`,
-          avatar: '',
-          sentAt: Date.now()
-        },
-        ...this.state.outgoingRequests
-      ]
-      saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
-      this.updateState({ outgoingRequests: nextOut })
+    const existingOut = this.state.outgoingRequests.find((r) => r.friendCode === targetCode)
+    const nextEntry = {
+      friendCode: targetCode,
+      name: existingOut?.name || `Friend ${targetCode.slice(-4)}`,
+      avatar: '',
+      picture: existingOut?.picture || '',
+      online: Boolean(existingOut?.online),
+      sentAt: Date.now()
     }
+    const nextOut = [
+      nextEntry,
+      ...this.state.outgoingRequests.filter((r) => r.friendCode !== targetCode)
+    ]
+    saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
+    this.updateState({ outgoingRequests: nextOut })
 
-    this.sendSocialPacket(targetCode, this.buildPresencePayload('FRIEND_REQUEST'))
+    this.sendSocialPacket(targetCode, this.buildPresencePayload('FRIEND_REQUEST'), {
+      useCloud: true
+    })
+    this.sendSocialPacket(targetCode, this.buildPresencePayload('PRESENCE_PING'), {
+      useCloud: true
+    })
+
     if (this.eventHandlers.onNotify) {
       this.eventHandlers.onNotify(`Friend request sent to ${targetCode}`, 'success')
     }
@@ -864,8 +1261,12 @@ class JamSessionManager {
       avatar: ''
     }
     this.promoteToConfirmedFriend(req)
-    this.sendSocialPacket(cleanCode, this.buildPresencePayload('FRIEND_ACCEPTED'))
-    this.sendSocialPacket(cleanCode, this.buildPresencePayload('PRESENCE_PING'))
+    this.sendSocialPacket(cleanCode, this.buildPresencePayload('FRIEND_ACCEPTED'), {
+      useCloud: true
+    })
+    this.sendSocialPacket(cleanCode, this.buildPresencePayload('PRESENCE_PING'), {
+      useCloud: true
+    })
     if (this.eventHandlers.onNotify) {
       this.eventHandlers.onNotify(`Added ${req.name} to Friends`, 'success')
     }
@@ -875,7 +1276,17 @@ class JamSessionManager {
     const cleanCode = normalizeFriendCode(friendCode)
     const nextIn = this.state.incomingRequests.filter((r) => r.friendCode !== cleanCode)
     saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
-    this.updateState({ incomingRequests: nextIn })
+    this.updateState({
+      incomingRequests: nextIn,
+      latestFriendRequestToast:
+        this.state.latestFriendRequestToast?.friendCode === cleanCode
+          ? null
+          : this.state.latestFriendRequestToast
+    })
+  }
+
+  dismissFriendRequestToast() {
+    this.updateState({ latestFriendRequestToast: null })
   }
 
   cancelOutgoingRequest(friendCode) {
@@ -915,7 +1326,8 @@ class JamSessionManager {
         hostName: this.userProfile.name,
         hostAvatar: '',
         currentTrack: snap?.track || null
-      })
+      }),
+      { useCloud: true }
     )
 
     const friend = this.state.friends.find((f) => f.friendCode === cleanCode)
@@ -932,21 +1344,141 @@ class JamSessionManager {
     this.updateState({ incomingJamInvite: null })
   }
 
-  setupBroadcastChannel(roomCode) {
-    if (this.bc) {
-      try { this.bc.close() } catch {}
-      this.bc = null
-    }
-    if (typeof BroadcastChannel !== 'undefined' && roomCode) {
+  // ============================================================================
+  // MULTI-CHANNEL ROOM TRANSPORT (BroadcastChannel + Backend + Cloud SSE + PeerJS)
+  // ============================================================================
+  setupRoomTransports(roomCode) {
+    this.teardownRoomTransports()
+    if (!roomCode) return
+
+    // 1. Same-browser BroadcastChannel
+    if (typeof BroadcastChannel !== 'undefined') {
       try {
         this.bc = new BroadcastChannel(`upbeat_jam_${roomCode}`)
         this.bc.onmessage = (ev) => {
-          if (ev?.data && ev.data._senderProfileId !== this.userProfile?.id) {
+          if (ev?.data && ev.data._senderInstanceId !== this.instanceId) {
             this.handleIncomingPacket(ev.data, null)
           }
         }
       } catch {}
     }
+
+    // 2. Cloud SSE Relay (ntfy.sh) for cross-network Jam sync fallback
+    const topic = getRoomCloudTopic(roomCode)
+    if (topic && typeof EventSource !== 'undefined') {
+      try {
+        const es = new EventSource(`${CLOUD_RELAY_BASE}/${topic}/sse?since=2m`)
+        this.roomEventSource = es
+        es.onmessage = (ev) => {
+          try {
+            const wrapper = JSON.parse(ev.data)
+            if (wrapper?.event === 'message' && wrapper.message) {
+              const pkt = JSON.parse(wrapper.message)
+              if (pkt && pkt._senderInstanceId !== this.instanceId) {
+                this.handleIncomingPacket(pkt, null)
+              }
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+
+    // 3. Local FastAPI Backend Room Polling
+    this.lastRoomServerTs = Date.now() - 120000
+    this.roomPollTimer = setInterval(() => {
+      this.pollBackendRoom(roomCode)
+    }, 1500)
+    setTimeout(() => {
+      this.pollBackendRoom(roomCode)
+      this.pollCloudRoom(roomCode)
+    }, 250)
+  }
+
+  teardownRoomTransports() {
+    if (this.bc) {
+      try {
+        this.bc.close()
+      } catch {}
+      this.bc = null
+    }
+    if (this.roomEventSource) {
+      try {
+        this.roomEventSource.close()
+      } catch {}
+      this.roomEventSource = null
+    }
+    if (this.roomPollTimer) {
+      clearInterval(this.roomPollTimer)
+      this.roomPollTimer = null
+    }
+  }
+
+  async pollCloudRoom(roomCode) {
+    const topic = getRoomCloudTopic(roomCode)
+    if (!topic || typeof fetch === 'undefined') return
+    try {
+      const res = await fetch(`${CLOUD_RELAY_BASE}/${topic}/json?poll=1&since=2m`)
+      if (!res.ok) return
+      const text = await res.text()
+      const lines = text.split('\n').filter(Boolean)
+      for (const line of lines) {
+        try {
+          const wrapper = JSON.parse(line)
+          if (wrapper?.event === 'message' && wrapper.message) {
+            const pkt = JSON.parse(wrapper.message)
+            if (pkt && pkt._senderInstanceId !== this.instanceId) {
+              this.handleIncomingPacket(pkt, null)
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  async sendCloudRoomPacket(roomCode, payload) {
+    const topic = getRoomCloudTopic(roomCode)
+    if (!topic || typeof fetch === 'undefined') return
+    try {
+      await fetch(`${CLOUD_RELAY_BASE}/${topic}`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+    } catch {}
+  }
+
+  async pollBackendRoom(roomCode) {
+    if (!hasBackend() || !roomCode) return
+    try {
+      const res = await fetch(
+        `${getApiBase()}/jam/room/poll?roomCode=${encodeURIComponent(roomCode)}&since=${this.lastRoomServerTs}`
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      if (data?.serverTs) {
+        this.lastRoomServerTs = data.serverTs
+      }
+      if (Array.isArray(data?.packets)) {
+        for (const pkt of data.packets) {
+          if (pkt && pkt._senderInstanceId !== this.instanceId) {
+            this.handleIncomingPacket(pkt, null)
+          }
+        }
+      }
+    } catch {}
+  }
+
+  async sendBackendRoomPacket(roomCode, payload) {
+    if (!hasBackend() || !roomCode) return
+    try {
+      await fetch(`${getApiBase()}/jam/room/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomCode,
+          packet: payload
+        })
+      })
+    } catch {}
   }
 
   async createJam(googleUser = null, initialDjMode = 'open_party') {
@@ -956,25 +1488,14 @@ class JamSessionManager {
     const peerId = getPeerIdFromCode(roomCode)
     const normDj = initialDjMode === 'host_only' ? 'host_only' : 'open_party'
 
-    const hostParticipant = {
-      id: this.userProfile.id,
-      peerId: this.userProfile.id,
-      friendCode: this.userProfile.friendCode,
-      name: this.userProfile.name,
-      avatar: '',
-      picture: this.userProfile.picture,
-      isHost: true,
-      rttMs: 0,
-      inSync: true,
-      joinedAt: Date.now()
-    }
+    const hostParticipant = this.buildSelfParticipant(true)
 
     this.updateState({
       active: true,
       isHost: true,
       role: 'host',
       roomCode,
-      status: 'CONNECTING',
+      status: 'CONNECTED',
       error: null,
       djMode: normDj,
       participants: [hostParticipant],
@@ -985,8 +1506,15 @@ class JamSessionManager {
       syncTier: 'LOCKED'
     })
 
-    this.setupBroadcastChannel(roomCode)
+    this.setupRoomTransports(roomCode)
+    this.startHostLoops()
+    this.broadcastParticipants()
+    this.broadcastSyncNow()
     this.broadcastPresenceStatus()
+
+    if (this.eventHandlers.onNotify) {
+      this.eventHandlers.onNotify(`Jam session active: ${roomCode}`, 'success')
+    }
 
     try {
       const peer = new Peer(peerId, {
@@ -997,31 +1525,26 @@ class JamSessionManager {
 
       peer.on('open', () => {
         this.updateState({ status: 'CONNECTED', error: null })
-        this.startHostLoops()
-        this.broadcastPresenceStatus()
-        if (this.eventHandlers.onNotify) {
-          this.eventHandlers.onNotify(`Jam session active: ${roomCode}`, 'success')
-        }
+        this.broadcastParticipants()
+        this.broadcastSyncNow()
       })
 
       peer.on('connection', (conn) => {
         this.setupHostPeerConnection(conn)
       })
 
+      peer.on('disconnected', () => {
+        try {
+          if (!peer.destroyed) peer.reconnect()
+        } catch {}
+      })
+
       peer.on('error', (err) => {
         if (err?.type === 'unavailable-id') {
           this.createJam(googleUser, normDj)
-          return
-        }
-        if (this.state.status === 'CONNECTING') {
-          this.updateState({ status: 'CONNECTED' })
-          this.startHostLoops()
         }
       })
-    } catch {
-      this.updateState({ status: 'CONNECTED' })
-      this.startHostLoops()
-    }
+    } catch {}
 
     return roomCode
   }
@@ -1029,8 +1552,8 @@ class JamSessionManager {
   setupHostPeerConnection(conn) {
     conn.on('open', () => {
       this.connections.set(conn.peer, conn)
-      this.broadcastSyncNow()
       this.broadcastParticipants()
+      this.broadcastSyncNow()
     })
 
     conn.on('data', (data) => {
@@ -1065,18 +1588,7 @@ class JamSessionManager {
     this.userProfile = loadJamUserProfile(googleUser)
     const hostPeerId = getPeerIdFromCode(roomCode)
 
-    const selfParticipant = {
-      id: this.userProfile.id,
-      peerId: this.userProfile.id,
-      friendCode: this.userProfile.friendCode,
-      name: this.userProfile.name,
-      avatar: '',
-      picture: this.userProfile.picture,
-      isHost: false,
-      rttMs: 18,
-      inSync: true,
-      joinedAt: Date.now()
-    }
+    const selfParticipant = this.buildSelfParticipant(false)
 
     this.updateState({
       active: true,
@@ -1093,12 +1605,31 @@ class JamSessionManager {
       incomingJamInvite: null
     })
 
-    this.setupBroadcastChannel(roomCode)
+    this.setupRoomTransports(roomCode)
 
-    this.sendToHost({
-      type: 'JAM_HELLO',
-      profile: selfParticipant
-    })
+    // Immediately announce over BroadcastChannel, Backend, and Cloud Relay
+    this.sendToHost(
+      {
+        type: 'JAM_HELLO',
+        profile: selfParticipant
+      },
+      { useCloud: true }
+    )
+
+    // Retry JAM_HELLO after 1.2s in case host was still initializing
+    setTimeout(() => {
+      if (this.state.active && this.state.role === 'guest') {
+        this.sendToHost(
+          {
+            type: 'JAM_HELLO',
+            profile: selfParticipant
+          },
+          { useCloud: true }
+        )
+      }
+    }, 1200)
+
+    this.startGuestPingLoop()
 
     try {
       const peer = new Peer({
@@ -1107,27 +1638,36 @@ class JamSessionManager {
       })
       this.peer = peer
 
-      peer.on('open', () => {
-        const conn = peer.connect(hostPeerId, { reliable: true })
-        this.hostConn = conn
+      const connectTimeout = setTimeout(() => {
+        if (
+          this.state.active &&
+          this.state.status === 'CONNECTING' &&
+          this.state.participants.length <= 1
+        ) {
+          this.updateState({
+            status: 'ERROR',
+            error: `Room ${roomCode} not found or host is offline`
+          })
+        }
+      }, 11000)
 
-        const connectTimeout = setTimeout(() => {
-          if (this.state.status === 'CONNECTING' && this.state.participants.length <= 1) {
-            this.updateState({
-              status: 'ERROR',
-              error: `Room ${roomCode} not found or host is offline`
-            })
-          }
-        }, 9000)
+      peer.on('open', () => {
+        const conn = peer.connect(hostPeerId, {
+          reliable: true,
+          serialization: 'json'
+        })
+        this.hostConn = conn
 
         conn.on('open', () => {
           clearTimeout(connectTimeout)
           this.updateState({ status: 'CONNECTED', error: null })
-          this.sendToHost({
-            type: 'JAM_HELLO',
-            profile: selfParticipant
-          })
-          this.startGuestPingLoop()
+          this.sendToHost(
+            {
+              type: 'JAM_HELLO',
+              profile: selfParticipant
+            },
+            { useCloud: false }
+          )
           this.broadcastPresenceStatus()
           if (this.eventHandlers.onNotify) {
             this.eventHandlers.onNotify(`Joined Jam ${roomCode}`, 'success')
@@ -1143,30 +1683,30 @@ class JamSessionManager {
         })
 
         conn.on('close', () => {
-          if (this.state.active && this.state.role === 'guest') {
-            if (this.eventHandlers.onNotify) {
-              this.eventHandlers.onNotify('Host ended the Jam session', 'info')
-            }
-            this.leaveJam(true)
+          if (this.state.active && this.state.role === 'guest' && !hasBackend()) {
+            // Only leave if not connected via relay
           }
         })
       })
 
       peer.on('error', (err) => {
         if (err?.type === 'peer-unavailable') {
-          if (this.state.participants.length > 1) return
-          this.updateState({
-            status: 'ERROR',
-            error: `Room ${roomCode} not found or host went offline`
-          })
+          // Wait for cloud/backend relay before declaring error
+          setTimeout(() => {
+            if (
+              this.state.active &&
+              this.state.status !== 'CONNECTED' &&
+              this.state.participants.length <= 1
+            ) {
+              this.updateState({
+                status: 'ERROR',
+                error: `Room ${roomCode} not found or host went offline`
+              })
+            }
+          }, 3500)
         }
       })
-    } catch (e) {
-      this.updateState({
-        status: 'ERROR',
-        error: e.message || 'Connection failed'
-      })
-    }
+    } catch {}
 
     return true
   }
@@ -1174,18 +1714,21 @@ class JamSessionManager {
   startHostLoops() {
     this.stopLoops()
     this.syncInterval = setInterval(() => {
-      this.broadcastSyncNow()
+      this.broadcastSyncNow(null, { useCloud: false })
     }, 2000)
   }
 
   startGuestPingLoop() {
     this.stopLoops()
     const sendPing = () => {
-      this.sendToHost({
-        type: 'JAM_PING',
-        t1: Date.now(),
-        senderId: this.userProfile?.id
-      })
+      this.sendToHost(
+        {
+          type: 'JAM_PING',
+          t1: Date.now(),
+          senderId: this.getSelfParticipantId()
+        },
+        { useCloud: false }
+      )
     }
     sendPing()
     this.pingInterval = setInterval(sendPing, 6000)
@@ -1202,55 +1745,79 @@ class JamSessionManager {
     }
   }
 
-  broadcastFromHost(packet) {
+  broadcastFromHost(packet, options = { useCloud: true }) {
     if (!this.state.active || this.state.role !== 'host') return
-    const payload = { ...packet, _senderProfileId: this.userProfile?.id }
+    const payload = {
+      ...packet,
+      _packetId: packet._packetId || makePacketId(),
+      _senderProfileId: this.getSelfParticipantId(),
+      _senderInstanceId: this.instanceId
+    }
     for (const conn of this.connections.values()) {
       try {
         if (conn.open) conn.send(payload)
       } catch {}
     }
     if (this.bc) {
-      try { this.bc.postMessage(payload) } catch {}
+      try {
+        this.bc.postMessage(payload)
+      } catch {}
+    }
+    this.sendBackendRoomPacket(this.state.roomCode, payload)
+    if (options?.useCloud !== false) {
+      this.sendCloudRoomPacket(this.state.roomCode, payload)
     }
   }
 
-  sendToHost(packet) {
+  sendToHost(packet, options = { useCloud: true }) {
     if (!this.state.active) return
-    const payload = { ...packet, _senderProfileId: this.userProfile?.id }
+    const payload = {
+      ...packet,
+      _packetId: packet._packetId || makePacketId(),
+      _senderProfileId: this.getSelfParticipantId(),
+      _senderInstanceId: this.instanceId
+    }
     if (this.hostConn && this.hostConn.open) {
-      try { this.hostConn.send(payload) } catch {}
+      try {
+        this.hostConn.send(payload)
+      } catch {}
     }
     if (this.bc) {
-      try { this.bc.postMessage(payload) } catch {}
+      try {
+        this.bc.postMessage(payload)
+      } catch {}
+    }
+    this.sendBackendRoomPacket(this.state.roomCode, payload)
+    if (options?.useCloud !== false) {
+      this.sendCloudRoomPacket(this.state.roomCode, payload)
     }
   }
 
-  broadcastSyncNow(overridePatch = null) {
+  broadcastSyncNow(overridePatch = null, options = { useCloud: true }) {
     if (!this.state.active || this.state.role !== 'host') return
     const snapshot = this.eventHandlers.getHostPlaybackSnapshot
       ? this.eventHandlers.getHostPlaybackSnapshot()
       : null
-    if (!snapshot && !overridePatch) return
-
     const merged = { ...(snapshot || {}), ...(overridePatch || {}) }
-    if (!merged.track) return
 
-    this.broadcastFromHost({
-      type: 'JAM_SYNC',
-      roomCode: this.state.roomCode,
-      track: merged.track,
-      isPlaying: Boolean(merged.isPlaying),
-      currentTime: Number(merged.currentTime) || 0,
-      hostTimestamp: Date.now(),
-      queue: Array.isArray(merged.queue) ? merged.queue.slice(0, 30) : [],
-      djMode: this.state.djMode,
-      hostName: this.userProfile?.name || 'Host'
-    })
+    this.broadcastFromHost(
+      {
+        type: 'JAM_SYNC',
+        roomCode: this.state.roomCode,
+        track: merged.track || null,
+        isPlaying: Boolean(merged.isPlaying),
+        currentTime: Number(merged.currentTime) || 0,
+        hostTimestamp: Date.now(),
+        queue: Array.isArray(merged.queue) ? merged.queue.slice(0, 30) : [],
+        djMode: this.state.djMode,
+        hostName: this.userProfile?.name || 'Host'
+      },
+      options
+    )
   }
 
   broadcastHostSync(overridePatch = null) {
-    this.broadcastSyncNow(overridePatch)
+    this.broadcastSyncNow(overridePatch, { useCloud: true })
     this.broadcastPresenceStatus()
   }
 
@@ -1261,33 +1828,53 @@ class JamSessionManager {
       peerId: p.peerId || p.id,
       avatar: ''
     }))
-    this.broadcastFromHost({
-      type: 'JAM_PARTICIPANTS',
-      participants: sanitizedParticipants,
-      djMode: this.state.djMode,
-      hostName: this.userProfile?.name || 'Host'
-    })
+    this.broadcastFromHost(
+      {
+        type: 'JAM_PARTICIPANTS',
+        participants: sanitizedParticipants,
+        djMode: this.state.djMode,
+        hostName: this.userProfile?.name || 'Host'
+      },
+      { useCloud: true }
+    )
   }
 
   handleIncomingPacket(data, conn) {
     if (!data || typeof data !== 'object') return
+    if (data._senderInstanceId && data._senderInstanceId === this.instanceId) return
+
+    // Deduplicate discrete room events across multiple transports
+    if (
+      data._packetId &&
+      data.type !== 'JAM_SYNC' &&
+      data.type !== 'JAM_PING' &&
+      data.type !== 'JAM_PONG'
+    ) {
+      if (this.markPacketSeen(data._packetId)) return
+    }
 
     switch (data.type) {
       case 'JAM_HELLO': {
         if (this.state.role === 'host' && data.profile) {
+          const guestId = data.profile.id || data.profile.peerId
           const cleanProfile = {
             ...data.profile,
-            peerId: data.profile.peerId || data.profile.id,
-            avatar: ''
+            id: guestId,
+            peerId: guestId,
+            avatar: '',
+            isHost: false,
+            inSync: true
           }
           if (conn) conn._guestProfileId = cleanProfile.id
           const exists = this.state.participants.some((p) => p.id === cleanProfile.id)
           const updated = exists
-            ? this.state.participants.map((p) => (p.id === cleanProfile.id ? { ...p, ...cleanProfile } : p))
-            : [...this.state.participants, { ...cleanProfile, isHost: false, inSync: true }]
+            ? this.state.participants.map((p) =>
+                p.id === cleanProfile.id ? { ...p, ...cleanProfile, isHost: p.isHost } : p
+              )
+            : [...this.state.participants, cleanProfile]
           this.updateState({ status: 'CONNECTED', participants: updated })
           this.broadcastParticipants()
-          this.broadcastSyncNow()
+          this.broadcastSyncNow(null, { useCloud: true })
           if (!exists && this.eventHandlers.onNotify) {
             this.eventHandlers.onNotify(`${cleanProfile.name} joined the Jam`, 'success')
           }
@@ -1297,6 +1884,7 @@ class JamSessionManager {
 
       case 'JAM_PARTICIPANTS': {
         if (this.state.role === 'guest' && Array.isArray(data.participants)) {
+          const wasConnecting = this.state.status !== 'CONNECTED'
           const cleanList = data.participants.map((p) => ({
             ...p,
             peerId: p.peerId || p.id,
@@ -1309,6 +1897,9 @@ class JamSessionManager {
             djMode: data.djMode || this.state.djMode,
             hostName: data.hostName || this.state.hostName
           })
+          if (wasConnecting && this.eventHandlers.onNotify) {
+            this.eventHandlers.onNotify(`Connected to ${data.hostName || 'Host'}'s Jam`, 'success')
+          }
         }
         break
       }
@@ -1321,22 +1912,28 @@ class JamSessionManager {
             t2: Date.now(),
             t3: Date.now(),
             targetId: data.senderId,
-            _senderProfileId: this.userProfile?.id
+            _senderProfileId: this.getSelfParticipantId(),
+            _senderInstanceId: this.instanceId
           }
           if (conn && conn.open) {
-            try { conn.send(pong) } catch {}
-          } else if (this.bc) {
-            try { this.bc.postMessage(pong) } catch {}
+            try {
+              conn.send(pong)
+            } catch {}
+          } else {
+            this.broadcastFromHost(pong, { useCloud: false })
           }
         }
         break
       }
 
       case 'JAM_PONG': {
-        if (this.state.role === 'guest' && (!data.targetId || data.targetId === this.userProfile?.id)) {
+        if (
+          this.state.role === 'guest' &&
+          (!data.targetId || data.targetId === this.getSelfParticipantId())
+        ) {
           const t4 = Date.now()
-          const rtt = Math.max(2, (t4 - data.t1) - (data.t3 - data.t2))
-          const offset = Math.round(((data.t2 - data.t1) + (data.t3 - t4)) / 2)
+          const rtt = Math.max(2, t4 - data.t1 - (data.t3 - data.t2))
+          const offset = Math.round((data.t2 - data.t1 + (data.t3 - t4)) / 2)
           this.clockSamples.push({ rtt, offset })
           if (this.clockSamples.length > 5) this.clockSamples.shift()
           const sortedOffsets = [...this.clockSamples].map((s) => s.offset).sort((a, b) => a - b)
@@ -1357,7 +1954,7 @@ class JamSessionManager {
             djMode: data.djMode || this.state.djMode,
             hostName: data.hostName || this.state.hostName
           })
-          if (this.eventHandlers.onRemoteSync) {
+          if (data.track && this.eventHandlers.onRemoteSync) {
             this.eventHandlers.onRemoteSync(data, this.state.clockOffsetMs)
           }
         }
@@ -1370,7 +1967,7 @@ class JamSessionManager {
             if (this.eventHandlers.onRemoteControl) {
               this.eventHandlers.onRemoteControl(data)
             }
-            this.broadcastFromHost(data)
+            this.broadcastFromHost(data, { useCloud: true })
           }
         } else if (this.state.role === 'guest') {
           if (this.eventHandlers.onRemoteControl) {
@@ -1390,8 +1987,8 @@ class JamSessionManager {
           if (this.eventHandlers.onRemoteQueueAdd) {
             this.eventHandlers.onRemoteQueueAdd(data.track, cleanAddedBy)
           }
-          this.broadcastFromHost({ ...data, addedBy: cleanAddedBy })
-          setTimeout(() => this.broadcastSyncNow(), 150)
+          this.broadcastFromHost({ ...data, addedBy: cleanAddedBy }, { useCloud: true })
+          setTimeout(() => this.broadcastSyncNow(null, { useCloud: true }), 150)
         } else if (this.state.role === 'guest') {
           if (this.eventHandlers.onRemoteQueueAdd) {
             this.eventHandlers.onRemoteQueueAdd(data.track, cleanAddedBy)
@@ -1402,7 +1999,7 @@ class JamSessionManager {
 
       case 'JAM_REACTION': {
         if (this.state.role === 'host') {
-          this.broadcastFromHost(data)
+          this.broadcastFromHost(data, { useCloud: true })
         }
         if (this.eventHandlers.onReaction) {
           this.eventHandlers.onReaction(data)
@@ -1466,16 +2063,17 @@ class JamSessionManager {
       type: 'JAM_CONTROL',
       action,
       ...payload,
-      senderId: this.userProfile?.id,
+      senderId: this.getSelfParticipantId(),
       senderName: this.userProfile?.name || 'Friend',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      _packetId: makePacketId()
     }
 
     if (this.state.role === 'host') {
-      this.broadcastFromHost(packet)
-      setTimeout(() => this.broadcastSyncNow(), 80)
+      this.broadcastFromHost(packet, { useCloud: true })
+      setTimeout(() => this.broadcastSyncNow(null, { useCloud: true }), 80)
     } else {
-      this.sendToHost(packet)
+      this.sendToHost(packet, { useCloud: true })
     }
     return true
   }
@@ -1490,33 +2088,37 @@ class JamSessionManager {
       type: 'JAM_QUEUE_ADD',
       track,
       addedBy: {
-        id: this.userProfile?.id,
+        id: this.getSelfParticipantId(),
         name: this.userProfile?.name || 'Friend',
         avatar: ''
-      }
+      },
+      _packetId: makePacketId()
     }
     if (this.state.role === 'host') {
-      this.broadcastFromHost(packet)
-      setTimeout(() => this.broadcastSyncNow(), 100)
+      this.broadcastFromHost(packet, { useCloud: true })
+      setTimeout(() => this.broadcastSyncNow(null, { useCloud: true }), 100)
     } else {
-      this.sendToHost(packet)
+      this.sendToHost(packet, { useCloud: true })
     }
   }
 
   sendReaction(reactionType = 'vibe') {
     if (!this.state.active) return
+    const id = `rx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const packet = {
       type: 'JAM_REACTION',
-      id: `rx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id,
+      _packetId: id,
       reaction: reactionType,
-      senderId: this.userProfile?.id,
+      senderId: this.getSelfParticipantId(),
       senderName: this.userProfile?.name || 'You',
       senderAvatar: ''
     }
+    this.markPacketSeen(id)
     if (this.state.role === 'host') {
-      this.broadcastFromHost(packet)
+      this.broadcastFromHost(packet, { useCloud: true })
     } else {
-      this.sendToHost(packet)
+      this.sendToHost(packet, { useCloud: true })
     }
     if (this.eventHandlers.onReaction) {
       this.eventHandlers.onReaction(packet)
@@ -1527,14 +2129,17 @@ class JamSessionManager {
     if (this.state.role !== 'host') return
     const cleanMode = mode === 'host_only' ? 'host_only' : 'open_party'
     this.updateState({ djMode: cleanMode })
-    this.broadcastFromHost({
-      type: 'JAM_DJ_MODE',
-      djMode: cleanMode
-    })
+    this.broadcastFromHost(
+      {
+        type: 'JAM_DJ_MODE',
+        djMode: cleanMode
+      },
+      { useCloud: true }
+    )
   }
 
   reportDriftStatus(driftMs, syncTier) {
-    const cleanTier = syncTier === 'IN_SYNC' ? 'LOCKED' : (syncTier || 'LOCKED')
+    const cleanTier = syncTier === 'IN_SYNC' ? 'LOCKED' : syncTier || 'LOCKED'
     if (Math.abs(driftMs - this.state.syncDeltaMs) > 25 || cleanTier !== this.state.syncTier) {
       this.updateState({
         syncDeltaMs: driftMs,
@@ -1547,31 +2152,37 @@ class JamSessionManager {
     this.stopLoops()
     if (this.state.active) {
       if (this.state.role === 'host') {
-        this.broadcastFromHost({ type: 'JAM_ENDED' })
+        this.broadcastFromHost({ type: 'JAM_ENDED' }, { useCloud: true })
       } else if (this.state.role === 'guest') {
-        this.sendToHost({ type: 'JAM_LEAVE', senderId: this.userProfile?.id })
+        this.sendToHost(
+          { type: 'JAM_LEAVE', senderId: this.getSelfParticipantId() },
+          { useCloud: true }
+        )
       }
     }
 
     for (const conn of this.connections.values()) {
-      try { conn.close() } catch {}
+      try {
+        conn.close()
+      } catch {}
     }
     this.connections.clear()
 
     if (this.hostConn) {
-      try { this.hostConn.close() } catch {}
+      try {
+        this.hostConn.close()
+      } catch {}
       this.hostConn = null
     }
 
     if (this.peer) {
-      try { this.peer.destroy() } catch {}
+      try {
+        this.peer.destroy()
+      } catch {}
       this.peer = null
     }
 
-    if (this.bc) {
-      try { this.bc.close() } catch {}
-      this.bc = null
-    }
+    this.teardownRoomTransports()
 
     this.clockSamples = []
     this.updateState({

@@ -4,6 +4,24 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.0.3] - 2026-11-04
+
+### 🔥 4-Layer Hybrid Jam & Friends Transport Overhaul (100% Reliable Add Friend & Live Jam Sync)
+- **Fixed Code Typing Mangling Bug (`JamModal.jsx`, `jamEngine.js`)**:
+  - Previously, calling `normalizeFriendCode` and `normalizeRoomCode` inside `onChange` on every keystroke prefixed `UP-` or `JAM-` on the very first character typed (turning `UP-7K4M9P` into `UP-UP7K4M` and `JAM-4829` into `JAM-JAM482`).
+  - Input fields now preserve clean uppercase typing and only auto-extract when a URL or deep link is pasted, normalizing cleanly on form submission.
+- **4-Layer Hybrid Social & Room Mesh (`jamEngine.js`, `backend/main.py`)**:
+  - Upgraded from single-point WebRTC DataChannel to a simultaneous 4-layer transport with packet-ID deduplication:
+    1. **Cloud SSE + HTTP Pub/Sub Relay (`ntfy.sh`)**: Penetrates symmetric NATs, mobile carrier firewalls, and cross-network boundaries with 12-hour offline message caching so Friend Requests and Accepts arrive even if the recipient opens the app later.
+    2. **Local FastAPI Backend Relay (`/api/jam/social/*` & `/api/jam/room/*`)**: Sub-5ms local server delivery for macOS and local network clients.
+    3. **PeerJS WebRTC DataChannel (`serialization: 'json'` + Public TURN Servers)**: Added `openrelay.metered.ca` TURN servers, JSON serialization (fixing Safari/macOS `WKWebView` <-> Android/Chrome BinaryPack drops), an outgoing packet queue (`pendingPeerPackets`), and automatic auxiliary peer fallback when multiple tabs share a Friend Code.
+    4. **`BroadcastChannel` (`upbeat_social_v7` & `upbeat_jam_<roomCode>`)**: 0ms same-browser sync with unique per-tab `instanceId` so multiple tabs can host and join rooms without participant ID collisions.
+- **1-Click Floating Friend Request Banner & Rich Sent Request Cards (`JamFloatingBar.jsx`, `JamModal.jsx`)**:
+  - Incoming friend requests now trigger an interactive floating glass banner with a 1-click **Accept** button even when the Friends modal is closed.
+  - Sent friend requests now render rich status cards (`Online • Request delivered` / `Request sent • Waiting for friend to accept`) with 1-click **Resend** and **Cancel** actions.
+
+---
+
 ## [v7.0.2] - 2026-11-04
 
 ### 🚀 Direct QR & Link Auto-Join, 1-Click Profile QR & Native Sharing

@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.0.2)
+# 🎵 UpBeat (v7.0.3)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -10,7 +10,8 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 
 ##  Features & Highlights
 
-###  Real-Time Friends & Live P2P Jam Social Engine (v7.0.2)
+###  Real-Time Friends & Live P2P Jam Social Engine (v7.0.3)
+- **4-Layer Hybrid Transport Engine**: Combines `BroadcastChannel` (0ms same-browser), Local FastAPI Backend Relay (`/api/jam/*`), PeerJS WebRTC DataChannel with public TURN servers, and Cloud Pub/Sub SSE Relay (`ntfy.sh` with 12-hour message retention) so Friend Requests and Jam rooms connect reliably across devices and networks.
 - **Direct QR Code & Link Auto-Join**: Friends can scan a QR code with their camera or tap an invite link (`?jam=JAM-XXXX` or `#jam=JAM-XXXX`) to automatically connect and sync audio in real time with zero code typing.
 - **1-Click Profile QR & Friend Links**: Share profile links (`?addFriend=UP-XXXXXX`) or show your personal QR code for instant zero-friction friend requests.
 - **Movable Floating Jam Widget**: Drag anywhere on screen so it never obstructs audio playback or seek controls; tap to expand the sleek glass room menu or full Jam Hub with quick link sharing.

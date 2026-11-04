@@ -9,6 +9,8 @@ export default function JamFloatingBar({
   hideWidget = false
 }) {
   const incomingInvite = jamState?.incomingJamInvite
+  const incomingRequests = jamState?.incomingRequests || []
+  const latestFriendRequest = incomingRequests[0] || null
   const hasActiveJam = Boolean(jamState?.active)
 
   // Floating icon position (movable / draggable)
@@ -167,6 +169,47 @@ export default function JamFloatingBar({
                 className="w-9 h-9 rounded-full flex items-center justify-center text-t2 hover:text-t1 cursor-pointer"
                 title="Not now"
                 aria-label="Not now"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Incoming Friend Request Floating Glass Banner */}
+      {latestFriendRequest && !incomingInvite && (
+        <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[120] w-[calc(100%-24px)] max-w-md pointer-events-auto animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="bg-s2 ring-1 ring-white/10 rounded-2xl p-3.5 shadow-[0_20px_60px_rgba(0,0,0,0.6)] flex items-center justify-between gap-3 text-t1" role="alert">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-s3 flex items-center justify-center text-live shrink-0">
+                <Users className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold truncate">
+                  {latestFriendRequest.name || 'Friend'} sent a friend request
+                </div>
+                <div className="text-[13px] text-t2 truncate">
+                  {latestFriendRequest.friendCode}
+                  {incomingRequests.length > 1 ? ` (+${incomingRequests.length - 1} more)` : ''}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => jamManager.acceptFriendRequest(latestFriendRequest.friendCode)}
+                className="h-9 px-4 rounded-full bg-t1 text-[#0A0A0B] text-sm font-bold cursor-pointer active:scale-95"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => jamManager.declineFriendRequest(latestFriendRequest.friendCode)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-t2 hover:text-t1 cursor-pointer"
+                title="Decline"
+                aria-label="Decline"
               >
                 <X size={18} />
               </button>
