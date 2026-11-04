@@ -26,6 +26,7 @@ import CreateView from './views/CreateView'
 import CollectionView from './views/CollectionView'
 import LibraryView from './views/LibraryView'
 import SettingsView from './views/SettingsView'
+import Onboarding from './views/Onboarding'
 import { initOtaUpdater } from './otaUpdater'
 import { getThemeInfo, applyThemeToDocument } from './utils/themeCycle'
 import {
@@ -168,9 +169,7 @@ export default function App() {
   const [safariStatus, setSafariStatus] = useState(null)
   const [safariNowPlaying, setSafariNowPlaying] = useState(null)
   const [extractedTracks, setExtractedTracks] = useState(() => {
-    if (hasBackend()) {
-      return loadStorage('argon_seeds_v2', DEFAULT_SEEDS)
-    }
+    // New users start with no taste sources (onboarding fills them); never the developer's demo seeds
     const raw = loadStorage('argon_seeds_v2', [])
     const animeIds = new Set(['F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE', 'CXDUXjsU5ao', 'MM8RufZr5lw', '2ZN-zAKIfyQ', 'tdzsOODJiX8'])
     return raw.filter((t) => !animeIds.has(t?.video_id))
@@ -299,6 +298,16 @@ export default function App() {
   const scrollRef = useRef(null)
   const scrollMemoryRef = useRef({})
   const searchInputRef = useRef(null)
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      if (localStorage.getItem('upbeat_onboarded_v1')) return false
+      const has = (k) => (loadStorage(k, []) || []).length > 0
+      return !has('argon_favs_v2') && !has('argon_seeds_v2') && !has('upbeat_history_v1')
+    } catch {
+      return false
+    }
+  })
+  const [onboardingBusy, setOnboardingBusy] = useState(false)
 
   // Live Jam & Friends Social State & Refs
   const [jamState, setJamState] = useState(() => jamManager.state)
@@ -2022,6 +2031,25 @@ export default function App() {
   useEffect(() => saveStorage('upbeat_recent_searches_v1', recentSearches), [recentSearches])
   useEffect(() => saveStorage('upbeat_right_panel_v1', rightPanelOpen), [rightPanelOpen])
 
+  // Android Auto: send saved collections and recent AI mixes to the car service ("Your Mixes")
+  useEffect(() => {
+    const bridge = typeof window !== 'undefined' ? window.UpBeatNative : null
+    if (!bridge || typeof bridge.syncMixes !== 'function') return
+    const seen = new Set()
+    const list = [...savedCollections, ...recentMixes]
+      .filter((c) => c?.tracks?.length && !seen.has(c.id) && seen.add(c.id))
+      .slice(0, 12)
+      .map((c) => ({
+        title: c.title,
+        subtitle: c.kind === 'mix' ? 'AI mix' : `${c.tracks.length} songs`,
+        kind: c.kind,
+        tracks: c.tracks.slice(0, 50).map((t) => ({ title: t.title, artist: t.artist, video_id: t.video_id, thumbnail: t.thumbnail }))
+      }))
+    try {
+      bridge.syncMixes(JSON.stringify(list))
+    } catch {}
+  }, [savedCollections, recentMixes])
+
   // Remember what was actually played (for History and Jump back in)
   useEffect(() => {
     if (!isPlaying || !currentTrack || (!currentTrack.video_id && !currentTrack.title)) return
@@ -2568,6 +2596,45 @@ export default function App() {
   const userPlaylists = savedCollections.filter((c) => c.kind === 'user')
   const friends = jamState?.friends || []
 
+  // ---- first-run setup -------------------------------------------------------
+  const finishOnboarding = async ({ genres = [], artists = [] } = {}, { connect = false } = {}) => {
+    setOnboardingBusy(true)
+    try {
+      saveStorage('upbeat_taste_prefs_v1', { genres, artists, at: Date.now() })
+      const picks = artists.slice(0, 8)
+      const results = await Promise.all(
+        picks.map((a) =>
+          directSearchStandalone(a, 'songs')
+            .then((r) => (r?.song_results?.length ? r.song_results : r?.tracks || []).filter(isValidMusicTrack).slice(0, 3))
+            .catch(() => [])
+        )
+      )
+      const seeds = results.flat()
+      if (seeds.length) {
+        setExtractedTracks((prev) => {
+          const seen = new Set(prev.map((t) => t.video_id))
+          return [...seeds.filter((t) => t.video_id && !seen.has(t.video_id)), ...prev]
+        })
+      }
+      showNotify(seeds.length ? 'Home is tuned to your picks' : 'You’re all set', 'success')
+    } finally {
+      try {
+        localStorage.setItem('upbeat_onboarded_v1', '1')
+      } catch {}
+      setOnboardingBusy(false)
+      setShowOnboarding(false)
+      navigate('/', { replace: true })
+      if (connect) setShowGoogleModal(true)
+    }
+  }
+
+  const skipOnboarding = () => {
+    try {
+      localStorage.setItem('upbeat_onboarded_v1', '1')
+    } catch {}
+    setShowOnboarding(false)
+  }
+
   const lastModelStatus = playlist
     ? {
         isFallback: Boolean(playlist.is_fallback) || (playlist.used_model && playlist.used_model !== selectedModel),
@@ -2700,6 +2767,7 @@ export default function App() {
             onClearDownloads={clearDownloads}
             playbackMode={playbackMode}
             setPlaybackMode={hasBackend() && !isNativeApp() ? setPlaybackMode : null}
+            onRedoSetup={() => setShowOnboarding(true)}
             notify={showNotify}
           />
         )
@@ -2983,6 +3051,15 @@ export default function App() {
           onSyncYouTubeLikes={() => handleSyncGoogleYouTubeLikes()}
           isSyncingLikes={isSyncingLikes}
         />
+
+        {showOnboarding && (
+          <Onboarding
+            busy={onboardingBusy}
+            onSkip={skipOnboarding}
+            onFinish={(picks) => finishOnboarding(picks)}
+            onConnect={(picks) => finishOnboarding(picks, { connect: true })}
+          />
+        )}
 
         <AddToPlaylistSheet
           open={Boolean(addToPlaylistTrack)}

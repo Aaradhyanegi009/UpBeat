@@ -246,6 +246,11 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void syncMixes(String mixesJson) {
+            UpBeatMediaService.saveMixes(MainActivity.this, mixesJson);
+        }
+
+        @JavascriptInterface
         public void openExternalUrl(String url) {
             if (url == null || url.trim().isEmpty()) return;
             try {

@@ -138,17 +138,17 @@ export default function JamFloatingBar({
       {/* Incoming 1-Click Live Jam Invite Floating Glass Banner */}
       {incomingInvite && (
         <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[120] w-[calc(100%-24px)] max-w-md pointer-events-auto animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="bg-white/95 dark:bg-[#121218]/95 border border-slate-200 dark:border-white/10 rounded-2xl p-3.5 sm:px-4 shadow-2xl flex items-center justify-between gap-3 text-slate-900 dark:text-white backdrop-blur-2xl">
+          <div className="bg-s2 ring-1 ring-white/10 rounded-2xl p-3.5 shadow-[0_20px_60px_rgba(0,0,0,0.6)] flex items-center justify-between gap-3 text-t1" role="alert">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-500 shrink-0">
-                <Radio className="w-4 h-4" />
+              <div className="w-10 h-10 rounded-xl bg-s3 flex items-center justify-center text-live shrink-0">
+                <Radio className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-xs font-bold truncate">
-                  {incomingInvite.hostName} invited you to Jam
+                <div className="text-sm font-bold truncate">
+                  {incomingInvite.hostName} wants to listen together
                 </div>
-                <div className="text-[11px] text-slate-500 dark:text-zinc-400 truncate font-mono">
-                  Room: {incomingInvite.roomCode}
+                <div className="text-[13px] text-t2 truncate">
+                  Room {incomingInvite.roomCode}
                 </div>
               </div>
             </div>
@@ -157,17 +157,18 @@ export default function JamFloatingBar({
               <button
                 type="button"
                 onClick={handleAcceptJamInvite}
-                className="px-3.5 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-all cursor-pointer shadow-md active:scale-95"
+                className="h-9 px-4 rounded-full bg-t1 text-[#0A0A0B] text-sm font-bold cursor-pointer active:scale-95"
               >
                 Join
               </button>
               <button
                 type="button"
                 onClick={() => jamManager.dismissJamInvite()}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer"
-                title="Dismiss"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-t2 hover:text-t1 cursor-pointer"
+                title="Not now"
+                aria-label="Not now"
               >
-                <X size={14} />
+                <X size={18} />
               </button>
             </div>
           </div>

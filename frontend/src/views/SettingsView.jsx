@@ -19,7 +19,8 @@ export default function SettingsView({
   onClearDownloads,
   playbackMode,
   setPlaybackMode,
-  notify
+  notify,
+  onRedoSetup
 }) {
   const [apiKey, setApiKey] = useState(() => getStoredApiKey())
   const [showKey, setShowKey] = useState(false)
@@ -84,6 +85,17 @@ export default function SettingsView({
               <Chip onClick={onOpenGoogle}>Connect</Chip>
             )}
           </Row>
+          {onRedoSetup && (
+            <Row className="border-t border-white/[0.08]">
+              <div className="flex-1">
+                <div className="text-[15px] font-bold">Your music picks</div>
+                <div className="text-[13px] text-t2">Choose genres and artists again to retune Home.</div>
+              </div>
+              <Chip variant="ghost" onClick={onRedoSetup}>
+                Pick again
+              </Chip>
+            </Row>
+          )}
         </Section>
 
         <Section title="Playback">
