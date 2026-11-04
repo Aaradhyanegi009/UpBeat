@@ -4,6 +4,18 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.2.1] - 2026-11-04
+
+### 🎨 Dynamic Playing-Song Color Touch (~5% Track Aura) on Playback & Ambient Surfaces
+- **Desktop & Mobile Playback Bar ~5% Track Color Touch (`PlayerBar.jsx`, `index.css`)**:
+  - Restored dynamic artwork hue extraction (`useAlbumColor`) on the desktop and mobile playback bars with a subtle **~5%–6% track color touch** (`linear-gradient(90deg, color-mix(in srgb, ${albumColor.primary} 6%, #0A0A0B) ...)`), soft top border accent (`rgba(${albumColor.rgb}, 0.14)`), and top 1.5px progress indicator colored by the track's primary/accent palette.
+  - Seek scrubber and volume slider (`input[type="range"].ub-range`) now smoothly adopt `--range-fill` from the currently playing song's artwork color, along with a subtle glow on the mini-artwork and play button when active.
+- **Subtle Playing-Song Ambient Surface & Active Track Highlights (`App.jsx`, `primitives.jsx`, `index.css`)**:
+  - Restored `.ub-ambient-surface` radial top aura (`--song-glow-1`, `--song-glow-2`, `--song-glow-3` at 4%–7% opacity) and a 5% track color tint on the sticky desktop `TopBar`.
+  - Active `TrackRow` items and the animated `Equalizer` indicator now reflect `--song-primary` with a 6% row surface tint.
+
+---
+
 ## [v7.2.0] - 2026-11-04
 
 ### 🎨 Full UI/UX Redesign + Vercel Multi-Service Deployment Fix + 4-Layer Social & Jam Engine

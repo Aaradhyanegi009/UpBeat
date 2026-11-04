@@ -201,9 +201,9 @@ export function EmptyState({ icon: Icon, title, body, action }) {
 export function Equalizer({ className = '' }) {
   return (
     <span className={`inline-flex items-end gap-[2px] h-3 ${className}`} aria-hidden="true">
-      <span className="w-[3px] bg-accent rounded-sm h-full animate-[eq_0.9s_ease-in-out_infinite]" />
-      <span className="w-[3px] bg-accent rounded-sm h-2/3 animate-[eq_0.9s_ease-in-out_infinite_0.2s]" />
-      <span className="w-[3px] bg-accent rounded-sm h-4/5 animate-[eq_0.9s_ease-in-out_infinite_0.4s]" />
+      <span className="w-[3px] rounded-sm h-full animate-[eq_0.9s_ease-in-out_infinite]" style={{ backgroundColor: 'var(--song-primary, var(--accent))' }} />
+      <span className="w-[3px] rounded-sm h-2/3 animate-[eq_0.9s_ease-in-out_infinite_0.2s]" style={{ backgroundColor: 'var(--song-primary, var(--accent))' }} />
+      <span className="w-[3px] rounded-sm h-4/5 animate-[eq_0.9s_ease-in-out_infinite_0.4s]" style={{ backgroundColor: 'var(--song-primary, var(--accent))' }} />
     </span>
   )
 }
@@ -335,7 +335,14 @@ export function TrackRow({
   const sub = [track.artist, track.duration_text && track.duration_text !== '--:--' ? track.duration_text : null].filter(Boolean).join(' · ')
   return (
     <div
-      className={`group flex items-center gap-3.5 min-h-[64px] py-1.5 px-2 -mx-2 rounded-xl cursor-pointer hover:bg-white/[0.04] ${isCurrent ? 'bg-white/[0.03]' : ''}`}
+      className={`group flex items-center gap-3.5 min-h-[64px] py-1.5 px-2 -mx-2 rounded-xl cursor-pointer hover:bg-white/[0.04] transition-colors ${isCurrent ? 'bg-white/[0.03]' : ''}`}
+      style={
+        isCurrent
+          ? {
+              background: 'color-mix(in srgb, var(--song-primary, var(--accent)) 6%, rgba(255,255,255,0.02))'
+            }
+          : undefined
+      }
       onClick={onPlay}
       role="button"
       tabIndex={0}
@@ -350,7 +357,12 @@ export function TrackRow({
       )}
       <Art track={track} style={{ width: artSize, height: artSize }} className={artSize < 48 ? '!rounded-lg' : ''} />
       <div className="flex-1 min-w-0">
-        <div className={`text-[15px] sm:text-base font-bold truncate ${isCurrent ? 'text-accent' : 'text-t1'}`}>{track.title}</div>
+        <div
+          className={`text-[15px] sm:text-base font-bold truncate transition-colors ${isCurrent ? 'text-accent' : 'text-t1'}`}
+          style={isCurrent ? { color: 'var(--song-primary, var(--accent))' } : undefined}
+        >
+          {track.title}
+        </div>
         <div className="text-[13px] text-t2 mt-0.5 truncate flex items-center gap-1.5">
           {isCurrent && isPlaying && !showIndex && <Equalizer className="shrink-0" />}
           {downloaded && <CircleCheck className="w-3.5 h-3.5 text-live shrink-0" aria-label="Downloaded" />}

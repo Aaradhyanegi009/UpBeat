@@ -102,9 +102,15 @@ html, body, #root {
   color: var(--text-primary);
   overscroll-behavior: none;
 }
-/* Flat app background. Album colour is applied inside player surfaces only. */
-.ytm-atmosphere {
+/* Subtle 5% dynamic playing-song ambient aura on main surface */
+.ytm-atmosphere,
+.ub-ambient-surface {
   background-color: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse 115% 540px at 50% -60px, var(--song-glow-1, transparent) 0%, var(--song-glow-2, transparent) 52%, transparent 80%),
+    radial-gradient(ellipse 90% 420px at 85% 30%, var(--song-glow-3, transparent) 0%, transparent 65%);
+  background-repeat: no-repeat;
+  transition: background-image 0.5s ease;
 }
 .ytm-grid-overlay {
   background-image: 
@@ -301,7 +307,8 @@ input[type="range"].ub-range {
 input[type="range"].ub-range::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 4px;
-  background: linear-gradient(to right, var(--t1) var(--pct, 50%), var(--s3) var(--pct, 50%));
+  background: linear-gradient(to right, var(--range-fill, var(--t1)) var(--pct, 50%), var(--s3) var(--pct, 50%));
+  transition: background 0.3s ease;
 }
 input[type="range"].ub-range::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -313,7 +320,7 @@ input[type="range"].ub-range::-webkit-slider-thumb {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 input[type="range"].ub-range::-moz-range-track { height: 4px; border-radius: 4px; background: var(--s3); }
-input[type="range"].ub-range::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--t1); }
+input[type="range"].ub-range::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--range-fill, var(--t1)); }
 input[type="range"].ub-range::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: #fff; }
 input[type="range"].ub-range:focus-visible { outline: none; }
 input[type="range"].ub-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25); }

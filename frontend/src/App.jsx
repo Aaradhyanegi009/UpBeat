@@ -2884,8 +2884,15 @@ export default function App() {
                 setLibFilter={setSideLibFilter}
               />
             </div>
-            <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-w-0 rounded-[14px] bg-bg overflow-y-auto overflow-x-hidden">
-              <div className="sticky top-0 z-20 bg-[rgba(10,10,11,0.94)] backdrop-blur-md">
+            <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-w-0 rounded-[14px] bg-bg ub-ambient-surface overflow-y-auto overflow-x-hidden">
+              <div
+                className="sticky top-0 z-20 backdrop-blur-md transition-colors duration-700"
+                style={{
+                  background: currentTrack
+                    ? 'color-mix(in srgb, var(--song-primary, #0A0A0B) 5%, rgba(10,10,11,0.92))'
+                    : 'rgba(10,10,11,0.94)',
+                }}
+              >
                 <TopBar
                   query={searchQuery}
                   setQuery={(v) => {
@@ -2928,7 +2935,7 @@ export default function App() {
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: topInset }}>
-            <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+            <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-h-0 ub-ambient-surface overflow-y-auto overflow-x-hidden overscroll-contain">
               {renderView()}
             </main>
           </div>

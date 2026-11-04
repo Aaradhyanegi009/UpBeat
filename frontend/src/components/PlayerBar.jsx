@@ -304,29 +304,31 @@ export default function PlayerBar({
       : (authoritativeDurationRef.current > 0
           ? authoritativeDurationRef.current
           : parseDurationText(track?.duration_text))
-  const thumbUrl = track?.thumbnail || (resolvedVid ? `https://i.ytimg.com/vi/${resolvedVid}/hqdefault.jpg` : '')
+  const thumbUrl = (track ? artUrl(track) : '') || track?.thumbnail || (resolvedVid ? `https://i.ytimg.com/vi/${resolvedVid}/hqdefault.jpg` : '')
   const albumColor = useAlbumColor(thumbUrl)
 
-  // Dynamic Subtle Playing-Song Ambient Aura across the App (+8% Boost)
+  // Dynamic Subtle Playing-Song Ambient Aura across the App (~5% Touch)
   useEffect(() => {
     if (typeof document === 'undefined') return
     const root = document.documentElement
     if (track && albumColor && albumColor.rgb) {
-      root.style.setProperty('--song-glow-1', `rgba(${albumColor.rgb}, 0.20)`)
-      root.style.setProperty('--song-glow-2', `rgba(${albumColor.rgb}, 0.11)`)
-      root.style.setProperty('--song-glow-3', `rgba(${albumColor.rgb}, 0.14)`)
+      root.style.setProperty('--song-glow-1', `rgba(${albumColor.rgb}, 0.07)`)
+      root.style.setProperty('--song-glow-2', `rgba(${albumColor.rgb}, 0.04)`)
+      root.style.setProperty('--song-glow-3', `rgba(${albumColor.rgb}, 0.05)`)
       root.style.setProperty('--song-primary', albumColor.primary)
+      root.style.setProperty('--song-accent', albumColor.accent || albumColor.primary)
       root.style.setProperty('--album', albumColor.primary)
     } else {
       root.style.setProperty('--song-glow-1', 'transparent')
       root.style.setProperty('--song-glow-2', 'transparent')
       root.style.setProperty('--song-glow-3', 'transparent')
       root.style.setProperty('--song-primary', '#FF5E3A')
+      root.style.setProperty('--song-accent', '#FF5E3A')
       root.style.setProperty('--album', '#2A2A2F')
     }
   }, [track, albumColor])
 
-  const miniArt = track ? artUrl(track) || thumbUrl : ''
+  const miniArt = thumbUrl
   const swipeRef = useRef(null)
   const cycleRepeat = () => setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'))
 
@@ -1665,7 +1667,27 @@ export default function PlayerBar({
       </div>
 
       {isDesktop ? (
-        <footer className="h-[88px] bg-black pl-3 pr-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)] items-center gap-4 select-none shrink-0">
+        <footer
+          className="relative h-[88px] pl-3 pr-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)] items-center gap-4 select-none shrink-0 transition-all duration-700"
+          style={{
+            background: track
+              ? `linear-gradient(90deg, color-mix(in srgb, ${albumColor.primary} 6%, #0A0A0B) 0%, color-mix(in srgb, ${albumColor.primary} 5%, #0A0A0B) 50%, color-mix(in srgb, ${albumColor.accent || albumColor.primary} 6%, #0A0A0B) 100%)`
+              : '#000000',
+            borderTop: track ? `1px solid rgba(${albumColor.rgb}, 0.14)` : '1px solid rgba(255,255,255,0.06)',
+          }}
+        >
+          {track && (
+            <div className="absolute left-0 right-0 top-0 h-[1.5px] bg-white/[0.04] pointer-events-none overflow-hidden" aria-hidden="true">
+              <div
+                className="h-full transition-all duration-300"
+                style={{
+                  width: `${progressPct}%`,
+                  background: `linear-gradient(to right, ${albumColor.primary}, ${albumColor.accent || albumColor.primary})`,
+                  opacity: 0.75,
+                }}
+              />
+            </div>
+          )}
           {/* Song */}
           <div className="flex items-center gap-3.5 min-w-0">
             {track ? (
@@ -1675,7 +1697,11 @@ export default function PlayerBar({
                   onClick={() => setNowPlayingOpen(true)}
                   aria-label="Open full-screen player"
                   title="Open full-screen player"
-                  className="relative w-14 h-14 rounded-[10px] overflow-hidden shrink-0 bg-s2 cursor-pointer"
+                  className="relative w-14 h-14 rounded-[10px] overflow-hidden shrink-0 bg-s2 cursor-pointer transition-shadow duration-500"
+                  style={{
+                    boxShadow: isPlaying ? `0 4px 18px rgba(${albumColor.rgb}, 0.22)` : 'none',
+                    border: `1px solid rgba(${albumColor.rgb}, 0.18)`,
+                  }}
                 >
                   {miniArt ? <img src={miniArt} alt="" className="w-full h-full object-cover" /> : <Music className="w-5 h-5 text-t3 m-auto" />}
                 </button>
@@ -1717,7 +1743,10 @@ export default function PlayerBar({
                 disabled={!track}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
                 title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-                className="w-10 h-10 rounded-full bg-white text-[#0A0A0B] flex items-center justify-center hover:scale-105 transition-transform cursor-pointer disabled:opacity-40"
+                className="w-10 h-10 rounded-full bg-white text-[#0A0A0B] flex items-center justify-center hover:scale-105 transition-all cursor-pointer disabled:opacity-40"
+                style={{
+                  boxShadow: track && isPlaying ? `0 0 18px rgba(${albumColor.rgb}, 0.25)` : 'none',
+                }}
               >
                 {isLoadingStream ? <Loader2 className="w-5 h-5 animate-spin" /> : isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
               </button>
@@ -1745,7 +1774,7 @@ export default function PlayerBar({
                 onMouseUp={handleScrubEnd}
                 disabled={!track || isSafariMode}
                 className="ub-range sm flex-1"
-                style={{ '--pct': `${progressPct}%` }}
+                style={{ '--pct': `${progressPct}%`, '--range-fill': track ? albumColor.primary : 'var(--t1)' }}
               />
               <span className="w-10">
                 {effectiveDuration > 0 ? formatTime(effectiveDuration) : track?.duration_text && track.duration_text !== '--:--' ? track.duration_text : '0:00'}
@@ -1799,7 +1828,7 @@ export default function PlayerBar({
                 setIsMuted(false)
               }}
               className="ub-range sm w-24 mr-1"
-              style={{ '--pct': `${volumeVal}%` }}
+              style={{ '--pct': `${volumeVal}%`, '--range-fill': track ? albumColor.primary : 'var(--t1)' }}
             />
             <BarButton label="Full-screen player" onClick={() => setNowPlayingOpen(true)} disabled={!track}>
               <Maximize2 className="w-[18px] h-[18px]" />
@@ -1809,7 +1838,10 @@ export default function PlayerBar({
       ) : track ? (
         <footer
           className="relative h-16 flex items-center gap-1 pl-3.5 pr-1.5 select-none shrink-0 transition-colors duration-500"
-          style={{ background: `color-mix(in srgb, ${albumColor.primary} 24%, #121214)` }}
+          style={{
+            background: `linear-gradient(90deg, color-mix(in srgb, ${albumColor.primary} 7%, #121214) 0%, color-mix(in srgb, ${albumColor.accent || albumColor.primary} 5%, #121214) 100%)`,
+            borderTop: `1px solid rgba(${albumColor.rgb}, 0.16)`,
+          }}
           onTouchStart={(e) => {
             const t = e.touches[0]
             swipeRef.current = { x: t.clientX, y: t.clientY, at: Date.now() }
@@ -1830,8 +1862,14 @@ export default function PlayerBar({
             }
           }}
         >
-          <div className="absolute left-0 right-0 top-0 h-[2px] bg-white/15" aria-hidden="true">
-            <div className="h-full bg-white" style={{ width: `${progressPct}%` }} />
+          <div className="absolute left-0 right-0 top-0 h-[2px] bg-white/10" aria-hidden="true">
+            <div
+              className="h-full transition-all duration-300"
+              style={{
+                width: `${progressPct}%`,
+                background: `linear-gradient(to right, ${albumColor.primary}, ${albumColor.accent || albumColor.primary})`,
+              }}
+            />
           </div>
           <button
             type="button"
