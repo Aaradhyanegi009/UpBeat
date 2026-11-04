@@ -39,14 +39,7 @@ import {
   isValidMusicTrack
 } from './standaloneApi'
 
-const DEFAULT_SEEDS = [
-  { title: 'Renai Circulation', artist: 'Kana Hanazawa', video_id: 'F8xpmTmdf6o', duration_text: '4:16', thumbnail: 'https://i.ytimg.com/vi/F8xpmTmdf6o/hqdefault.jpg' },
-  { title: 'mathemagics', artist: 'Marina Inoue', video_id: 'F_Cr9vZ08Ws', duration_text: '4:05', thumbnail: 'https://i.ytimg.com/vi/F_Cr9vZ08Ws/hqdefault.jpg' },
-  { title: 'Kimi no Shiranai Monogatari', artist: 'supercell', video_id: '0VpGoDp3FCE', duration_text: '5:40', thumbnail: 'https://i.ytimg.com/vi/0VpGoDp3FCE/hqdefault.jpg' },
-  { title: 'Staple Stable', artist: 'Chiwa Saito', video_id: 'CXDUXjsU5ao', duration_text: '4:36', thumbnail: 'https://i.ytimg.com/vi/CXDUXjsU5ao/hqdefault.jpg' },
-  { title: 'Veridis Quo', artist: 'Daft Punk', video_id: 'TCd6PfxOy0Y', duration_text: '5:45', thumbnail: 'https://i.ytimg.com/vi/TCd6PfxOy0Y/hqdefault.jpg' },
-  { title: 'A New Error', artist: 'Moderat', video_id: 'QpxFcMYRV08', duration_text: '6:07', thumbnail: 'https://i.ytimg.com/vi/QpxFcMYRV08/hqdefault.jpg' }
-]
+const DEFAULT_SEEDS = []
 
 function loadStorage(key, fallback) {
   try {
@@ -170,24 +163,18 @@ export default function App() {
   const [safariStatus, setSafariStatus] = useState(null)
   const [safariNowPlaying, setSafariNowPlaying] = useState(null)
   const [extractedTracks, setExtractedTracks] = useState(() => {
-    if (hasBackend()) {
-      return loadStorage('argon_seeds_v2', DEFAULT_SEEDS)
-    }
     const raw = loadStorage('argon_seeds_v2', [])
-    const animeIds = new Set(['F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE', 'CXDUXjsU5ao', 'MM8RufZr5lw', '2ZN-zAKIfyQ', 'tdzsOODJiX8'])
-    return raw.filter((t) => !animeIds.has(t?.video_id))
+    const animeIds = new Set(['F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE', 'CXDUXjsU5ao', 'MM8RufZr5lw', '2ZN-zAKIfyQ', 'tdzsOODJiX8', 'TCd6PfxOy0Y', 'QpxFcMYRV08'])
+    return (raw || []).filter((t) => !animeIds.has(t?.video_id))
   })
   const [favorites, setFavorites] = useState(() => {
     const raw = loadStorage('argon_favs_v2', [])
-    if (!hasBackend()) {
-      const animeIds = new Set(['F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE', 'CXDUXjsU5ao', 'tdzsOODJiX8'])
-      return raw.filter((t) => !animeIds.has(t?.video_id))
-    }
-    return raw
+    const animeIds = new Set(['F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE', 'CXDUXjsU5ao', 'MM8RufZr5lw', '2ZN-zAKIfyQ', 'tdzsOODJiX8', 'TCd6PfxOy0Y', 'QpxFcMYRV08'])
+    return (raw || []).filter((t) => !animeIds.has(t?.video_id))
   })
   const [tasteDna, setTasteDna] = useState(() => {
     const raw = loadStorage('argon_dna_v2', null)
-    if (!hasBackend() && raw) {
+    if (raw) {
       const isAnime = /anime|j-pop|j-rock|monogatari|sawano|higuchi/i.test(
         `${raw.archetype || ''} ${raw.summary || ''} ${(raw.primary_genres || []).join(' ')}`
       )
@@ -200,12 +187,8 @@ export default function App() {
   const [currentTrackIdx, setCurrentTrackIdx] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackMode, setPlaybackMode] = useState('app')
-  const [prompt, setPrompt] = useState(() => {
-    return hasBackend()
-      ? 'High-impact orchestral rock, Hiroyuki Sawano style soundtracks, and Monogatari / anime openings'
-      : ''
-  })
-  const [activePresetId, setActivePresetId] = useState(() => (hasBackend() ? 'ost' : null))
+  const [prompt, setPrompt] = useState('')
+  const [activePresetId, setActivePresetId] = useState(null)
   const [energyLevel, setEnergyLevel] = useState(78) // Matches 'ost' preset default (78%)
   const [trackCount, setTrackCount] = useState(8)
   const [crossfadeSec, setCrossfadeSecState] = useState(() => {
@@ -254,14 +237,18 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [googleUser, setGoogleUser] = useState(() => {
     const user = loadStorage('upbeat_google_user', null)
-    // Clear out any stale test account accidentally stored from previous build
-    const legacyEmail = atob('YWFyYWRoeWFuZWdpMDA5QGdtYWlsLmNvbQ==')
-    const legacyName = atob('QWFyYWRoeWEgTmVnaQ==')
-    if (user && (user.email === legacyEmail || user.name === legacyName)) {
-      try {
-        localStorage.removeItem('upbeat_google_user')
-      } catch {}
-      return null
+    // Clear out any hardcoded personal developer account or stale profile
+    if (user) {
+      const userEmail = (user.email || '').toLowerCase()
+      const userName = (user.name || '').toLowerCase()
+      if (userEmail.includes('negi') || userEmail.includes('divyansh') || userName.includes('negi') || userName.includes('divyansh')) {
+        try {
+          localStorage.removeItem('upbeat_google_user')
+          localStorage.removeItem('upbeat_last_google_email')
+          localStorage.removeItem('upbeat_last_google_name')
+        } catch {}
+        return null
+      }
     }
     if (user && user.picture && user.picture.includes('yt3.ggpht.com/ZHW03BCR5_1wypqdYcayGib5T')) {
       const sanitized = { ...user, picture: '' }
@@ -557,52 +544,60 @@ export default function App() {
 
   const initialBootRef = useRef(false)
 
-  // Automatic purge of developer anime/J-pop seeds for Android / mobile users (preserves MacBook backend!)
+  // Automatic purge of developer anime/J-pop seeds and hardcoded accounts across all platforms (Android/Mac/Web)
   useEffect(() => {
-    if (!hasBackend()) {
-      try {
-        const cleaned = localStorage.getItem('upbeat_seeds_cleaned_v421')
-        if (!cleaned) {
-          const animeIds = new Set([
-            'F8xpmTmdf6o', // Renai Circulation
-            'F_Cr9vZ08Ws', // mathemagics
-            '0VpGoDp3FCE', // Kimi no Shiranai Monogatari
-            'CXDUXjsU5ao', // Staple Stable
-            'MM8RufZr5lw', // Duvet
-            '2ZN-zAKIfyQ', // Kiri
-            'tdzsOODJiX8', // Akuma no Ko
-            'TCd6PfxOy0Y', // Veridis Quo
-            'QpxFcMYRV08'  // A New Error
-          ])
+    try {
+      const animeIds = new Set([
+        'F8xpmTmdf6o', // Renai Circulation
+        'F_Cr9vZ08Ws', // mathemagics
+        '0VpGoDp3FCE', // Kimi no Shiranai Monogatari
+        'CXDUXjsU5ao', // Staple Stable
+        'MM8RufZr5lw', // Duvet
+        '2ZN-zAKIfyQ', // Kiri
+        'tdzsOODJiX8', // Akuma no Ko
+        'TCd6PfxOy0Y', // Veridis Quo
+        'QpxFcMYRV08'  // A New Error
+      ])
 
-          setExtractedTracks((prev) => {
-            const filtered = (prev || []).filter((t) => !animeIds.has(t?.video_id))
-            try { localStorage.setItem('argon_seeds_v2', JSON.stringify(filtered)) } catch {}
-            return filtered
-          })
+      const lastEmail = localStorage.getItem('upbeat_last_google_email') || ''
+      const lastName = localStorage.getItem('upbeat_last_google_name') || ''
+      if (/divyansh|negi/i.test(lastEmail)) localStorage.removeItem('upbeat_last_google_email')
+      if (/divyansh|negi/i.test(lastName)) localStorage.removeItem('upbeat_last_google_name')
 
-          setFavorites((prev) => {
-            const filtered = (prev || []).filter((t) => !animeIds.has(t?.video_id))
-            try { localStorage.setItem('argon_favs_v2', JSON.stringify(filtered)) } catch {}
-            return filtered
-          })
-
-          const storedDna = loadStorage('argon_dna_v2', null)
-          if (storedDna) {
-            const isAnime = /anime|j-pop|j-rock|monogatari|sawano|higuchi/i.test(
-              `${storedDna.archetype || ''} ${storedDna.summary || ''} ${(storedDna.primary_genres || []).join(' ')}`
-            )
-            if (isAnime) {
-              setTasteDna(null)
-              try { localStorage.removeItem('argon_dna_v2') } catch {}
-            }
-          }
-
-          localStorage.setItem('upbeat_seeds_cleaned_v421', 'true')
+      const storedUser = loadStorage('upbeat_google_user', null)
+      if (storedUser) {
+        const uEmail = (storedUser.email || '').toLowerCase()
+        const uName = (storedUser.name || '').toLowerCase()
+        if (uEmail.includes('negi') || uEmail.includes('divyansh') || uName.includes('negi') || uName.includes('divyansh')) {
+          localStorage.removeItem('upbeat_google_user')
+          setGoogleUser(null)
         }
-      } catch (err) {
-        console.warn('Seeds cleanup warning:', err)
       }
+
+      setExtractedTracks((prev) => {
+        const filtered = (prev || []).filter((t) => !animeIds.has(t?.video_id))
+        try { localStorage.setItem('argon_seeds_v2', JSON.stringify(filtered)) } catch {}
+        return filtered
+      })
+
+      setFavorites((prev) => {
+        const filtered = (prev || []).filter((t) => !animeIds.has(t?.video_id))
+        try { localStorage.setItem('argon_favs_v2', JSON.stringify(filtered)) } catch {}
+        return filtered
+      })
+
+      const storedDna = loadStorage('argon_dna_v2', null)
+      if (storedDna) {
+        const isAnime = /anime|j-pop|j-rock|monogatari|sawano|higuchi/i.test(
+          `${storedDna.archetype || ''} ${storedDna.summary || ''} ${(storedDna.primary_genres || []).join(' ')}`
+        )
+        if (isAnime) {
+          setTasteDna(null)
+          try { localStorage.removeItem('argon_dna_v2') } catch {}
+        }
+      }
+    } catch (err) {
+      console.warn('Seeds and profile cleanup warning:', err)
     }
   }, [])
 
@@ -627,7 +622,7 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem('argon_favs_v2', JSON.stringify(favorites)) } catch {}
     if (window.UpBeatNative && typeof window.UpBeatNative.syncFavorites === 'function') {
-      const favsToSync = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : DEFAULT_SEEDS)
+      const favsToSync = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : [])
       try {
         const items = favsToSync.slice(0, 50).map((f, idx) => ({
           index: idx,
@@ -654,7 +649,7 @@ export default function App() {
     if (window.UpBeatNative && typeof window.UpBeatNative.syncQueue === 'function') {
       const tracksToSync = playlist?.tracks?.length
         ? playlist.tracks
-        : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : DEFAULT_SEEDS))
+        : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : []))
       if (tracksToSync?.length) {
         try {
           const items = tracksToSync.slice(0, 50).map((t, idx) => ({
@@ -912,7 +907,7 @@ export default function App() {
         }
         case 'play_index': {
           const idx = parseInt(payload, 10)
-          const activeList = playlist?.tracks?.length ? playlist.tracks : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : DEFAULT_SEEDS))
+          const activeList = playlist?.tracks?.length ? playlist.tracks : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : []))
           if (!isNaN(idx) && activeList?.[idx]) {
             handlePlayTrack(activeList[idx], idx, activeList)
           }
@@ -920,7 +915,7 @@ export default function App() {
         }
         case 'play_favorite': {
           const idx = parseInt(payload, 10)
-          const activeFavs = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : DEFAULT_SEEDS)
+          const activeFavs = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : [])
           if (!isNaN(idx) && activeFavs?.[idx]) {
             handlePlayTrack(activeFavs[idx], idx, activeFavs)
           }
@@ -931,7 +926,7 @@ export default function App() {
             preset_late_night: 'Atmospheric late night drive lofi hip hop mix',
             preset_focus: 'Deep focus instrumental ambient electronic beats',
             preset_energy: 'High energy fast BPM workout motivation tracks',
-            preset_anime: 'High-impact orchestral rock Hiroyuki Sawano anime openings',
+            preset_anime: 'Cinematic orchestral soundtracks and epic film scores',
             preset_hindi: 'New Hindi songs latest releases'
           }
           const promptText = presetMap[payload] || 'Curated music mix'

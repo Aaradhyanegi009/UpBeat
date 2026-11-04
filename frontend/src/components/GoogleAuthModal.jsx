@@ -47,10 +47,18 @@ export default function GoogleAuthModal({
   })
   const [customAccessToken, setCustomAccessToken] = useState('')
   const [customEmail, setCustomEmail] = useState(() => {
-    try { return localStorage.getItem('upbeat_last_google_email') || 'divyanshnegi009@gmail.com' } catch { return 'divyanshnegi009@gmail.com' }
+    try {
+      const saved = localStorage.getItem('upbeat_last_google_email') || ''
+      if (/divyansh|negi/i.test(saved)) return ''
+      return saved
+    } catch { return '' }
   })
   const [customName, setCustomName] = useState(() => {
-    try { return localStorage.getItem('upbeat_last_google_name') || 'Divyansh Negi' } catch { return 'Divyansh Negi' }
+    try {
+      const saved = localStorage.getItem('upbeat_last_google_name') || ''
+      if (/divyansh|negi/i.test(saved)) return ''
+      return saved
+    } catch { return '' }
   })
   const [customPicUrl, setCustomPicUrl] = useState('')
   const [showEditPic, setShowEditPic] = useState(false)
@@ -58,6 +66,16 @@ export default function GoogleAuthModal({
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [isSyncingProfile, setIsSyncingProfile] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  // Clean any stale hardcoded personal developer email/name on mount
+  useEffect(() => {
+    try {
+      const storedEmail = localStorage.getItem('upbeat_last_google_email') || ''
+      const storedName = localStorage.getItem('upbeat_last_google_name') || ''
+      if (/divyansh|negi/i.test(storedEmail)) localStorage.removeItem('upbeat_last_google_email')
+      if (/divyansh|negi/i.test(storedName)) localStorage.removeItem('upbeat_last_google_name')
+    } catch {}
+  }, [])
 
   // Try to sync authentic avatar from active Safari YouTube Music session
   useEffect(() => {
@@ -79,8 +97,8 @@ export default function GoogleAuthModal({
   const handleInstantConnect = async (e) => {
     if (e) e.preventDefault()
     setErrorMsg('')
-    const email = customEmail.trim() || 'divyanshnegi009@gmail.com'
-    const name = customName.trim() || email.split('@')[0]
+    const email = customEmail.trim() || 'guest@upbeat.app'
+    const name = customName.trim() || (customEmail.trim() ? customEmail.split('@')[0] : 'Music Lover')
     const url = playlistUrl.trim()
 
     setIsLoggingIn(true)
@@ -96,8 +114,8 @@ export default function GoogleAuthModal({
       }
 
       try {
-        localStorage.setItem('upbeat_last_google_email', email)
-        localStorage.setItem('upbeat_last_google_name', name)
+        if (customEmail.trim()) localStorage.setItem('upbeat_last_google_email', customEmail.trim())
+        if (customName.trim()) localStorage.setItem('upbeat_last_google_name', customName.trim())
       } catch {}
 
       const userObj = {
@@ -463,7 +481,7 @@ export default function GoogleAuthModal({
                         type="text"
                         value={customName}
                         onChange={(e) => setCustomName(e.target.value)}
-                        placeholder="Divyansh Negi"
+                        placeholder="e.g. Alex Rivera"
                         className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
                       />
                     </div>
@@ -475,7 +493,7 @@ export default function GoogleAuthModal({
                         type="email"
                         value={customEmail}
                         onChange={(e) => setCustomEmail(e.target.value)}
-                        placeholder="divyanshnegi009@gmail.com"
+                        placeholder="you@gmail.com"
                         className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
                       />
                     </div>

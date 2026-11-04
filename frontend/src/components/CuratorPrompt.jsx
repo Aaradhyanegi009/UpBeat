@@ -12,8 +12,8 @@ export const MOOD_CHIPS = [
   { id: 'sad', label: 'Sad', query: 'Emotional melancholic slow acoustic songs' },
   { id: 'focus', label: 'Focus', query: 'Deep focus instrumental ambient electronic beats' },
   { id: 'sleep', label: 'Sleep', query: 'Deep sleep soothing ambient delta waves' },
-  { id: 'anime', label: 'Anime OST', query: 'High-impact orchestral rock Hiroyuki Sawano anime openings' },
-  { id: 'sawano', label: 'Sawano OST', query: 'Hiroyuki Sawano best epic soundtrack mix' },
+  { id: 'soundtrack', label: 'Soundtrack', query: 'Epic cinematic orchestral soundtracks and film scores' },
+  { id: 'indie', label: 'Indie & Alt', query: 'Indie pop alternative melodic hits playlist' },
   { id: 'hindi', label: 'Hindi Trending', query: 'New Hindi songs latest releases' },
   { id: 'lofi', label: 'Lo-Fi', query: 'Nocturnal lofi hip hop chill study beats' }
 ]

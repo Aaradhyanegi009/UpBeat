@@ -15,11 +15,11 @@ export const PRESET_MODES = [
   },
   {
     id: 'ost',
-    label: 'Cinematic & Anime OST',
-    character: 'Orchestral Rock • Sawano',
+    label: 'Cinematic Soundtracks',
+    character: 'Orchestral Rock • Film Scores',
     energy: 78,
     theme: 'amber',
-    prompt: 'High-impact orchestral rock, Hiroyuki Sawano style soundtracks, and Monogatari / anime openings'
+    prompt: 'Cinematic orchestral soundtracks, ambient instrumental soundscapes, and epic film scores'
   },
   {
     id: 'velocity',
