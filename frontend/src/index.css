@@ -332,4 +332,4 @@ input[type="range"].ub-range.sm::-moz-range-thumb { width: 12px; height: 12px; }
 input[type="range"].ub-range:disabled { cursor: default; opacity: 0.5; }
 
 /* Legacy screens with their own sticky header sit below the desktop top bar */
-.ub-under-topbar .sticky { top: 80px; }
+.ub-under-topbar .sticky { top: 76px; }

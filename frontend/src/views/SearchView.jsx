@@ -11,7 +11,7 @@ const FILTERS = [
   { id: 'videos', label: 'Videos' }
 ]
 
-export function SearchField({ value, onChange, onSubmit, onClear, autoFocus = false, inputRef, placeholder = 'Songs, artists, or a vibe', className = '', onFocus, kbdHint }) {
+export function SearchField({ value, onChange, onSubmit, onClear, autoFocus = false, inputRef, placeholder = 'Songs, artists, or a vibe', className = '', onFocus, onBlur, kbdHint }) {
   return (
     <form
       role="search"
@@ -34,6 +34,7 @@ export function SearchField({ value, onChange, onSubmit, onClear, autoFocus = fa
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
         className="flex-1 min-w-0 bg-transparent text-base font-semibold placeholder:text-t3 placeholder:font-medium focus:outline-none [&::-webkit-search-cancel-button]:hidden"
       />

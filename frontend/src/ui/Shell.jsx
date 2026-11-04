@@ -1,7 +1,8 @@
-import React from 'react'
-import { House, Search, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings } from 'lucide-react'
 import { Avatar, IconButton, LikedTile, Collage, Chip } from './primitives'
 import { SearchField } from '../views/SearchView'
+import { useMediaQuery } from './router'
 
 export const TABS = [
   { id: 'home', path: '/', label: 'Home', icon: House },
@@ -45,9 +46,7 @@ export function SideNav({ activeTab, onSelect, saved = [], favoritesCount = 0, d
       <div className="rounded-[14px] bg-bg p-3 shrink-0">
         <div className="flex items-center gap-2.5 px-2.5 pt-1 pb-3.5 text-xl font-extrabold tracking-[-0.02em]">
           <span className="w-[30px] h-[30px] rounded-[9px] bg-accent text-on-accent flex items-center justify-center">
-            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
-              <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.4-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" />
-            </svg>
+            <Music className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
           </span>
           UpBeat
         </div>
@@ -146,6 +145,19 @@ function SideItem({ onClick, art, title, sub, active, playing }) {
 /** Desktop: bar at the top of the centre column. */
 export function TopBar({ query, setQuery, onSearchFocus, onSearchSubmit, searchInputRef, user, onOpenProfile, onOpenSettings, friends = [], onOpenFriends }) {
   const online = friends.filter((f) => f.online)
+  const compact = !useMediaQuery('(min-width: 1280px)')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const showField = !compact || searchOpen || !!query
+
+  useEffect(() => {
+    if (!compact) return undefined
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') setSearchOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [compact])
+
   return (
     <div className="flex items-center gap-3 px-7 py-4">
       <IconButton label="Back" variant="filled" size={36} onClick={() => window.history.back()}>
@@ -154,17 +166,33 @@ export function TopBar({ query, setQuery, onSearchFocus, onSearchSubmit, searchI
       <IconButton label="Forward" variant="filled" size={36} onClick={() => window.history.forward()}>
         <ChevronRight className="w-5 h-5" />
       </IconButton>
-      <SearchField
-        className="flex-[0_1_460px] min-w-0"
-        inputRef={searchInputRef}
-        value={query}
-        onChange={setQuery}
-        onFocus={onSearchFocus}
-        onSubmit={onSearchSubmit}
-        onClear={() => setQuery('')}
-        placeholder="Search, or describe a vibe to make a mix"
-        kbdHint="⌘K"
-      />
+      {showField ? (
+        <SearchField
+          className="flex-[0_1_460px] min-w-0"
+          inputRef={searchInputRef}
+          value={query}
+          onChange={setQuery}
+          autoFocus={compact}
+          onFocus={onSearchFocus}
+          onBlur={() => setSearchOpen(false)}
+          onSubmit={onSearchSubmit}
+          onClear={() => setQuery('')}
+          placeholder="Search, or describe a vibe to make a mix"
+          kbdHint={compact ? undefined : '⌘K'}
+        />
+      ) : (
+        <IconButton
+          label="Search"
+          variant="filled"
+          size={44}
+          onClick={() => {
+            setSearchOpen(true)
+            onSearchFocus?.()
+          }}
+        >
+          <Search className="w-5 h-5" />
+        </IconButton>
+      )}
       <span className="flex-1" />
       <button
         type="button"

@@ -17,14 +17,6 @@ export const MOODS = [
   { id: 'lofi', label: 'Lo-fi', query: 'Lofi hip hop chill beats playlist' }
 ]
 
-function greeting() {
-  const h = new Date().getHours()
-  if (h < 5) return 'Up late'
-  if (h < 12) return 'Good morning'
-  if (h < 17) return 'Good afternoon'
-  return 'Good evening'
-}
-
 export default function HomeView({
   isDesktop,
   user,
@@ -76,7 +68,6 @@ export default function HomeView({
   const moreForYou = personal.slice(1)
   const listening = friends.filter((f) => f.online && f.currentTrack)
   const onlineCount = friends.filter((f) => f.online).length
-  const firstName = (user?.name || '').split(' ')[0]
 
   return (
     <div className="px-5 lg:px-8 pb-10 max-w-[1400px] mx-auto w-full">
@@ -92,12 +83,7 @@ export default function HomeView({
         </div>
       )}
 
-      <h1 className={`font-extrabold tracking-[-0.025em] leading-tight ${isDesktop ? 'text-[34px] mt-2' : 'text-[30px] mt-3'}`}>
-        {greeting()}
-        {firstName ? `, ${firstName}` : ''}
-      </h1>
-
-      <ChipRow className="mt-4">
+      <ChipRow className={isDesktop ? 'mt-2' : 'mt-3'}>
         <Chip active>For you</Chip>
         {MOODS.map((m) => (
           <Chip key={m.id} onClick={() => onMood(m)}>
