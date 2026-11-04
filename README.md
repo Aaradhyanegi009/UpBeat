@@ -1,14 +1,18 @@
-# 🎵 UpBeat
+# 🎵 UpBeat (v7.0)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
-UpBeat pairs Google Gemini with YouTube Music to sequence harmonic DJ sets, decode your personal musical taste into a **Sonic DNA profile**, and stream music with zero ads, zero trackers, and zero subscription paywalls.
+UpBeat pairs Google Gemini with YouTube Music to sequence harmonic DJ sets, decode your personal musical taste into a **Sonic DNA profile**, connect with friends via **Real-Time Friends & Live P2P Jam Sessions**, and stream music with zero ads, zero trackers, and zero subscription paywalls.
 
 Built as a clean cross-platform project for **Android**, **Android Auto**, **macOS**, and the **Web**.
 
 ---
 
 ##  Features & Highlights
+
+###  Real-Time Friends & Live P2P Jam Social Engine (v7.0)
+- **Persistent Friend Code (`UP-XXXXXX`) & Live Activity Feed**: Every user gets a shareable Friend ID with an always-on WebRTC + `BroadcastChannel` presence mesh. Add friends, accept/decline requests, and see when friends are **🟢 Online — Listening to *[Song Title] - [Artist]*** (with 1-click **Listen Along**) or **Idle in Studio**.
+- **1-Click Jam Invites & Synchronized Listening (`JAM-XXXX`)**: Send instant live Jam invites to online friends with an interactive floating glass Join banner. Features NTP clock calibration and 3-tier acoustic drift compensation (`< 150ms` locked, `150ms–850ms` micro-speed ramping, `>= 850ms` hard seek).
 
 ###  Atmosphere Themes & Day/Night Engine
 - **Dynamic Time-Based Cycling**: Automatically shifts ambient lighting and gradient reflections based on your local time:

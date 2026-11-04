@@ -11,7 +11,7 @@ import QueueDrawer from './components/QueueDrawer'
 import GoogleAuthModal from './components/GoogleAuthModal'
 import JamModal from './components/JamModal'
 import JamFloatingBar from './components/JamFloatingBar'
-import { jamManager, evaluateAudioDrift, normalizeRoomCode } from './jamEngine'
+import { jamManager, evaluateAudioDrift, normalizeRoomCode, normalizeFriendCode, renderEmoji } from './jamEngine'
 import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges } from './offlineStorage'
 import { initOtaUpdater } from './otaUpdater'
 import { getDayNightThemeInfo, getThemeInfo, getNextThemePreference, applyThemeToDocument } from './utils/themeCycle'
@@ -267,10 +267,12 @@ export default function App() {
   const [isApplyingOta, setIsApplyingOta] = useState(false)
   const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
 
-  // Live Jam Session State & Refs
+  // Live Jam & Friends Social State & Refs
   const [jamState, setJamState] = useState(() => jamManager.state)
   const [isJamModalOpen, setIsJamModalOpen] = useState(false)
   const [initialJamCode, setInitialJamCode] = useState('')
+  const [initialFriendCode, setInitialFriendCode] = useState('')
+  const [initialJamSection, setInitialJamSection] = useState('')
   const [jamReactions, setJamReactions] = useState([])
   const currentTrackRef = useRef(currentTrack)
   const isPlayingRef = useRef(isPlaying)
@@ -283,7 +285,7 @@ export default function App() {
   isPlayingRef.current = isPlaying
   queueRef.current = queue
 
-  // Subscribe to Jam Engine state & detect ?jam=XXXX invite link on startup
+  // Subscribe to Jam Engine state & detect ?jam=XXXX or ?addFriend=UP-XXXXXX invite links on startup
   useEffect(() => {
     const unsub = jamManager.subscribe((nextState) => {
       setJamState(nextState)
@@ -292,10 +294,20 @@ export default function App() {
     try {
       const params = new URLSearchParams(window.location.search)
       const jamParam = params.get('jam')
+      const friendParam = params.get('addFriend')
       if (jamParam) {
         const cleanCode = normalizeRoomCode(jamParam)
         if (cleanCode && cleanCode !== 'JAM-') {
           setInitialJamCode(cleanCode)
+          setIsJamModalOpen(true)
+          const cleanUrl = window.location.pathname + window.location.hash
+          window.history.replaceState({}, document.title, cleanUrl)
+        }
+      } else if (friendParam) {
+        const cleanFriend = normalizeFriendCode(friendParam)
+        if (cleanFriend && cleanFriend !== 'UP-') {
+          setInitialFriendCode(cleanFriend)
+          setInitialJamSection('friends')
           setIsJamModalOpen(true)
           const cleanUrl = window.location.pathname + window.location.hash
           window.history.replaceState({}, document.title, cleanUrl)
@@ -398,8 +410,9 @@ export default function App() {
           }
           return nextQ
         })
+        const cleanAv = renderEmoji(addedBy?.avatar, '🎧')
         showNotify(
-          `${addedBy?.avatar || '🎧'} ${addedBy?.name || 'Friend'} added "${track.title}" to Jam queue`,
+          `${cleanAv} ${addedBy?.name || 'Friend'} added "${track.title}" to Jam queue`,
           'info'
         )
       },
@@ -407,13 +420,15 @@ export default function App() {
         if (!packet?.emoji) return
         const id = packet.id || `${Date.now()}_${Math.random()}`
         const xOffset = 18 + Math.floor(Math.random() * 64)
+        const cleanEmoji = renderEmoji(packet.emoji, '🔥')
+        const cleanAvatar = renderEmoji(packet.senderAvatar, '🎧')
         setJamReactions((prev) => [
           ...prev.slice(-14),
           {
             id,
-            emoji: packet.emoji,
+            emoji: cleanEmoji,
             senderName: packet.senderName || 'Listener',
-            senderAvatar: packet.senderAvatar || '🎧',
+            senderAvatar: cleanAvatar,
             xOffset
           }
         ])
@@ -427,8 +442,9 @@ export default function App() {
     })
   }, [])
 
-  // Automatically broadcast Host playback state changes to Jam room
+  // Automatically broadcast Host playback state changes to Jam room & Friends presence feed
   useEffect(() => {
+    jamManager.broadcastPresenceStatus()
     if (!jamState.active || !jamState.isHost || remoteJamGuardRef.current) return
     jamManager.broadcastHostSync({
       track: currentTrack,
@@ -2170,24 +2186,31 @@ export default function App() {
         onUserSeek={handleUserSeek}
       />
 
-      {/* Live Jam Session Floating Bar & Emoji Particle Stream */}
+      {/* Live Jam Session Floating Bar, Invite Toast & Emoji Particle Stream */}
       <JamFloatingBar
         jamState={jamState}
         reactions={jamReactions}
+        googleUser={googleUser}
         onOpenJamModal={() => setIsJamModalOpen(true)}
       />
 
-      {/* Live Jam Session Modal (Host / Join / Room Dashboard) */}
+      {/* Friends & Live Jam Social Hub Modal */}
       <JamModal
         isOpen={isJamModalOpen}
         onClose={() => {
           setIsJamModalOpen(false)
           setInitialJamCode('')
+          setInitialFriendCode('')
+          setInitialJamSection('')
         }}
         jamState={jamState}
+        googleUser={googleUser}
         currentTrack={currentTrack}
         isPlaying={isPlaying}
         initialJoinCode={initialJamCode}
+        initialFriendCode={initialFriendCode}
+        initialSection={initialJamSection}
+        onPlayTrack={handlePlayTrack}
         onNotify={(msg, type) => showNotify(msg, type || 'info')}
       />
 

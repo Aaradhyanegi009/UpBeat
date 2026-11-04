@@ -44,7 +44,7 @@ export default function Navbar({
   const [savedBanner, setSavedBanner] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
-  const [otaVer, setOtaVer] = useState('v6.4.0')
+  const [otaVer, setOtaVer] = useState('v7.0')
   const [isCheckingOta, setIsCheckingOta] = useState(false)
   const [otaStatusMsg, setOtaStatusMsg] = useState('')
 
@@ -346,31 +346,40 @@ export default function Navbar({
                 <Search className="w-5 h-5" />
               </button>
 
-              {/* Friends / Live Jam Session Button (Desktop & Mobile) */}
+              {/* Friends & Live Jam Session Button (Desktop & Mobile) */}
               {onOpenJamModal && (
                 <button
                   type="button"
                   onClick={onOpenJamModal}
-                  title={jamState?.active ? `Live Jam Room: ${jamState.roomCode}` : 'Start or Join a Jam Session with Friends'}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all cursor-pointer active:scale-95 ${
+                  title={
                     jamState?.active
-                      ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.2)]'
+                      ? `Live Jam Room: ${jamState.roomCode}`
+                      : 'Friends & Live Jam Hub'
+                  }
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all cursor-pointer active:scale-95 ${
+                    jamState?.active
+                      ? 'bg-[#10B981]/15 hover:bg-[#10B981]/25 border-[#10B981]/40 text-[#10B981] shadow-[0_0_16px_rgba(16,185,129,0.2)]'
                       : 'bg-[var(--surface-hover)] hover:bg-[var(--bg-elevated)] border-[var(--border-subtle)] text-[var(--text-primary)]'
                   }`}
                 >
                   {jamState?.active ? (
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10B981] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#10B981]"></span>
                     </span>
                   ) : (
-                    <Users className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                    <Users className="w-3.5 h-3.5 text-[#F43F5E]" />
                   )}
                   <span>
                     {jamState?.active
                       ? `Jam (${jamState.participants?.length || 1})`
                       : 'Jam'}
                   </span>
+                  {(jamState?.incomingRequests?.length || 0) > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-[#F59E0B] text-white text-[10px] font-extrabold leading-tight">
+                      {jamState.incomingRequests.length}
+                    </span>
+                  )}
                 </button>
               )}
 

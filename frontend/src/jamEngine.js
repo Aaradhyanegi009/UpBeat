@@ -1,17 +1,34 @@
 import { Peer } from 'peerjs'
 
 const JAM_USER_STORAGE_KEY = 'upbeat_jam_profile_v1'
-const JAM_PEER_PREFIX = 'upbeat-jam-v64-'
+const LEGACY_PROFILE_KEYS = ['upbeat_jam_profile_v1', 'upbeat_jam_profile', 'upbeat_user_profile']
+const FRIENDS_LIST_STORAGE_KEY = 'upbeat_friends_list'
+const FRIEND_REQ_IN_STORAGE_KEY = 'upbeat_friend_requests_in'
+const FRIEND_REQ_OUT_STORAGE_KEY = 'upbeat_friend_requests_out'
+
+const JAM_PEER_PREFIX = 'upbeat-jam-v70-'
+const PRESENCE_PEER_PREFIX = 'upbeat-user-'
+
+export const renderEmoji = (val, fallback = '🎧') => {
+  if (!val) return fallback
+  if (typeof val === 'string') return val
+  if (typeof val === 'object' && typeof val.emoji === 'string') return val.emoji
+  return fallback
+}
 
 export const JAM_AVATARS = ['🎧', '🎸', '🎹', '🎷', '🥁', '🎤', '🎻', '⚡']
 
-export const JAM_REACTIONS = [
+export const JAM_REACTIONS = ['🔥', '❤️', '🙌', '⚡', '🥹', '🕺', '🚀', '✨']
+
+export const JAM_REACTION_PRESETS = [
   { emoji: '🔥', label: 'Fire' },
   { emoji: '❤️', label: 'Love' },
+  { emoji: '🙌', label: 'Hands' },
   { emoji: '⚡', label: 'Vibe' },
-  { emoji: '💃', label: 'Dance' },
-  { emoji: '✨', label: 'Magic' },
-  { emoji: '🚀', label: 'Hype' }
+  { emoji: '🥹', label: 'Feels' },
+  { emoji: '🕺', label: 'Dance' },
+  { emoji: '🚀', label: 'Hype' },
+  { emoji: '✨', label: 'Magic' }
 ]
 
 const ICE_SERVERS = [
@@ -21,13 +38,22 @@ const ICE_SERVERS = [
   { urls: 'stun:global.stun.twilio.com:3478' }
 ]
 
-function generateShortPin() {
-  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
-  let pin = ''
-  for (let i = 0; i < 4; i++) {
-    pin += chars[Math.floor(Math.random() * chars.length)]
+const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+
+function randomChars(len) {
+  let out = ''
+  for (let i = 0; i < len; i++) {
+    out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
   }
-  return `JAM-${pin}`
+  return out
+}
+
+function generateShortPin() {
+  return `JAM-${randomChars(4)}`
+}
+
+function generateFriendCode() {
+  return `UP-${randomChars(6)}`
 }
 
 export function normalizeRoomCode(raw) {
@@ -38,26 +64,90 @@ export function normalizeRoomCode(raw) {
   return `JAM-${stripped.slice(0, 6)}`
 }
 
+export function normalizeFriendCode(raw) {
+  if (!raw) return ''
+  const cleaned = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const stripped = cleaned.startsWith('UP') ? cleaned.slice(2) : cleaned
+  if (!stripped) return ''
+  return `UP-${stripped.slice(0, 6)}`
+}
+
 function getPeerIdFromCode(roomCode) {
   const norm = normalizeRoomCode(roomCode)
   const suffix = norm.replace('JAM-', '').toLowerCase()
   return `${JAM_PEER_PREFIX}${suffix}`
 }
 
+function getPresencePeerId(friendCode) {
+  const norm = normalizeFriendCode(friendCode)
+  if (!norm) return ''
+  return `${PRESENCE_PEER_PREFIX}${norm}`
+}
+
+/**
+ * Boot sanitizer: Ensure any stored avatar or reaction in localStorage is a plain string emoji,
+ * preventing React Error #31 ({emoji, label} object rendered as child).
+ */
+export function sanitizeStoredJamAndSocialData() {
+  if (typeof window === 'undefined' || !window.localStorage) return
+
+  for (const key of LEGACY_PROFILE_KEYS) {
+    try {
+      const raw = localStorage.getItem(key)
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        const cleanAvatar = renderEmoji(parsed.avatar, '🎧')
+        const cleanFriendCode = normalizeFriendCode(parsed.friendCode) || generateFriendCode()
+        const updated = {
+          ...parsed,
+          avatar: cleanAvatar,
+          friendCode: cleanFriendCode
+        }
+        localStorage.setItem(key, JSON.stringify(updated))
+      }
+    } catch {}
+  }
+
+  for (const listKey of [FRIENDS_LIST_STORAGE_KEY, FRIEND_REQ_IN_STORAGE_KEY, FRIEND_REQ_OUT_STORAGE_KEY]) {
+    try {
+      const raw = localStorage.getItem(listKey)
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        const sanitized = parsed
+          .filter((item) => item && typeof item === 'object')
+          .map((item) => ({
+            ...item,
+            friendCode: normalizeFriendCode(item.friendCode || item.id),
+            avatar: renderEmoji(item.avatar, '🎧'),
+            name: String(item.name || 'Friend')
+          }))
+          .filter((item) => Boolean(item.friendCode))
+        localStorage.setItem(listKey, JSON.stringify(sanitized))
+      }
+    } catch {}
+  }
+}
+
+sanitizeStoredJamAndSocialData()
+
 export function loadJamUserProfile(googleUser = null) {
   try {
     const saved = localStorage.getItem(JAM_USER_STORAGE_KEY)
     const parsed = saved ? JSON.parse(saved) : {}
     const id = parsed.id || `usr_${Math.random().toString(36).slice(2, 10)}`
-    const name = googleUser?.name || parsed.name || `Listener ${id.slice(-3).toUpperCase()}`
-    const avatar = parsed.avatar || JAM_AVATARS[Math.floor(Math.random() * JAM_AVATARS.length)]
+    const friendCode = normalizeFriendCode(parsed.friendCode) || generateFriendCode()
+    const name = googleUser?.name || parsed.name || `Listener ${friendCode.slice(-3)}`
+    const avatar = renderEmoji(parsed.avatar, JAM_AVATARS[0])
     const picture = googleUser?.picture || parsed.picture || ''
-    const profile = { id, name, avatar, picture }
+    const profile = { id, friendCode, name, avatar, picture }
     localStorage.setItem(JAM_USER_STORAGE_KEY, JSON.stringify(profile))
     return profile
   } catch {
     return {
       id: `usr_${Math.random().toString(36).slice(2, 10)}`,
+      friendCode: generateFriendCode(),
       name: googleUser?.name || 'Music Lover',
       avatar: '🎧',
       picture: googleUser?.picture || ''
@@ -67,11 +157,32 @@ export function loadJamUserProfile(googleUser = null) {
 
 export function saveJamUserProfile(updates) {
   const current = loadJamUserProfile()
-  const updated = { ...current, ...updates }
+  const updated = {
+    ...current,
+    ...updates,
+    avatar: renderEmoji(updates?.avatar ?? current.avatar, '🎧'),
+    friendCode: normalizeFriendCode(updates?.friendCode || current.friendCode) || current.friendCode
+  }
   try {
     localStorage.setItem(JAM_USER_STORAGE_KEY, JSON.stringify(updated))
   } catch {}
   return updated
+}
+
+function loadJsonArray(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveJsonArray(key, arr) {
+  try {
+    localStorage.setItem(key, JSON.stringify(arr))
+  } catch {}
 }
 
 /**
@@ -79,8 +190,6 @@ export function saveJamUserProfile(updates) {
  */
 export function evaluateAudioDrift(localCurrentTime, hostCurrentTime, hostTimestamp, clockOffsetMs, isPlaying) {
   const now = Date.now()
-  // Host clock estimation at current moment: now - clockOffsetMs
-  // Wait: if guest clock + offset = host clock, then estimatedHostNow = now + clockOffsetMs
   const estimatedHostNow = now + (clockOffsetMs || 0)
   const elapsedSec = isPlaying && hostTimestamp
     ? Math.max(0, Math.min(15, (estimatedHostNow - hostTimestamp) / 1000))
@@ -90,7 +199,7 @@ export function evaluateAudioDrift(localCurrentTime, hostCurrentTime, hostTimest
   const driftSec = targetTime - (Number(localCurrentTime) || 0)
   const absDriftMs = Math.round(Math.abs(driftSec) * 1000)
 
-  // Tier 1: < 150ms -> Imperceptible to human ear, keep normal speed
+  // Tier 1: < 150ms -> Locked in sync, keep 1.0x speed
   if (absDriftMs < 150) {
     return {
       action: 'NONE',
@@ -98,7 +207,7 @@ export function evaluateAudioDrift(localCurrentTime, hostCurrentTime, hostTimest
       driftMs: Math.round(driftSec * 1000),
       absDriftMs,
       playbackRate: 1.0,
-      syncTier: 'IN_SYNC'
+      syncTier: 'LOCKED'
     }
   }
 
@@ -131,13 +240,23 @@ class JamSessionManager {
     this.peer = null
     this.connections = new Map() // peerId -> DataConnection (used by Host)
     this.hostConn = null // DataConnection to Host (used by Guest)
-    this.bc = null // Same-browser BroadcastChannel fast bridge
+    this.bc = null // Same-browser BroadcastChannel fast bridge for Jam room
+
+    // Always-on Friends Presence P2P & BroadcastChannel
+    this.presencePeer = null
+    this.presenceConns = new Map() // friendCode -> DataConnection
+    this.socialBc = null
+    this.presenceTimer = null
+
     this.syncInterval = null
     this.pingInterval = null
     this.clockSamples = []
 
+    this.userProfile = loadJamUserProfile()
+
     this.state = {
       active: false,
+      isHost: false,
       role: null, // 'host' | 'guest' | null
       roomCode: '',
       status: 'IDLE', // 'IDLE' | 'CONNECTING' | 'CONNECTED' | 'ERROR'
@@ -148,7 +267,25 @@ class JamSessionManager {
       clockOffsetMs: 0,
       rttMs: 18,
       syncDeltaMs: 0,
-      syncTier: 'IN_SYNC'
+      syncTier: 'LOCKED',
+
+      // Friends & Presence State (v7.0)
+      userProfile: this.userProfile,
+      friends: loadJsonArray(FRIENDS_LIST_STORAGE_KEY).map((f) => ({
+        ...f,
+        avatar: renderEmoji(f.avatar, '🎧'),
+        online: false
+      })),
+      incomingRequests: loadJsonArray(FRIEND_REQ_IN_STORAGE_KEY).map((r) => ({
+        ...r,
+        avatar: renderEmoji(r.avatar, '🎧')
+      })),
+      outgoingRequests: loadJsonArray(FRIEND_REQ_OUT_STORAGE_KEY).map((r) => ({
+        ...r,
+        avatar: renderEmoji(r.avatar, '🎧')
+      })),
+      incomingJamInvite: null,
+      presenceReady: false
     }
 
     this.listeners = new Set()
@@ -158,7 +295,12 @@ class JamSessionManager {
       onRemoteQueueAdd: null,
       onReaction: null,
       onNotify: null,
+      onJamInvite: null,
       getHostPlaybackSnapshot: null
+    }
+
+    if (typeof window !== 'undefined') {
+      setTimeout(() => this.initPresenceNetwork(), 350)
     }
   }
 
@@ -173,7 +315,14 @@ class JamSessionManager {
   }
 
   updateState(patch) {
-    this.state = { ...this.state, ...patch }
+    const nextRole = patch.role !== undefined ? patch.role : this.state.role
+    const nextIsHost = patch.isHost !== undefined ? patch.isHost : nextRole === 'host'
+    this.state = {
+      ...this.state,
+      ...patch,
+      role: nextRole,
+      isHost: Boolean(nextIsHost)
+    }
     for (const fn of this.listeners) {
       try {
         fn(this.state)
@@ -181,9 +330,555 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Setup same-device BroadcastChannel so multi-tab testing and local windows sync in < 2ms
-   */
+  refreshProfile(googleUser = null) {
+    this.userProfile = loadJamUserProfile(googleUser)
+    this.updateState({ userProfile: this.userProfile })
+    this.broadcastPresenceStatus()
+    return this.userProfile
+  }
+
+  updateUserProfile(updates) {
+    this.userProfile = saveJamUserProfile(updates)
+    this.updateState({ userProfile: this.userProfile })
+    if (this.state.active) {
+      const updatedParticipants = this.state.participants.map((p) =>
+        p.id === this.userProfile.id
+          ? { ...p, name: this.userProfile.name, avatar: renderEmoji(this.userProfile.avatar, '🎧') }
+          : p
+      )
+      this.updateState({ participants: updatedParticipants })
+      if (this.state.isHost) {
+        this.broadcastParticipants()
+      } else {
+        this.sendToHost({
+          type: 'JAM_HELLO',
+          profile: {
+            id: this.userProfile.id,
+            friendCode: this.userProfile.friendCode,
+            name: this.userProfile.name,
+            avatar: renderEmoji(this.userProfile.avatar, '🎧'),
+            picture: this.userProfile.picture,
+            isHost: false,
+            inSync: true
+          }
+        })
+      }
+    }
+    this.broadcastPresenceStatus()
+    return this.userProfile
+  }
+
+  // ============================================================================
+  // PILLAR 3: REAL-TIME FRIENDS & ALWAYS-ON PRESENCE NETWORK (UP-XXXXXX)
+  // ============================================================================
+
+  initPresenceNetwork() {
+    this.userProfile = loadJamUserProfile()
+    const myFriendCode = this.userProfile.friendCode
+
+    // 1. Same-device / local tab BroadcastChannel social mesh
+    if (typeof BroadcastChannel !== 'undefined' && !this.socialBc) {
+      try {
+        this.socialBc = new BroadcastChannel('upbeat_social_v7')
+        this.socialBc.onmessage = (ev) => {
+          const data = ev?.data
+          if (!data || data._fromFriendCode === myFriendCode) return
+          if (!data.targetFriendCode || data.targetFriendCode === myFriendCode) {
+            this.handleSocialPacket(data, null)
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Deterministic PeerJS Presence Endpoint (upbeat-user-UP-XXXXXX)
+    if (!this.presencePeer) {
+      try {
+        const peerId = getPresencePeerId(myFriendCode)
+        const pPeer = new Peer(peerId, {
+          config: { iceServers: ICE_SERVERS },
+          debug: 0
+        })
+        this.presencePeer = pPeer
+
+        pPeer.on('open', () => {
+          this.updateState({ presenceReady: true })
+          this.pingAllFriends()
+          this.retryOutgoingRequests()
+        })
+
+        pPeer.on('connection', (conn) => {
+          this.setupPresenceConn(conn)
+        })
+
+        pPeer.on('error', () => {
+          // Even if PeerJS ID is already open in another tab, BroadcastChannel still works
+          this.updateState({ presenceReady: true })
+        })
+      } catch {}
+    }
+
+    if (this.presenceTimer) clearInterval(this.presenceTimer)
+    this.presenceTimer = setInterval(() => {
+      this.pingAllFriends()
+      this.pruneStaleFriendPresence()
+    }, 15000)
+
+    setTimeout(() => {
+      this.pingAllFriends()
+      this.retryOutgoingRequests()
+    }, 1000)
+  }
+
+  setupPresenceConn(conn, knownFriendCode = null) {
+    conn.on('open', () => {
+      if (knownFriendCode) {
+        this.presenceConns.set(knownFriendCode, conn)
+      }
+      try {
+        conn.send(this.buildPresencePayload('PRESENCE_PING'))
+      } catch {}
+    })
+
+    conn.on('data', (data) => {
+      if (data?._fromFriendCode) {
+        this.presenceConns.set(data._fromFriendCode, conn)
+      }
+      this.handleSocialPacket(data, conn)
+    })
+
+    const cleanup = () => {
+      for (const [code, activeConn] of this.presenceConns.entries()) {
+        if (activeConn === conn) {
+          this.presenceConns.delete(code)
+        }
+      }
+    }
+    conn.on('close', cleanup)
+    conn.on('error', cleanup)
+  }
+
+  getMyPublicSummary() {
+    const snap = this.eventHandlers.getHostPlaybackSnapshot
+      ? this.eventHandlers.getHostPlaybackSnapshot()
+      : null
+    return {
+      id: this.userProfile.id,
+      friendCode: this.userProfile.friendCode,
+      name: this.userProfile.name,
+      avatar: renderEmoji(this.userProfile.avatar, '🎧'),
+      picture: this.userProfile.picture || '',
+      currentTrack: snap?.track
+        ? {
+            video_id: snap.track.video_id,
+            title: snap.track.title,
+            artist: snap.track.artist,
+            thumbnail: snap.track.thumbnail,
+            duration_text: snap.track.duration_text
+          }
+        : null,
+      isPlaying: Boolean(snap?.isPlaying),
+      activeJamCode: this.state.active ? this.state.roomCode : '',
+      timestamp: Date.now()
+    }
+  }
+
+  buildPresencePayload(type, extra = {}) {
+    return {
+      type,
+      from: this.getMyPublicSummary(),
+      _fromFriendCode: this.userProfile.friendCode,
+      ...extra
+    }
+  }
+
+  sendSocialPacket(targetFriendCode, packet) {
+    const cleanTarget = normalizeFriendCode(targetFriendCode)
+    if (!cleanTarget || cleanTarget === this.userProfile.friendCode) return
+
+    const fullPacket = {
+      ...packet,
+      targetFriendCode: cleanTarget,
+      _fromFriendCode: this.userProfile.friendCode
+    }
+
+    // 1. Send via BroadcastChannel (instant same-device delivery)
+    if (this.socialBc) {
+      try {
+        this.socialBc.postMessage(fullPacket)
+      } catch {}
+    }
+
+    // 2. Send via active PeerJS connection or open a new one
+    const existing = this.presenceConns.get(cleanTarget)
+    if (existing && existing.open) {
+      try {
+        existing.send(fullPacket)
+        return
+      } catch {}
+    }
+
+    if (this.presencePeer && !this.presencePeer.destroyed) {
+      try {
+        const targetPeerId = getPresencePeerId(cleanTarget)
+        const conn = this.presencePeer.connect(targetPeerId, { reliable: true })
+        this.setupPresenceConn(conn, cleanTarget)
+        conn.on('open', () => {
+          try {
+            conn.send(fullPacket)
+          } catch {}
+        })
+      } catch {}
+    }
+  }
+
+  pingAllFriends() {
+    const friends = this.state.friends || []
+    for (const f of friends) {
+      if (f.friendCode) {
+        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_PING'))
+      }
+    }
+  }
+
+  retryOutgoingRequests() {
+    const outgoing = this.state.outgoingRequests || []
+    for (const req of outgoing) {
+      if (req.friendCode) {
+        this.sendSocialPacket(req.friendCode, this.buildPresencePayload('FRIEND_REQUEST'))
+      }
+    }
+  }
+
+  broadcastPresenceStatus() {
+    const friends = this.state.friends || []
+    for (const f of friends) {
+      if (f.friendCode) {
+        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_STATUS'))
+      }
+    }
+  }
+
+  pruneStaleFriendPresence() {
+    const now = Date.now()
+    let changed = false
+    const nextFriends = (this.state.friends || []).map((f) => {
+      if (f.online && f.lastSeen && now - f.lastSeen > 42000) {
+        changed = true
+        return { ...f, online: false }
+      }
+      return f
+    })
+    if (changed) {
+      this.updateState({ friends: nextFriends })
+      saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
+    }
+  }
+
+  handleSocialPacket(data, conn) {
+    if (!data || typeof data !== 'object' || !data.from) return
+    const sender = {
+      ...data.from,
+      friendCode: normalizeFriendCode(data.from.friendCode),
+      avatar: renderEmoji(data.from.avatar, '🎧')
+    }
+    if (!sender.friendCode) return
+
+    switch (data.type) {
+      case 'PRESENCE_PING': {
+        this.updateFriendPresence(sender)
+        const reply = this.buildPresencePayload('PRESENCE_PONG', {
+          targetFriendCode: sender.friendCode
+        })
+        if (conn && conn.open) {
+          try { conn.send(reply) } catch {}
+        } else {
+          this.sendSocialPacket(sender.friendCode, reply)
+        }
+        break
+      }
+
+      case 'PRESENCE_PONG':
+      case 'PRESENCE_STATUS': {
+        this.updateFriendPresence(sender)
+        break
+      }
+
+      case 'FRIEND_REQUEST': {
+        // Check if already friends
+        const alreadyFriend = this.state.friends.some((f) => f.friendCode === sender.friendCode)
+        if (alreadyFriend) {
+          this.updateFriendPresence(sender)
+          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'))
+          return
+        }
+
+        // Check if we also have an outgoing request to them (Mutual Request Handshake!)
+        const isOutgoingMatch = this.state.outgoingRequests.some(
+          (r) => r.friendCode === sender.friendCode
+        )
+        if (isOutgoingMatch) {
+          this.promoteToConfirmedFriend(sender)
+          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'))
+          if (this.eventHandlers.onNotify) {
+            this.eventHandlers.onNotify(
+              `🎉 You and ${sender.name} (${sender.friendCode}) are now friends!`,
+              'success'
+            )
+          }
+          return
+        }
+
+        // Otherwise add to incomingRequests if not already present
+        const existsIn = this.state.incomingRequests.some((r) => r.friendCode === sender.friendCode)
+        if (!existsIn) {
+          const nextIn = [
+            {
+              friendCode: sender.friendCode,
+              name: sender.name,
+              avatar: sender.avatar,
+              picture: sender.picture || '',
+              currentTrack: sender.currentTrack || null,
+              requestedAt: Date.now()
+            },
+            ...this.state.incomingRequests
+          ]
+          saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
+          this.updateState({ incomingRequests: nextIn })
+          if (this.eventHandlers.onNotify) {
+            this.eventHandlers.onNotify(
+              `${sender.avatar} ${sender.name} sent you a Friend Request!`,
+              'info'
+            )
+          }
+        }
+        break
+      }
+
+      case 'FRIEND_ACCEPTED': {
+        this.promoteToConfirmedFriend(sender)
+        if (this.eventHandlers.onNotify) {
+          this.eventHandlers.onNotify(
+            `${sender.avatar} ${sender.name} accepted your friend request!`,
+            'success'
+          )
+        }
+        break
+      }
+
+      case 'JAM_INVITE': {
+        const invite = {
+          id: `inv_${Date.now()}`,
+          roomCode: normalizeRoomCode(data.roomCode),
+          hostName: sender.name || data.hostName || 'Friend',
+          hostAvatar: renderEmoji(sender.avatar || data.hostAvatar, '🎧'),
+          hostFriendCode: sender.friendCode,
+          currentTrack: data.currentTrack || sender.currentTrack || null,
+          receivedAt: Date.now()
+        }
+        if (!invite.roomCode) return
+        this.updateState({ incomingJamInvite: invite })
+        if (this.eventHandlers.onJamInvite) {
+          this.eventHandlers.onJamInvite(invite)
+        }
+        if (this.eventHandlers.onNotify) {
+          this.eventHandlers.onNotify(
+            `🎧 ${invite.hostName} invited you to a Live Jam (${invite.roomCode})!`,
+            'info'
+          )
+        }
+        break
+      }
+
+      default:
+        break
+    }
+  }
+
+  updateFriendPresence(sender) {
+    const idx = this.state.friends.findIndex((f) => f.friendCode === sender.friendCode)
+    if (idx === -1) return
+    const updatedFriend = {
+      ...this.state.friends[idx],
+      name: sender.name || this.state.friends[idx].name,
+      avatar: renderEmoji(sender.avatar || this.state.friends[idx].avatar, '🎧'),
+      picture: sender.picture || this.state.friends[idx].picture || '',
+      online: true,
+      lastSeen: Date.now(),
+      currentTrack: sender.currentTrack || null,
+      isPlaying: Boolean(sender.isPlaying),
+      activeJamCode: sender.activeJamCode || ''
+    }
+    const nextFriends = [...this.state.friends]
+    nextFriends[idx] = updatedFriend
+    saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
+    this.updateState({ friends: nextFriends })
+  }
+
+  promoteToConfirmedFriend(sender) {
+    const cleanCode = normalizeFriendCode(sender.friendCode)
+    if (!cleanCode) return
+
+    const nextIn = this.state.incomingRequests.filter((r) => r.friendCode !== cleanCode)
+    const nextOut = this.state.outgoingRequests.filter((r) => r.friendCode !== cleanCode)
+    saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
+    saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
+
+    const exists = this.state.friends.some((f) => f.friendCode === cleanCode)
+    const friendEntry = {
+      friendCode: cleanCode,
+      name: sender.name || `Friend ${cleanCode.slice(-4)}`,
+      avatar: renderEmoji(sender.avatar, '🎧'),
+      picture: sender.picture || '',
+      online: true,
+      lastSeen: Date.now(),
+      currentTrack: sender.currentTrack || null,
+      isPlaying: Boolean(sender.isPlaying),
+      activeJamCode: sender.activeJamCode || ''
+    }
+
+    const nextFriends = exists
+      ? this.state.friends.map((f) => (f.friendCode === cleanCode ? { ...f, ...friendEntry } : f))
+      : [friendEntry, ...this.state.friends]
+
+    saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
+    this.updateState({
+      friends: nextFriends,
+      incomingRequests: nextIn,
+      outgoingRequests: nextOut
+    })
+  }
+
+  sendFriendRequest(rawCode) {
+    const targetCode = normalizeFriendCode(rawCode)
+    if (!targetCode || targetCode.length < 7) {
+      if (this.eventHandlers.onNotify) {
+        this.eventHandlers.onNotify('Enter a valid Friend Code (e.g. UP-7K4M9P)', 'warning')
+      }
+      return { ok: false, error: 'Enter a valid Friend Code (e.g. UP-7K4M9P)' }
+    }
+
+    if (targetCode === this.userProfile.friendCode) {
+      if (this.eventHandlers.onNotify) {
+        this.eventHandlers.onNotify("That's your own Friend Code!", 'warning')
+      }
+      return { ok: false, error: "That's your own Friend Code!" }
+    }
+
+    if (this.state.friends.some((f) => f.friendCode === targetCode)) {
+      if (this.eventHandlers.onNotify) {
+        this.eventHandlers.onNotify('Already in your Friends list!', 'info')
+      }
+      return { ok: true, status: 'already_friends' }
+    }
+
+    // If they already sent us an incoming request, accept immediately!
+    const incomingMatch = this.state.incomingRequests.find((r) => r.friendCode === targetCode)
+    if (incomingMatch) {
+      this.acceptFriendRequest(targetCode)
+      return { ok: true, status: 'accepted' }
+    }
+
+    if (!this.state.outgoingRequests.some((r) => r.friendCode === targetCode)) {
+      const nextOut = [
+        {
+          friendCode: targetCode,
+          name: `Friend ${targetCode.slice(-4)}`,
+          avatar: '🎧',
+          sentAt: Date.now()
+        },
+        ...this.state.outgoingRequests
+      ]
+      saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
+      this.updateState({ outgoingRequests: nextOut })
+    }
+
+    this.sendSocialPacket(targetCode, this.buildPresencePayload('FRIEND_REQUEST'))
+    if (this.eventHandlers.onNotify) {
+      this.eventHandlers.onNotify(`Friend request sent to ${targetCode}!`, 'success')
+    }
+    return { ok: true, status: 'sent' }
+  }
+
+  acceptFriendRequest(friendCode) {
+    const cleanCode = normalizeFriendCode(friendCode)
+    const req = this.state.incomingRequests.find((r) => r.friendCode === cleanCode) || {
+      friendCode: cleanCode,
+      name: `Friend ${cleanCode.slice(-4)}`,
+      avatar: '🎧'
+    }
+    this.promoteToConfirmedFriend(req)
+    this.sendSocialPacket(cleanCode, this.buildPresencePayload('FRIEND_ACCEPTED'))
+    this.sendSocialPacket(cleanCode, this.buildPresencePayload('PRESENCE_PING'))
+    if (this.eventHandlers.onNotify) {
+      this.eventHandlers.onNotify(`Added ${req.name} to your Friends!`, 'success')
+    }
+  }
+
+  declineFriendRequest(friendCode) {
+    const cleanCode = normalizeFriendCode(friendCode)
+    const nextIn = this.state.incomingRequests.filter((r) => r.friendCode !== cleanCode)
+    saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
+    this.updateState({ incomingRequests: nextIn })
+  }
+
+  cancelOutgoingRequest(friendCode) {
+    const cleanCode = normalizeFriendCode(friendCode)
+    const nextOut = this.state.outgoingRequests.filter((r) => r.friendCode !== cleanCode)
+    saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
+    this.updateState({ outgoingRequests: nextOut })
+  }
+
+  removeFriend(friendCode) {
+    const cleanCode = normalizeFriendCode(friendCode)
+    const nextFriends = this.state.friends.filter((f) => f.friendCode !== cleanCode)
+    saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
+    this.updateState({ friends: nextFriends })
+    if (this.eventHandlers.onNotify) {
+      this.eventHandlers.onNotify('Friend removed', 'info')
+    }
+  }
+
+  async inviteFriendToJam(friendCode, googleUser = null) {
+    const cleanCode = normalizeFriendCode(friendCode)
+    if (!cleanCode) return
+
+    let roomCode = this.state.roomCode
+    if (!this.state.active || !roomCode) {
+      roomCode = await this.createJam(googleUser, 'open_party')
+    }
+
+    const snap = this.eventHandlers.getHostPlaybackSnapshot
+      ? this.eventHandlers.getHostPlaybackSnapshot()
+      : null
+
+    this.sendSocialPacket(
+      cleanCode,
+      this.buildPresencePayload('JAM_INVITE', {
+        roomCode,
+        hostName: this.userProfile.name,
+        hostAvatar: renderEmoji(this.userProfile.avatar, '🎧'),
+        currentTrack: snap?.track || null
+      })
+    )
+
+    const friend = this.state.friends.find((f) => f.friendCode === cleanCode)
+    if (this.eventHandlers.onNotify) {
+      this.eventHandlers.onNotify(
+        `Sent Live Jam invite (${roomCode}) to ${friend?.name || cleanCode}!`,
+        'success'
+      )
+    }
+    return roomCode
+  }
+
+  dismissJamInvite() {
+    this.updateState({ incomingJamInvite: null })
+  }
+
+  // ============================================================================
+  // LIVE JAM ROOM P2P ENGINE
+  // ============================================================================
+
   setupBroadcastChannel(roomCode) {
     if (this.bc) {
       try { this.bc.close() } catch {}
@@ -201,19 +896,19 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Start a new Jam session as Host
-   */
   async createJam(googleUser = null, initialDjMode = 'open_party') {
     this.leaveJam(true)
     this.userProfile = loadJamUserProfile(googleUser)
     const roomCode = generateShortPin()
     const peerId = getPeerIdFromCode(roomCode)
+    const normDj = initialDjMode === 'host_only' ? 'host_only' : 'open_party'
 
     const hostParticipant = {
       id: this.userProfile.id,
+      peerId: this.userProfile.id,
+      friendCode: this.userProfile.friendCode,
       name: this.userProfile.name,
-      avatar: this.userProfile.avatar,
+      avatar: renderEmoji(this.userProfile.avatar, '🎧'),
       picture: this.userProfile.picture,
       isHost: true,
       rttMs: 0,
@@ -223,20 +918,22 @@ class JamSessionManager {
 
     this.updateState({
       active: true,
+      isHost: true,
       role: 'host',
       roomCode,
       status: 'CONNECTING',
       error: null,
-      djMode: initialDjMode,
+      djMode: normDj,
       participants: [hostParticipant],
       hostName: this.userProfile.name,
       clockOffsetMs: 0,
       rttMs: 0,
       syncDeltaMs: 0,
-      syncTier: 'IN_SYNC'
+      syncTier: 'LOCKED'
     })
 
     this.setupBroadcastChannel(roomCode)
+    this.broadcastPresenceStatus()
 
     try {
       const peer = new Peer(peerId, {
@@ -248,8 +945,9 @@ class JamSessionManager {
       peer.on('open', () => {
         this.updateState({ status: 'CONNECTED', error: null })
         this.startHostLoops()
+        this.broadcastPresenceStatus()
         if (this.eventHandlers.onNotify) {
-          this.eventHandlers.onNotify(`Jam started! Share code ${roomCode} with friends`, 'success')
+          this.eventHandlers.onNotify(`Jam started! Room code: ${roomCode}`, 'success')
         }
       })
 
@@ -258,20 +956,16 @@ class JamSessionManager {
       })
 
       peer.on('error', (err) => {
-        console.warn('PeerJS Host notice:', err?.type || err)
         if (err?.type === 'unavailable-id') {
-          // Retry with a new PIN if collision
-          this.createJam(googleUser, initialDjMode)
+          this.createJam(googleUser, normDj)
           return
         }
-        // Keep session active via BroadcastChannel fallback even if signaling server hiccups
         if (this.state.status === 'CONNECTING') {
           this.updateState({ status: 'CONNECTED' })
           this.startHostLoops()
         }
       })
-    } catch (e) {
-      console.warn('Peer init fallback:', e)
+    } catch {
       this.updateState({ status: 'CONNECTED' })
       this.startHostLoops()
     }
@@ -282,7 +976,6 @@ class JamSessionManager {
   setupHostPeerConnection(conn) {
     conn.on('open', () => {
       this.connections.set(conn.peer, conn)
-      // Immediately send current state and participants
       this.broadcastSyncNow()
       this.broadcastParticipants()
     })
@@ -308,13 +1001,10 @@ class JamSessionManager {
     conn.on('error', cleanup)
   }
 
-  /**
-   * Join an existing Jam session as Guest
-   */
   async joinJam(rawCode, googleUser = null) {
     const roomCode = normalizeRoomCode(rawCode)
     if (!roomCode || roomCode.length < 6) {
-      this.updateState({ error: 'Please enter a valid 4-character Jam code (e.g. JAM-4829)' })
+      this.updateState({ error: 'Please enter a valid Jam code (e.g. JAM-4829)' })
       return false
     }
 
@@ -324,31 +1014,35 @@ class JamSessionManager {
 
     const selfParticipant = {
       id: this.userProfile.id,
+      peerId: this.userProfile.id,
+      friendCode: this.userProfile.friendCode,
       name: this.userProfile.name,
-      avatar: this.userProfile.avatar,
+      avatar: renderEmoji(this.userProfile.avatar, '🎧'),
       picture: this.userProfile.picture,
       isHost: false,
-      rttMs: 22,
+      rttMs: 18,
       inSync: true,
       joinedAt: Date.now()
     }
 
     this.updateState({
       active: true,
+      isHost: false,
       role: 'guest',
       roomCode,
       status: 'CONNECTING',
       error: null,
       participants: [selfParticipant],
       clockOffsetMs: 0,
-      rttMs: 22,
+      rttMs: 18,
       syncDeltaMs: 0,
-      syncTier: 'IN_SYNC'
+      syncTier: 'LOCKED',
+      incomingJamInvite: null
     })
 
     this.setupBroadcastChannel(roomCode)
 
-    // Announce over BroadcastChannel immediately (for local/same-browser tabs)
+    // Announce immediately over BroadcastChannel for instant local/multi-tab join
     this.sendToHost({
       type: 'JAM_HELLO',
       profile: selfParticipant
@@ -382,6 +1076,7 @@ class JamSessionManager {
             profile: selfParticipant
           })
           this.startGuestPingLoop()
+          this.broadcastPresenceStatus()
           if (this.eventHandlers.onNotify) {
             this.eventHandlers.onNotify(`Joined Jam ${roomCode}! Syncing audio...`, 'success')
           }
@@ -406,9 +1101,7 @@ class JamSessionManager {
       })
 
       peer.on('error', (err) => {
-        console.warn('PeerJS Guest error:', err?.type || err)
         if (err?.type === 'peer-unavailable') {
-          // If BroadcastChannel already connected us locally, ignore peer-unavailable
           if (this.state.participants.length > 1) return
           this.updateState({
             status: 'ERROR',
@@ -443,7 +1136,7 @@ class JamSessionManager {
       })
     }
     sendPing()
-    this.pingInterval = setInterval(sendPing, 8000)
+    this.pingInterval = setInterval(sendPing, 6000)
   }
 
   stopLoops() {
@@ -457,9 +1150,6 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Send packet from Host to all connected Guests
-   */
   broadcastFromHost(packet) {
     if (!this.state.active || this.state.role !== 'host') return
     const payload = { ...packet, _senderProfileId: this.userProfile?.id }
@@ -473,9 +1163,6 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Send packet from Guest to Host
-   */
   sendToHost(packet) {
     if (!this.state.active) return
     const payload = { ...packet, _senderProfileId: this.userProfile?.id }
@@ -487,9 +1174,6 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Host broadcasts immediate playback snapshot
-   */
   broadcastSyncNow(overridePatch = null) {
     if (!this.state.active || this.state.role !== 'host') return
     const snapshot = this.eventHandlers.getHostPlaybackSnapshot
@@ -513,35 +1197,48 @@ class JamSessionManager {
     })
   }
 
+  // Alias used by App.jsx
+  broadcastHostSync(overridePatch = null) {
+    this.broadcastSyncNow(overridePatch)
+    this.broadcastPresenceStatus()
+  }
+
   broadcastParticipants() {
     if (this.state.role !== 'host') return
+    const sanitizedParticipants = (this.state.participants || []).map((p) => ({
+      ...p,
+      peerId: p.peerId || p.id,
+      avatar: renderEmoji(p.avatar, '🎧')
+    }))
     this.broadcastFromHost({
       type: 'JAM_PARTICIPANTS',
-      participants: this.state.participants,
+      participants: sanitizedParticipants,
       djMode: this.state.djMode,
       hostName: this.userProfile?.name || 'Host'
     })
   }
 
-  /**
-   * Handle incoming packets on both Host and Guest
-   */
   handleIncomingPacket(data, conn) {
     if (!data || typeof data !== 'object') return
 
     switch (data.type) {
       case 'JAM_HELLO': {
         if (this.state.role === 'host' && data.profile) {
-          if (conn) conn._guestProfileId = data.profile.id
-          const exists = this.state.participants.some((p) => p.id === data.profile.id)
+          const cleanProfile = {
+            ...data.profile,
+            peerId: data.profile.peerId || data.profile.id,
+            avatar: renderEmoji(data.profile.avatar, '🎧')
+          }
+          if (conn) conn._guestProfileId = cleanProfile.id
+          const exists = this.state.participants.some((p) => p.id === cleanProfile.id)
           const updated = exists
-            ? this.state.participants.map((p) => (p.id === data.profile.id ? { ...p, ...data.profile } : p))
-            : [...this.state.participants, { ...data.profile, isHost: false, inSync: true }]
-          this.updateState({ participants: updated })
+            ? this.state.participants.map((p) => (p.id === cleanProfile.id ? { ...p, ...cleanProfile } : p))
+            : [...this.state.participants, { ...cleanProfile, isHost: false, inSync: true }]
+          this.updateState({ status: 'CONNECTED', participants: updated })
           this.broadcastParticipants()
           this.broadcastSyncNow()
           if (!exists && this.eventHandlers.onNotify) {
-            this.eventHandlers.onNotify(`🎧 ${data.profile.name} joined your Jam!`, 'success')
+            this.eventHandlers.onNotify(`${cleanProfile.avatar} ${cleanProfile.name} joined your Jam!`, 'success')
           }
         }
         break
@@ -549,10 +1246,15 @@ class JamSessionManager {
 
       case 'JAM_PARTICIPANTS': {
         if (this.state.role === 'guest' && Array.isArray(data.participants)) {
+          const cleanList = data.participants.map((p) => ({
+            ...p,
+            peerId: p.peerId || p.id,
+            avatar: renderEmoji(p.avatar, '🎧')
+          }))
           this.updateState({
             status: 'CONNECTED',
             error: null,
-            participants: data.participants,
+            participants: cleanList,
             djMode: data.djMode || this.state.djMode,
             hostName: data.hostName || this.state.hostName
           })
@@ -612,9 +1314,8 @@ class JamSessionManager {
       }
 
       case 'JAM_CONTROL': {
-        // If Host receives control from Guest in Open Party mode, apply & rebroadcast to all guests
         if (this.state.role === 'host') {
-          if (this.state.djMode === 'open_party') {
+          if (this.state.djMode !== 'host_only') {
             if (this.eventHandlers.onRemoteControl) {
               this.eventHandlers.onRemoteControl(data)
             }
@@ -629,27 +1330,37 @@ class JamSessionManager {
       }
 
       case 'JAM_QUEUE_ADD': {
+        const cleanAddedBy = {
+          ...(data.addedBy || {}),
+          avatar: renderEmoji(data.addedBy?.avatar, '🎧'),
+          name: data.addedBy?.name || 'Friend'
+        }
         if (this.state.role === 'host') {
           if (this.eventHandlers.onRemoteQueueAdd) {
-            this.eventHandlers.onRemoteQueueAdd(data.track, data.addedBy)
+            this.eventHandlers.onRemoteQueueAdd(data.track, cleanAddedBy)
           }
-          this.broadcastFromHost(data)
+          this.broadcastFromHost({ ...data, addedBy: cleanAddedBy })
           setTimeout(() => this.broadcastSyncNow(), 150)
         } else if (this.state.role === 'guest') {
           if (this.eventHandlers.onRemoteQueueAdd) {
-            this.eventHandlers.onRemoteQueueAdd(data.track, data.addedBy)
+            this.eventHandlers.onRemoteQueueAdd(data.track, cleanAddedBy)
           }
         }
         break
       }
 
       case 'JAM_REACTION': {
+        const cleanPacket = {
+          ...data,
+          emoji: renderEmoji(data.emoji, '🔥'),
+          senderAvatar: renderEmoji(data.senderAvatar, '🎧'),
+          senderName: data.senderName || 'Friend'
+        }
         if (this.state.role === 'host') {
-          // Relay guest reaction to everyone else
-          this.broadcastFromHost(data)
+          this.broadcastFromHost(cleanPacket)
         }
         if (this.eventHandlers.onReaction) {
-          this.eventHandlers.onReaction(data)
+          this.eventHandlers.onReaction(cleanPacket)
         }
         break
       }
@@ -659,9 +1370,9 @@ class JamSessionManager {
           this.updateState({ djMode: data.djMode })
           if (this.eventHandlers.onNotify) {
             this.eventHandlers.onNotify(
-              data.djMode === 'open_party'
-                ? '🎉 Host enabled Open Party Mode — anyone can DJ!'
-                : '🔒 Host switched to Host-Only Broadcast Mode',
+              data.djMode === 'host_only'
+                ? '🔒 Host switched to Host-Only DJ Mode'
+                : '🎉 Host enabled Open Party Mode — anyone can DJ!',
               'info'
             )
           }
@@ -697,9 +1408,6 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Dispatch a playback action (PLAY, PAUSE, SEEK, SELECT_TRACK, NEXT, PREV)
-   */
   emitControl(action, payload = {}) {
     if (!this.state.active) return true
     if (this.state.role === 'guest' && this.state.djMode === 'host_only') {
@@ -727,9 +1435,11 @@ class JamSessionManager {
     return true
   }
 
-  /**
-   * Add a song to the shared Jam queue
-   */
+  // Alias used by App.jsx
+  emitPlaybackControl(action, payload = {}) {
+    return this.emitControl(action, payload)
+  }
+
   emitQueueAdd(track) {
     if (!this.state.active || !track) return
     const packet = {
@@ -738,7 +1448,7 @@ class JamSessionManager {
       addedBy: {
         id: this.userProfile?.id,
         name: this.userProfile?.name || 'Friend',
-        avatar: this.userProfile?.avatar || '🎧'
+        avatar: renderEmoji(this.userProfile?.avatar, '🎧')
       }
     }
     if (this.state.role === 'host') {
@@ -749,18 +1459,16 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Send a live floating emoji reaction to everyone in the Jam
-   */
-  sendReaction(emoji) {
-    if (!this.state.active || !emoji) return
+  sendReaction(emojiInput) {
+    if (!this.state.active) return
+    const emojiStr = renderEmoji(emojiInput, '🔥')
     const packet = {
       type: 'JAM_REACTION',
       id: `rx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      emoji,
+      emoji: emojiStr,
       senderId: this.userProfile?.id,
       senderName: this.userProfile?.name || 'You',
-      senderAvatar: this.userProfile?.avatar || '🎧'
+      senderAvatar: renderEmoji(this.userProfile?.avatar, '🎧')
     }
     if (this.state.role === 'host') {
       this.broadcastFromHost(packet)
@@ -772,9 +1480,6 @@ class JamSessionManager {
     }
   }
 
-  /**
-   * Toggle DJ Permission Mode (Host only)
-   */
   setDjMode(mode) {
     if (this.state.role !== 'host') return
     const cleanMode = mode === 'host_only' ? 'host_only' : 'open_party'
@@ -785,21 +1490,16 @@ class JamSessionManager {
     })
   }
 
-  /**
-   * Update sync telemetry displayed in UI
-   */
   reportDriftStatus(driftMs, syncTier) {
-    if (Math.abs(driftMs - this.state.syncDeltaMs) > 25 || syncTier !== this.state.syncTier) {
+    const cleanTier = syncTier === 'IN_SYNC' ? 'LOCKED' : (syncTier || 'LOCKED')
+    if (Math.abs(driftMs - this.state.syncDeltaMs) > 25 || cleanTier !== this.state.syncTier) {
       this.updateState({
         syncDeltaMs: driftMs,
-        syncTier
+        syncTier: cleanTier
       })
     }
   }
 
-  /**
-   * Leave or end the active Jam session
-   */
   leaveJam(silent = false) {
     this.stopLoops()
     if (this.state.active) {
@@ -833,6 +1533,7 @@ class JamSessionManager {
     this.clockSamples = []
     this.updateState({
       active: false,
+      isHost: false,
       role: null,
       roomCode: '',
       status: 'IDLE',
@@ -842,8 +1543,10 @@ class JamSessionManager {
       clockOffsetMs: 0,
       rttMs: 0,
       syncDeltaMs: 0,
-      syncTier: 'IN_SYNC'
+      syncTier: 'LOCKED'
     })
+
+    this.broadcastPresenceStatus()
 
     if (!silent && this.eventHandlers.onNotify) {
       this.eventHandlers.onNotify('Left Jam session', 'info')

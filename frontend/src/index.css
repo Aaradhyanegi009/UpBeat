@@ -477,3 +477,60 @@ input[type="range"].argon-slider::-moz-range-thumb:hover {
   input[type="range"].argon-slider::-webkit-slider-thumb { width: 16px; height: 16px; }
   input[type="range"].argon-slider::-moz-range-thumb { width: 16px; height: 16px; }
 }
+
+/* ============================================================================
+   UpBeat v7.0 Studio Glass Surfaces & Inputs for Friends & Live Jam Hub
+   ============================================================================ */
+.jam-glass-surface {
+  background: var(--bg-glass-heavy, rgba(18, 18, 26, 0.78));
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: var(--border-glass, 1px solid rgba(255, 255, 255, 0.09));
+  box-shadow: var(--card-shadow);
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.jam-glass-pill {
+  border-radius: 999px;
+  background: var(--surface-glass, rgba(18, 18, 26, 0.68));
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: var(--border-glass, 1px solid rgba(255, 255, 255, 0.09));
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.theme-light .jam-glass-surface,
+.theme-light .jam-glass-pill {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+  color: #0F172A !important;
+}
+
+.jam-input-field {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+.jam-input-field::placeholder {
+  color: var(--text-muted);
+}
+.jam-input-field:focus {
+  border-color: #F43F5E;
+}
+
+.theme-light .jam-input-field {
+  background: #F1F5F9 !important;
+  border: 1px solid rgba(15, 23, 42, 0.14) !important;
+  color: #0F172A !important;
+}
+.theme-light .jam-input-field::placeholder {
+  color: #64748B !important;
+}
+.theme-light .jam-input-field:focus {
+  border-color: #F43F5E !important;
+  background: #FFFFFF !important;
+}

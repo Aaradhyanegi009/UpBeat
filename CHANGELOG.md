@@ -4,6 +4,23 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.0] - 2026-11-04
+
+### 👥 Real-Time Friends + Live Jam Social Engine, Studio Glass Alignment & React Error #31 Fix
+- **Fatal Crash Fix (`Minified React error #31` — `{emoji, label}` Object Rendered in JSX)**:
+  - Added universal `renderEmoji(val, fallback)` sanitizer across `jamEngine.js`, `JamModal.jsx`, `JamFloatingBar.jsx`, and `App.jsx` so both plain emoji strings (`'🔥'`) and preset objects (`{ emoji: '🔥', label: 'Fire' }`) render safely as strings.
+  - Added automatic startup `localStorage` sanitizer (`sanitizeStoredJamAndSocialData`) that cleanses any previously stored profile or friend avatar objects before React mounts.
+- **Studio Translucent Glass & Semantic Typography Alignment (`JamModal.jsx`, `JamFloatingBar.jsx`, `index.css`)**:
+  - Unified all Jam & Friends modals, pills, and inputs with UpBeat Studio's semantic CSS variables (`var(--text-primary)`, `var(--text-secondary)`, `var(--text-muted)`, `var(--surface-glass)`, `var(--border-glass)`) and `backdrop-filter: blur(24px) saturate(170%)`.
+  - Guaranteed 100% contrast legibility in both Dark AMOLED and Daylight Studio Light Mode (`#F1F5F9` input boxes with `#0F172A` text).
+- **Complete Real-Time Friends System (`jamEngine.js` & `JamModal.jsx`)**:
+  - **Unique Persistent Friend Code (`UP-XXXXXX`)**: Deterministic PeerJS presence endpoint (`upbeat-user-UP-XXXXXX`) + `BroadcastChannel('upbeat_social_v7')` active in the background.
+  - **Friend Requests**: Send requests by `UP-XXXXXX` code or `?addFriend=UP-XXXXXX` deep-link, with real-time **Incoming Requests** (`✓ Accept` / `✕ Decline`), **Outgoing Pending**, and automatic **Mutual Request Handshake**.
+  - **Live Online Status & "Now Playing" Activity Feed**: Pings friends every 15s and broadcasts track changes immediately so friends see **🟢 Online — Listening to *[Song Title] - [Artist]*** (with 1-click **`▶ Listen Along`**), **🟢 Online — Idle in Studio**, or **⚫ Offline** with last-seen timestamps.
+  - **1-Click "Invite to Jam" & Interactive Floating Join Banner**: Clicking `Invite to Jam` automatically starts a Jam room (if not already in one) and sends a real-time `{ type: 'JAM_INVITE' }` toast banner with a 1-click **`Join Jam`** button.
+
+---
+
 ## [v6.4.0] - 2026-11-04
 
 ### 👥 Friends / Live Jam Sessions — Synchronized Real-Time Music Listening
