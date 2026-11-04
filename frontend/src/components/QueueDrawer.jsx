@@ -1,303 +1,104 @@
-import React from 'react'
-import { X, Play, Trash2, ListMusic, Music, ListPlus } from 'lucide-react'
-import { prewarmTrack } from '../standaloneApi'
+import React, { useEffect } from 'react'
+import { X, Trash2, ListPlus, ListMusic } from 'lucide-react'
+import { Art, IconButton, Chip, Equalizer } from '../ui/primitives'
 
-export default function QueueDrawer({
-  isOpen,
-  onClose,
-  queue = [],
-  currentTrack,
-  isPlaying,
-  onPlayTrack,
-  onRemoveFromQueue,
-  onClearQueue,
-  onAddToQueue,
-  upcomingTracks = []
-}) {
+/** Up next sheet (phones; desktop uses the right panel). Same props as before. */
+export default function QueueDrawer({ isOpen, onClose, queue = [], currentTrack, isPlaying, onPlayTrack, onRemoveFromQueue, onClearQueue, onAddToQueue, upcomingTracks = [] }) {
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
-  const getThumb = (track) => {
-    if (!track) return ''
-    if (track.thumbnail) return track.thumbnail
-    if (track.video_id) return `https://i.ytimg.com/vi/${track.video_id}/hqdefault.jpg`
-    return ''
-  }
-
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end select-none">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/65 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Drawer Panel */}
-      <div className="relative w-full max-w-md bg-[var(--bg-glass-heavy)] backdrop-blur-2xl border-l border-[var(--border-subtle)] text-[var(--text-primary)] h-full flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
-        {/* Sticky Header */}
-        <div className="pt-safe-top border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-md shrink-0">
-          <div className="px-5 py-3.5 sm:px-6 sm:py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
-              <ListMusic className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
-                  Playback Queue
-                </h3>
-                {queue.length > 0 && (
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                    {queue.length}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-[var(--text-secondary)] font-normal mt-0.5">
-                Tracks play sequentially
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {queue.length > 0 && (
-              <button
-                onClick={onClearQueue}
-                className="px-3 py-1.5 rounded-full bg-[var(--surface-hover)] hover:bg-rose-500/15 border border-[var(--border-subtle)] hover:border-rose-500/30 text-xs font-semibold text-[var(--text-secondary)] hover:text-rose-400 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                title="Clear all queued songs"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear</span>
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer active:scale-90"
-              title="Close Queue"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          </div>
+    <div className="fixed inset-0 z-[65] flex items-end sm:items-stretch sm:justify-end select-none" role="dialog" aria-modal="true" aria-labelledby="queue-title">
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/60 cursor-default" onClick={onClose} />
+      <div className="relative w-full sm:w-[420px] h-[88dvh] sm:h-full flex flex-col rounded-t-3xl sm:rounded-none bg-s1 ring-1 ring-white/10 shadow-2xl text-t1 pb-safe animate-in slide-in-from-bottom sm:slide-in-from-right duration-200">
+        <div className="sm:hidden w-10 h-1.5 rounded-full bg-white/25 mx-auto mt-2.5 shrink-0" />
+        <div className="flex items-center justify-between px-5 pt-3 sm:pt-5 shrink-0">
+          <h2 id="queue-title" className="text-xl font-extrabold tracking-[-0.015em]">
+            Up next
+          </h2>
+          <IconButton label="Close" size={40} onClick={onClose}>
+            <X className="w-5 h-5" />
+          </IconButton>
         </div>
 
-        {/* Scrollable Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 gpu-scroll">
-          {/* Section: Now Playing */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
           {currentTrack && (
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-xs font-bold text-emerald-400 tracking-tight flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${isPlaying ? 'animate-ping' : ''}`} />
-                  <span>Now Playing</span>
-                </span>
-                {currentTrack.duration_text && currentTrack.duration_text !== '--:--' && (
-                  <span className="text-xs font-semibold text-zinc-400">
-                    {currentTrack.duration_text}
-                  </span>
-                )}
-              </div>
-
-              <div className="p-3 rounded-2xl bg-emerald-500/[0.08] border border-emerald-500/30 flex items-center gap-3.5 shadow-lg backdrop-blur-xl">
-                <div className="relative w-12 h-12 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10 shadow-xs">
-                  {getThumb(currentTrack) ? (
-                    <img
-                      src={getThumb(currentTrack)}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                      <Music className="w-4 h-4" />
-                    </div>
-                  )}
-                  {isPlaying && (
-                    <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
-                      <div className="flex items-end gap-0.5 h-3.5">
-                        <span className="w-1 bg-emerald-400 rounded-full h-full animate-[bounce_0.8s_infinite_100ms]" />
-                        <span className="w-1 bg-emerald-400 rounded-full h-2/3 animate-[bounce_0.8s_infinite_300ms]" />
-                        <span className="w-1 bg-emerald-400 rounded-full h-4/5 animate-[bounce_0.8s_infinite_200ms]" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-bold text-white truncate tracking-tight">
-                    {currentTrack.title}
-                  </div>
-                  <div className="text-[11px] text-zinc-400 truncate mt-0.5 font-normal">
+            <>
+              <h3 className="text-sm font-bold text-t2 mt-3 mb-1.5">Now playing</h3>
+              <div className="flex items-center gap-3 min-h-[60px]">
+                <Art track={currentTrack} className="w-12 h-12" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-bold text-accent truncate">{currentTrack.title}</div>
+                  <div className="text-[13px] text-t2 truncate flex items-center gap-1.5">
+                    {isPlaying && <Equalizer />}
                     {currentTrack.artist}
                   </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
 
-          {/* Section: Up Next in Queue */}
-          <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white tracking-tight">
-                  Queued Next
-                </span>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-300 border border-white/10">
-                  {queue.length}
-                </span>
-              </div>
-              {queue.length > 0 && (
-                <span className="text-[11px] font-semibold text-emerald-400">
-                  Plays First
-                </span>
-              )}
-            </div>
-
-            {queue.length === 0 ? (
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center text-zinc-400 shrink-0">
-                  <ListPlus className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-white tracking-tight">
-                    Your priority queue is empty
-                  </p>
-                  <p className="text-[11px] text-zinc-400 font-normal mt-0.5">
-                    Tap <span className="text-white font-semibold">+</span> on any track to play it next.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {queue.map((t, idx) => (
-                  <div
-                    key={`${t.video_id || t.title}-${idx}`}
-                    onClick={() => onPlayTrack(t, idx)}
-                    onMouseEnter={() => t.video_id && prewarmTrack(t.video_id)}
-                    onTouchStart={() => t.video_id && prewarmTrack(t.video_id)}
-                    className="group p-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] flex items-center justify-between gap-3 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-5 text-center shrink-0">
-                        <span className="text-xs font-semibold text-zinc-500 group-hover:hidden">
-                          {(idx + 1).toString().padStart(2, '0')}
-                        </span>
-                        <Play className="w-3.5 h-3.5 text-white fill-current mx-auto hidden group-hover:block" />
-                      </div>
-
-                      <div className="w-10 h-10 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10 shadow-xs">
-                        {getThumb(t) ? (
-                          <img src={getThumb(t)} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                            <Music className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-300 truncate tracking-tight transition-colors">
-                          {t.title}
-                        </div>
-                        <div className="text-[11px] text-zinc-400 truncate mt-0.5 font-normal">
-                          {t.artist}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {t.duration_text && t.duration_text !== '--:--' && (
-                        <span className="text-xs font-semibold text-zinc-400">
-                          {t.duration_text}
-                        </span>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onRemoveFromQueue(idx)
-                        }}
-                        className="p-1.5 rounded-full text-zinc-400 hover:text-rose-400 hover:bg-rose-500/15 transition-colors cursor-pointer"
-                        title="Remove from queue"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <div className="flex items-baseline justify-between mt-5 mb-1.5">
+            <h3 className="text-sm font-bold text-t2">In queue{queue.length ? ` · ${queue.length}` : ''}</h3>
+            {queue.length > 0 && (
+              <button type="button" onClick={onClearQueue} className="text-sm font-semibold text-t2 hover:text-t1 cursor-pointer">
+                Clear
+              </button>
             )}
           </div>
+          {queue.length === 0 ? (
+            <p className="text-[13px] text-t2 py-2 flex items-center gap-2">
+              <ListMusic className="w-4 h-4 shrink-0" />
+              Use “Play next” or “Add to queue” from any song’s ⋯ menu.
+            </p>
+          ) : (
+            queue.map((t, i) => (
+              <div key={`${t.video_id || t.title}-q${i}`} className="group flex items-center gap-3 min-h-[60px] -mx-2 px-2 rounded-xl hover:bg-white/[0.04]">
+                <button type="button" onClick={() => onPlayTrack(t, i)} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer py-1.5">
+                  <Art track={t} className="w-12 h-12" />
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-bold truncate">{t.title}</span>
+                    <span className="block text-[13px] text-t2 truncate">{t.artist}</span>
+                  </span>
+                </button>
+                <IconButton label={`Remove ${t.title} from queue`} size={40} onClick={() => onRemoveFromQueue(i)}>
+                  <Trash2 className="w-[18px] h-[18px]" />
+                </IconButton>
+              </div>
+            ))
+          )}
 
-          {/* Section: Next Up from Playlist */}
           {upcomingTracks.length > 0 && (
-            <div className="pt-2 border-t border-white/[0.08]">
-              <div className="flex items-center justify-between mb-2.5 pt-2">
-                <span className="text-xs font-bold text-white tracking-tight">
-                  Next Up from Playlist
-                </span>
-                <span className="text-[11px] font-semibold text-zinc-400">
-                  Autoplay
-                </span>
-              </div>
-
-              <div className="space-y-1.5">
-                {upcomingTracks.slice(0, 12).map((t, idx) => (
-                  <div
-                    key={`up-${t.video_id || idx}`}
-                    onClick={() => onPlayTrack(t)}
-                    className="group p-2 rounded-2xl hover:bg-white/[0.05] border border-transparent hover:border-white/[0.07] flex items-center justify-between gap-3 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-5 text-center shrink-0">
-                        <span className="text-xs font-semibold text-zinc-500 group-hover:hidden">
-                          {(idx + 1).toString().padStart(2, '0')}
-                        </span>
-                        <Play className="w-3.5 h-3.5 text-white fill-current mx-auto hidden group-hover:block" />
-                      </div>
-
-                      <div className="w-10 h-10 rounded-2xl bg-zinc-900 overflow-hidden shrink-0 border border-white/10 shadow-xs">
-                        {getThumb(t) ? (
-                          <img src={getThumb(t)} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                            <Music className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-300 truncate tracking-tight transition-colors">
-                          {t.title}
-                        </div>
-                        <div className="text-[11px] text-zinc-400 truncate mt-0.5 font-normal">
-                          {t.artist}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {t.duration_text && t.duration_text !== '--:--' && (
-                        <span className="text-xs font-semibold text-zinc-400">
-                          {t.duration_text}
-                        </span>
-                      )}
-                      {onAddToQueue && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onAddToQueue(t)
-                          }}
-                          className="p-1.5 rounded-full text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/15 opacity-80 group-hover:opacity-100 transition-all cursor-pointer"
-                          title="Add to priority queue"
-                        >
-                          <ListPlus className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <>
+              <h3 className="text-sm font-bold text-t2 mt-6 mb-1.5">Then from this list</h3>
+              {upcomingTracks.slice(0, 20).map((t, i) => (
+                <div key={`${t.video_id || t.title}-u${i}`} className="flex items-center gap-3 min-h-[60px] -mx-2 px-2 rounded-xl hover:bg-white/[0.04]">
+                  <button type="button" onClick={() => onPlayTrack(t)} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer py-1.5">
+                    <Art track={t} className="w-12 h-12" />
+                    <span className="min-w-0">
+                      <span className="block text-[15px] font-bold truncate">{t.title}</span>
+                      <span className="block text-[13px] text-t2 truncate">{t.artist}</span>
+                    </span>
+                  </button>
+                  {onAddToQueue && (
+                    <IconButton label={`Add ${t.title} to queue`} size={40} onClick={() => onAddToQueue(t)}>
+                      <ListPlus className="w-[18px] h-[18px]" />
+                    </IconButton>
+                  )}
+                </div>
+              ))}
+            </>
           )}
         </div>
       </div>
     </div>
   )
 }
+
+export { Chip }

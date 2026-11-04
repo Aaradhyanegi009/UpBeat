@@ -502,11 +502,15 @@ async function ytWebSearch(query, pages = 2) {
         }
       }
       if (title) {
+        const imgSources =
+          lk?.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources ||
+          lk?.contentImage?.thumbnailViewModel?.image?.sources ||
+          []
         playlists.push({
           browse_id: `VL${pid}`,
           title,
           subtitle: owner ? `YouTube Playlist • ${owner}` : 'YouTube Playlist',
-          thumbnail: '',
+          thumbnail: imgSources.length ? imgSources[imgSources.length - 1].url || '' : '',
           is_editorial: false,
           source: 'youtube'
         })
@@ -604,11 +608,12 @@ function parseYtmPlaylists(data) {
     if (!cols[0]) continue
     const meta = cols[1] || 'Playlist'
     seen.add(bid)
+    const thumbs = item?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || []
     out.push({
       browse_id: bid,
       title: cols[0],
       subtitle: meta,
-      thumbnail: '',
+      thumbnail: thumbs.length ? thumbs[thumbs.length - 1].url || '' : '',
       is_editorial: meta.includes('YouTube Music') || bid.startsWith('VLRDCLAK'),
       source: 'ytmusic'
     })

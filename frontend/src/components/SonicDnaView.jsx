@@ -9,50 +9,6 @@ import { saveTrackOffline, createOfflineAudioUrl, getDownloadedVideoIds, subscri
 import { Youtube } from './YouTubeTasteSyncModal'
 import { GoogleIcon } from './GoogleAuthModal'
 
-const GENRE_PALETTE = [
-  {
-    gradient: 'from-rose-500 to-pink-500',
-    text: 'text-rose-600 dark:text-rose-400',
-    hoverBorder: 'hover:border-rose-500/40',
-  },
-  {
-    gradient: 'from-amber-500 to-orange-400',
-    text: 'text-amber-600 dark:text-amber-400',
-    hoverBorder: 'hover:border-amber-500/40',
-  },
-  {
-    gradient: 'from-emerald-500 to-teal-400',
-    text: 'text-emerald-600 dark:text-emerald-400',
-    hoverBorder: 'hover:border-emerald-500/40',
-  },
-  {
-    gradient: 'from-yellow-500 to-rose-400',
-    text: 'text-amber-600 dark:text-amber-400',
-    hoverBorder: 'hover:border-amber-500/40',
-  },
-]
-
-const ARTIST_PALETTE = [
-  {
-    icon: 'text-rose-500 dark:text-rose-400',
-    bg: 'group-hover:bg-rose-500/20',
-    hoverBorder: 'hover:border-rose-500/40',
-    curateText: 'text-rose-600 dark:text-rose-400 group-hover:text-rose-500',
-  },
-  {
-    icon: 'text-amber-500 dark:text-amber-400',
-    bg: 'group-hover:bg-amber-500/20',
-    hoverBorder: 'hover:border-amber-500/40',
-    curateText: 'text-amber-600 dark:text-amber-400 group-hover:text-amber-500',
-  },
-  {
-    icon: 'text-emerald-500 dark:text-emerald-400',
-    bg: 'group-hover:bg-emerald-500/20',
-    hoverBorder: 'hover:border-emerald-500/40',
-    curateText: 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-500',
-  },
-]
-
 function SonicDnaView({
   mode = 'dna',
   currentTrack,
@@ -648,7 +604,7 @@ function SonicDnaView({
                   <Disc className="w-4 h-4 text-sky-400" />
                 </div>
                 <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
-                  Seeds & Library
+                  Taste sources
                 </h1>
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
                   {librarySeeds.length}
@@ -657,7 +613,7 @@ function SonicDnaView({
               <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1.5 font-normal truncate">
                 <Disc className="w-3 h-3 text-sky-400 shrink-0" />
                 <span className="truncate">
-                  {librarySeeds.length} {librarySeeds.length === 1 ? 'track' : 'tracks'} • Seed tracks powering your mixes
+                  {librarySeeds.length} {librarySeeds.length === 1 ? 'track' : 'tracks'} • Songs that shape your recommendations
                 </span>
               </p>
             </div>
@@ -1041,23 +997,18 @@ function SonicDnaView({
 
   // 3. MODERN INTERACTIVE SONIC TASTE STUDIO
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto overflow-x-hidden bg-transparent select-none gpu-scroll content-scroll-container" onClick={() => setQueueMenuIdx(null)}>
-      {/* Sticky Translucent Top Header (Clean Dual Controls: Analyze & Refresh) */}
-      <div className="px-5 py-3 sm:px-6 sm:py-3.5 border-b border-[var(--border-subtle)] bg-[var(--bg-glass)] backdrop-blur-xl sticky top-0 z-20 flex items-center justify-between gap-3 text-[var(--text-primary)]">
-        <div className="flex items-center min-w-0">
-          <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
-            Taste Profile
-          </h1>
-        </div>
+    <div className="flex-1 flex flex-col min-h-0 overflow-x-hidden bg-transparent select-none" onClick={() => setQueueMenuIdx(null)}>
+      <div className="px-5 sm:px-8 pt-2 sm:pt-5 max-w-4xl w-full mx-auto flex items-center justify-between gap-3 text-t1">
+        <h1 className="text-[28px] sm:text-[34px] font-extrabold tracking-[-0.025em] leading-tight truncate">Your taste</h1>
 
-        <div className="flex items-center gap-[10px] shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => onAnalyzeTaste && onAnalyzeTaste()}
             disabled={isSyncing}
             title="Run deep musical taste analysis with Gemini"
-            className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs sm:text-sm text-slate-900 dark:text-emerald-200 font-bold flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 shrink-0 btn-analyze-taste"
+            className="h-10 px-4 rounded-full bg-s2 hover:bg-s3 text-sm text-t1 font-bold flex items-center gap-2 transition-colors cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
           >
-            <Sparkles className={`w-4 h-4 text-emerald-500 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-4 h-4 text-accent shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>Analyze</span>
           </button>
 
@@ -1068,15 +1019,15 @@ function SonicDnaView({
             }}
             disabled={isSyncing}
             title="Refresh and re-sync taste profile & seeds"
-            className="h-9 sm:h-10 w-9 sm:w-10 rounded-full bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+            className="h-10 w-10 rounded-full bg-s2 hover:bg-s3 text-t2 hover:text-t1 flex items-center justify-center transition-colors cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
             aria-label="Refresh Profile & Seeds"
           >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-emerald-500' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      <div className="px-5 py-4 sm:px-8 sm:py-6 pb-[140px] max-w-4xl w-full mx-auto flex flex-col gap-6 sm:gap-8">
+      <div className="px-5 pt-4 sm:px-8 sm:pt-5 pb-[140px] max-w-4xl w-full mx-auto flex flex-col gap-6 sm:gap-8">
         {/* Main Archetype Hero Card */}
         <div className="relative overflow-hidden rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-xl p-5 sm:p-7 shadow-xl">
           {/* Archetype Title & Summary */}
@@ -1097,7 +1048,7 @@ function SonicDnaView({
                 className="px-4 py-3 sm:py-2.5 rounded-2xl bg-[var(--text-primary)] text-[var(--bg-primary)] hover:opacity-90 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95"
               >
                 <Sparkles className="w-4 h-4 fill-current shrink-0" />
-                <span>Curate My DNA Mix (0 AI Tokens)</span>
+                <span>Mix from my likes</span>
               </button>
             )}
 
@@ -1107,7 +1058,7 @@ function SonicDnaView({
               className="px-4 py-3 sm:py-2.5 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--text-primary)] font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-40 active:scale-95"
             >
               <Compass className="w-4 h-4 text-indigo-500 dark:text-indigo-400 shrink-0" />
-              <span>Explore Boundaries</span>
+              <span>Start radio from a favourite</span>
             </button>
           </div>
         </div>
@@ -1163,114 +1114,64 @@ function SonicDnaView({
           </div>
         </div>
 
-        {/* Genre Affinity Breakdown */}
-        <div className="p-5 sm:p-6 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between mb-4 gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center shrink-0">
-                <Disc className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
-              </div>
-              <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight truncate">
-                Genre Affinity
-              </h3>
-            </div>
-            <span className="text-xs font-semibold text-[var(--text-secondary)] px-2.5 py-1 rounded-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] shrink-0">
-              {genrePills.length} Styles
-            </span>
+        {/* Genre Affinity */}
+        <section>
+          <div className="flex items-baseline justify-between gap-4 mb-3.5">
+            <h3 className="text-xl font-extrabold tracking-[-0.015em]">Genre affinity</h3>
+            <span className="text-sm font-semibold text-t2">{genrePills.length} styles</span>
           </div>
+          <div className="rounded-2xl bg-s1 divide-y divide-white/[0.06]">
+            {genrePills.map((g, idx) => (
+              <div key={idx} className="px-4 py-3.5">
+                <div className="flex items-baseline justify-between gap-3 mb-2">
+                  <span className="text-[15px] font-bold truncate">{g.name}</span>
+                  <span className="text-sm font-bold text-t2 tabular-nums shrink-0">{g.pct}%</span>
+                </div>
+                <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                  <div style={{ width: `${g.pct}%`, opacity: Math.max(0.45, 1 - idx * 0.15) }} className="h-full rounded-full bg-accent" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {genrePills.map((g, idx) => {
-              const theme = GENRE_PALETTE[idx % GENRE_PALETTE.length]
-              return (
-                <div
+        {/* Key Anchoring Artists */}
+        <section>
+          <div className="flex items-baseline justify-between gap-4 mb-3.5">
+            <h3 className="text-xl font-extrabold tracking-[-0.015em]">Key artists</h3>
+            <span className="text-sm font-semibold text-t2">Tap to make a mix</span>
+          </div>
+          {topArtists.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {topArtists.map((a, idx) => (
+                <button
                   key={idx}
-                  className={`p-3.5 rounded-2xl bg-[var(--surface-hover)] border border-[var(--border-subtle)] ${theme.hoverBorder} transition-colors`}
+                  type="button"
+                  onClick={() => onCurateSimilar && onCurateSimilar({ title: 'Mix', artist: a })}
+                  title={`Curate mix inspired by ${a}`}
+                  className="flex items-center gap-3 h-16 px-3 rounded-xl bg-s1 hover:bg-s2 text-left cursor-pointer transition-colors group"
                 >
-                  <div className="flex items-center justify-between text-xs mb-2">
-                    <span className="font-bold text-[var(--text-primary)] tracking-tight truncate mr-2">{g.name}</span>
-                    <span className={`text-xs ${theme.text} font-bold shrink-0`}>{g.pct}%</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-black/10 dark:bg-black/50 border border-[var(--border-subtle)] overflow-hidden">
-                    <div
-                      style={{ width: `${g.pct}%` }}
-                      className={`h-full bg-gradient-to-r ${theme.gradient} rounded-full`}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Top Influences & Artists */}
-        <div className="p-5 sm:p-6 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between mb-4 gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
-                <Music className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-              </div>
-              <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight truncate">
-                Key Anchoring Artists
-              </h3>
+                  <span className="w-10 h-10 rounded-full bg-s3 flex items-center justify-center text-base font-extrabold text-t1 shrink-0">
+                    {(a || '?').trim()[0]?.toUpperCase()}
+                  </span>
+                  <span className="flex-1 min-w-0 text-[15px] font-bold truncate">{a}</span>
+                  <Sparkles className="w-[18px] h-[18px] text-t3 group-hover:text-accent transition-colors shrink-0" />
+                </button>
+              ))}
             </div>
-            <span className="text-xs font-semibold text-[var(--text-secondary)] px-2.5 py-1 rounded-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] shrink-0">
-              Influences
-            </span>
-          </div>
+          ) : (
+            <p className="text-sm text-t2 py-2">No anchoring artists yet. Heart songs or add seeds to populate your key artists.</p>
+          )}
+        </section>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {topArtists.length > 0 ? (
-              topArtists.map((a, idx) => {
-                const theme = ARTIST_PALETTE[idx % ARTIST_PALETTE.length]
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => onCurateSimilar && onCurateSimilar({ title: 'Mix', artist: a })}
-                    className={`p-3 px-3.5 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] ${theme.hoverBorder} flex items-center justify-between gap-3 transition-all cursor-pointer group active:scale-98`}
-                    title={`Curate mix inspired by ${a}`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={`w-8 h-8 rounded-xl bg-[var(--border-subtle)] ${theme.bg} border border-[var(--border-subtle)] flex items-center justify-center shrink-0 transition-colors`}>
-                        <Music className={`w-3.5 h-3.5 ${theme.icon}`} />
-                      </div>
-                      <span className="font-semibold text-xs sm:text-sm text-[var(--text-primary)] truncate">
-                        {a}
-                      </span>
-                    </div>
-                    <span className={`text-xs font-semibold ${theme.curateText} shrink-0 whitespace-nowrap flex items-center gap-1`}>
-                      <span>Curate</span>
-                      <span className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
-                    </span>
-                  </div>
-                )
-              })
-            ) : (
-              <p className="text-xs text-[var(--text-secondary)] font-normal py-2 col-span-2">
-                No anchoring artists yet. Heart songs or add seeds to populate your key artists.
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Top 4 Anchor Songs (The actual songs shaping this profile) */}
+        {/* Core Profile Tracks */}
         {allTracks.length > 0 && (
-          <div className="p-5 sm:p-6 rounded-3xl bg-[var(--bg-card)] backdrop-blur-xl border border-[var(--border-subtle)] shadow-lg relative overflow-hidden">
-            <div className="flex items-center justify-between mb-4 gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center shrink-0">
-                  <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                </div>
-                <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight truncate">
-                  Core Profile Tracks
-                </h3>
-              </div>
-              <span className="text-xs font-semibold text-[var(--text-secondary)] px-2.5 py-1 rounded-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] shrink-0">
-                {allTracks.length} Tracks
-              </span>
+          <section>
+            <div className="flex items-baseline justify-between gap-4 mb-3.5">
+              <h3 className="text-xl font-extrabold tracking-[-0.015em]">Core tracks</h3>
+              <span className="text-sm font-semibold text-t2">{allTracks.length} {allTracks.length === 1 ? 'track' : 'tracks'}</span>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {allTracks.slice(0, 4).map((t, idx) => {
                 const thumb = t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
                 return (
@@ -1279,45 +1180,37 @@ function SonicDnaView({
                     onClick={() => onPlayTrack(t, idx)}
                     onMouseEnter={() => t.video_id && prewarmTrack(t.video_id)}
                     onTouchStart={() => t.video_id && prewarmTrack(t.video_id)}
-                    className="p-3 rounded-2xl bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border border-[var(--border-subtle)] hover:border-emerald-500/30 flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-xs active:scale-98"
+                    className="flex items-center gap-3 p-2 pr-3 rounded-xl bg-s1 hover:bg-s2 cursor-pointer transition-colors group"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-2xl bg-black/10 dark:bg-black/50 border border-[var(--border-subtle)] overflow-hidden shrink-0 relative">
-                        {thumb ? (
-                          <img src={thumb} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Music className="w-5 h-5 text-zinc-500 m-auto mt-3.5" />
-                        )}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <Play className="w-4 h-4 text-white fill-current ml-0.5" />
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs sm:text-sm font-bold text-[var(--text-primary)] truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors tracking-tight">
-                          {t.title}
-                        </div>
-                        <div className="text-[11px] sm:text-xs text-[var(--text-secondary)] truncate mt-0.5 font-normal">
-                          {t.artist}
-                        </div>
+                    <div className="w-14 h-14 rounded-lg bg-s3 overflow-hidden shrink-0 relative flex items-center justify-center">
+                      {thumb ? <img src={thumb} alt="" className="w-full h-full object-cover" /> : <Music className="w-5 h-5 text-t3" />}
+                      <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Play className="w-5 h-5 text-white fill-current" />
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      {onCurateSimilar && (
-                        <button
-                          onClick={() => onCurateSimilar(t)}
-                          title="Curate similar vibe"
-                          className="p-2 rounded-full text-[var(--text-secondary)] hover:text-emerald-500 hover:bg-emerald-500/15 border border-transparent hover:border-emerald-500/30 transition-all cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-bold truncate">{t.title}</div>
+                      <div className="text-[13px] text-t2 truncate">{t.artist}</div>
                     </div>
+                    {onCurateSimilar && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onCurateSimilar(t)
+                        }}
+                        title="Curate similar vibe"
+                        aria-label="Curate similar vibe"
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-t3 hover:text-accent hover:bg-white/[0.06] transition-colors cursor-pointer shrink-0"
+                      >
+                        <Sparkles className="w-[18px] h-[18px]" />
+                      </button>
+                    )}
                   </div>
                 )
               })}
             </div>
-          </div>
+          </section>
         )}
       </div>
     </div>

@@ -18,17 +18,16 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 - **Persistent Friend Code (`UP-XXXXXX`) & Live Activity Feed**: Every user gets a shareable Friend ID with an always-on WebRTC + `BroadcastChannel` presence mesh. Add friends, accept/decline requests, and see when friends are **Online — Listening to *[Song Title] - [Artist]*** (with 1-click **Listen Along**) or **In Studio**.
 - **1-Click Jam Invites & Synchronized Listening (`JAM-XXXX`)**: Send instant live Jam invites to online friends with an interactive floating glass Join banner. Features NTP clock calibration and 3-tier acoustic drift compensation (`< 150ms` locked, `150ms–850ms` micro-speed ramping, `>= 850ms` hard seek).
 
-###  Atmosphere Themes & Day/Night Engine
-- **Dynamic Time-Based Cycling**: Automatically shifts ambient lighting and gradient reflections based on your local time:
-  -  **Crimson Glow** (4:00 AM – 11:59 AM)
-  -  **Dark (AMOLED)** (12:00 PM – 3:59 AM): 100% pure black for afternoon glare reduction and OLED battery savings
-- **Daylight Studio (High-Contrast Light Mode)**: Soft Alabaster background (`#F7F7FA`) with deep slate ink typography (`#0F172A`), zero-glare ambient elevations, and 100% contrast compliance across all screens, drawers, and player bars.
-- **Quick Slide-Down Theme Drawer**: Tap **Themes** in Taste Controls to expand a 4-option slider (**Auto**, **Dark**, **Crimson Glow**, **Light**) to lock in your preferred aesthetic anytime.
-
-###  Spatial UI/UX & Mobile "Airy" Layout (v5.5)
-- **Breathing Room & Hierarchy**: Overhauled mobile spacing with `20px` edge margins, `32px–40px` shelf gaps, and `130px` bottom scroll clearance so floating controls never collide with content.
-- **Generous Touch Targets**: Track rows expanded to `64px–72px` touch targets with `48px x 48px` squircle album art (`rounded-[12px]`) and uncluttered typography.
-- **Horizontal Discovery Carousels**: Smooth snap-scrolling cards (`156px–168px` width) with responsive layout across mobile, tablet, and desktop viewports.
+###  v8 Redesign: Navigation, Library & Player
+- **Four places, always labelled**: **Home**, **Search**, **Create** and **Library**. Phones get a tab bar fixed to the bottom; laptops, the Mac app and wide browser windows get one workspace (library on the left, content in the middle, the current song / Up next / friends on the right, full player at the bottom).
+- **Create (AI mixes)**: describe a moment or mood, start from your likes or the song that's playing, set Energy, Familiar ↔ New and Length. Every mix gets its own page with Save, Download all, Share and Listen together, plus "Tweak" chips (More energy, Calmer, Fewer vocals…) to regenerate it.
+- **Search**: one box, grouped results (Songs, Playlists, Videos). "Make a mix from …" is always the first result, so there's no AI toggle.
+- **Library**: Playlists (your own + saved mixes and charts), Liked, Downloads, Artists and History, with search inside.
+- **Every song has a ⋯ menu**: Play next, Add to queue, Add to playlist, Like, Download, Start radio, Go to artist.
+- **Player**: slim mini-player on phones (swipe left/right to skip, up to open), desktop bar with shuffle and repeat, Now Playing coloured by the artwork, sleep timer, lyrics.
+- **Listen together**: Friends & Jam hub with your code/QR, requests, who's online, "Listen along", and live Jam rooms.
+- **First-run setup**: pick genres and artists (and optionally import YouTube likes) so Home is personal from the start.
+- **Dark only**, one ember accent for AI and likes; back button, undo toasts and keyboard shortcuts (Space, ⌘K search, ⌘N create, ⌘B right panel).
 
 ###  Dynamic 9-Block Listen Together & Discovery Engine (v5.5)
 - **Tier 1 (Regional & Viral Live Charts)**:
@@ -51,11 +50,12 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 ### Android Auto (Car Display Mode)
 - **In-Car Browse & Playback**: Full native Android Auto dashboard support (`AutomotiveApp` via `MediaBrowserServiceCompat`).
 - **Direct Car Screen Selection**: Browse and trigger your curated playlists, Liked Songs, and AI mixes directly from your car's touchscreen console with zero latency.
+- **Your Mixes in the car**: AI mixes and playlists saved on the phone appear under **Your Mixes** on the Home and Library tabs.
 - **Lock Screen & Media Controls**: Complete system notification playback controls with high-res album art and persistent background audio.
 
 ### Taste DNA & YouTube Likes Sync
 - **Listener Archetype Synthesis**: Gemini analyzes your hearted songs and listening history to classify your acoustic profile (e.g. *High-Impact Sonic Voyager*, *Atmospheric Connoisseur*), tempo range, and genre affinity breakdowns.
-- **Sync Liked Songs**: 1-click sync that analyzes your local favorites to refresh seeds and curate tailored mixes with 0 AI token waste.
+- **Mix from my likes**: one tap analyzes your liked songs and builds a mix from them (Your taste → Mix from my likes).
 - **Google & YouTube Integration**: Connect with Google OAuth 2.0 or paste any YouTube Music playlist link to import your authentic likes and listening habits.
 
 ### Ultra-Fast AI Curation (Argon Priority)
@@ -96,14 +96,15 @@ UpBeat/
 │   └── youtube_search.py               # YouTube Music & Safari AppleScript Bridge
 ├── frontend/         # React 19 + Vite Frontend
 │   ├── src/
+│   │   ├── ui/                         # Shell: router, tab bar, sidebar, right panel, shared building blocks
+│   │   ├── views/                      # Home, Search, Create, Collection, Library, Settings, Onboarding
 │   │   ├── components/
-│   │   │   ├── Navbar.jsx              # Search, AI Curate toggle, Model selector
-│   │   │   ├── Sidebar.jsx             # Taste Controls & Atmosphere Themes drawer
-│   │   │   ├── PlayerBar.jsx           # Global playback controls & queue
-│   │   │   ├── SonicDnaView.jsx        # Taste Profile, Favourites & Seeds Library
-│   │   │   ├── GoogleAuthModal.jsx     # Google OAuth & YouTube sync modal
-│   │   │   └── YouTubeTasteSyncModal.jsx # YouTube Search & Playlist import modal
-│   │   ├── utils/themeCycle.js         # Day/Night dynamic theme engine
+│   │   │   ├── PlayerBar.jsx           # Audio engine, mini-player & desktop player bar
+│   │   │   ├── NowPlayingView.jsx      # Full-screen player, lyrics, share cards
+│   │   │   ├── JamModal.jsx            # Friends & Jam hub
+│   │   │   ├── SonicDnaView.jsx        # Your taste & taste sources
+│   │   │   └── GoogleAuthModal.jsx     # Google sign-in & YouTube import
+│   │   ├── jamEngine.js                # Real-time friends presence & synced Jam rooms
 │   │   ├── offlineStorage.js           # IndexedDB audio binary storage
 │   │   ├── otaUpdater.js               # Over-The-Air update manager
 │   │   └── standaloneApi.js            # Direct Innertube streaming & Gemini client
@@ -155,6 +156,8 @@ Run the startup script:
 ./run.sh
 ```
 
+For UI work, `npm run dev` (in `frontend/`) also serves the `/api` functions locally, so search and charts work without a backend.
+
 Or build manually:
 ```bash
 # Frontend
@@ -174,10 +177,10 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ##  Configuration (Optional)
 
-UpBeat works out of the box with **Direct Search (0 tokens)**. To unlock Gemini AI curation:
-1. Tap the **Settings (⚙️)** icon in the top navigation bar.
-2. Enter your free **Gemini API Key** from [Google AI Studio](https://aistudio.google.com).
-3. If using an Android device on the same local Wi-Fi as your Mac, enter your Mac's LAN address (`http://192.168.x.x:8000`) to sync live Safari tabs.
+Search, charts and playback work out of the box. To make AI mixes:
+1. Open **Settings** (your avatar on phones, the ⚙ button on desktop).
+2. Under **AI mixes**, paste your free **Gemini API key** from [Google AI Studio](https://aistudio.google.com).
+3. Optional: under **Mac companion**, enter your Mac's address (`http://192.168.x.x:8000`) to use UpBeat running on your Mac from another device on the same Wi-Fi.
 
 ---
 

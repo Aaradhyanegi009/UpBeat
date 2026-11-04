@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Play, Pause, SkipForward, SkipBack, Volume2, VolumeX,
-  ExternalLink, Video, Music, Heart, Loader2, Download, Check, ListMusic, ChevronUp,
-  Monitor, Compass, Mic2, Moon
+  Music, Heart, Loader2, ListMusic, Moon, Shuffle, Repeat, Repeat1, Users, Maximize2, MessageSquareQuote
 } from 'lucide-react'
+import { artUrl } from '../ui/primitives'
 import { getApiBase, hasBackend, getAudioSource, resolveStandaloneAudio, searchYouTubeStandalone, getTrackDownloadUrl, openExternalUrl, prewarmTrack } from '../standaloneApi'
 import { isTrackDownloaded, saveTrackOffline, createOfflineAudioUrl, subscribeOfflineChanges } from '../offlineStorage'
 import { useAlbumColor, DEFAULT_LAVENDER_THEME } from '../utils/colorExtractor'
@@ -60,7 +60,17 @@ export default function PlayerBar({
   isShuffle: externalIsShuffle,
   setIsShuffle: externalSetIsShuffle,
   onToggleShuffle: externalOnToggleShuffle,
-  onUserSeek
+  onUserSeek,
+  isDesktop = false,
+  playingFromTitle = '',
+  rightPanelOpen = false,
+  onToggleRightPanel,
+  jamActive = false,
+  onOpenJam,
+  onGoToArtist,
+  onStartRadio,
+  onAddToPlaylist,
+  upNextTrack = null
 }) {
   const [internalNowPlaying, setInternalNowPlaying] = useState(false)
   const nowPlayingOpen = typeof isNowPlayingOpen === 'boolean' ? isNowPlayingOpen : internalNowPlaying
@@ -306,13 +316,29 @@ export default function PlayerBar({
       root.style.setProperty('--song-glow-2', `rgba(${albumColor.rgb}, 0.11)`)
       root.style.setProperty('--song-glow-3', `rgba(${albumColor.rgb}, 0.14)`)
       root.style.setProperty('--song-primary', albumColor.primary)
+      root.style.setProperty('--album', albumColor.primary)
     } else {
       root.style.setProperty('--song-glow-1', 'transparent')
       root.style.setProperty('--song-glow-2', 'transparent')
       root.style.setProperty('--song-glow-3', 'transparent')
-      root.style.setProperty('--song-primary', '#e11d48')
+      root.style.setProperty('--song-primary', '#FF5E3A')
+      root.style.setProperty('--album', '#2A2A2F')
     }
   }, [track, albumColor])
+
+  const miniArt = track ? artUrl(track) || thumbUrl : ''
+  const swipeRef = useRef(null)
+  const cycleRepeat = () => setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'))
+
+  // Other surfaces (desktop right panel) can ask for the lyrics view
+  useEffect(() => {
+    const openLyrics = () => {
+      setShowLyrics(true)
+      setNowPlayingOpen(true)
+    }
+    window.addEventListener('upbeat-open-lyrics', openLyrics)
+    return () => window.removeEventListener('upbeat-open-lyrics', openLyrics)
+  }, [setNowPlayingOpen])
   const displayTime = Math.min(
     isScrubbing ? scrubTime : currentTime,
     effectiveDuration > 0 ? effectiveDuration : Infinity
@@ -1470,11 +1496,8 @@ export default function PlayerBar({
               }
               if (cur > 5 && !hasPrewarmedNextRef.current) {
                 hasPrewarmedNextRef.current = true
-                if (queue && queue.length > 0 && typeof queueIndex === 'number') {
-                  const nextTrack = queue[queueIndex + 1]
-                  if (nextTrack?.video_id) {
-                    prewarmTrack(nextTrack.video_id)
-                  }
+                if (upNextTrack?.video_id) {
+                  prewarmTrack(upNextTrack.video_id)
                 }
               }
               const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
@@ -1641,248 +1664,75 @@ export default function PlayerBar({
         <div id="argon-yt-player-mount" className="w-full h-full" />
       </div>
 
-      <footer
-        className="bg-[var(--bg-glass-heavy)] backdrop-blur-[20px] border-t border-[var(--border-subtle)] text-[var(--text-primary)] px-5 sm:px-6 py-2.5 sm:py-0 sm:h-[74px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 select-none flex-shrink-0 z-30 relative transition-colors"
-        style={{
-          '--slider-thumb-color': albumColor.primary,
-          '--slider-thumb-glow': albumColor.glow,
-          boxShadow: isPlaying ? `0 -10px 36px ${albumColor.subtle}` : 'none',
-          transition: 'box-shadow 0.4s ease'
-        }}
-      >
-        {/* Top progress bar */}
-        {track && effectiveDuration > 0 && (
-          <div
-            className="absolute top-0 left-0 h-[2.5px] transition-all duration-150 pointer-events-none"
-            style={{
-              width: `${progressPct}%`,
-              background: `linear-gradient(to right, ${albumColor.primary}, ${albumColor.accent})`,
-              boxShadow: isPlaying ? `0 0 14px ${albumColor.glow}` : 'none'
-            }}
-          />
-        )}
-
-        {/* Mobile Row 1 / Desktop Left+Center+Right */}
-        <div className="flex items-center justify-between gap-3 w-full sm:w-auto sm:flex-1">
-          {/* Track Artwork + Title + Artist (Click to expand Spotify/YT Music Now Playing screen) */}
-          <div
-            onClick={() => track && setNowPlayingOpen(true)}
-            className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1 flex-nowrap sm:w-1/4 sm:min-w-[200px] sm:flex-initial cursor-pointer group select-none"
-            title="Tap to expand Now Playing view"
-          >
+      {isDesktop ? (
+        <footer className="h-[88px] bg-black pl-3 pr-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)] items-center gap-4 select-none shrink-0">
+          {/* Song */}
+          <div className="flex items-center gap-3.5 min-w-0">
             {track ? (
               <>
-                <div
-                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-[14px] bg-[var(--surface-hover)] border overflow-hidden shrink-0 relative transition-all duration-300 group-hover:scale-105"
-                  style={{
-                    borderColor: isPlaying ? albumColor.border : 'var(--border-subtle)',
-                    boxShadow: isPlaying ? `0 0 14px ${albumColor.subtle}` : 'none'
-                  }}
+                <button
+                  type="button"
+                  onClick={() => setNowPlayingOpen(true)}
+                  aria-label="Open full-screen player"
+                  title="Open full-screen player"
+                  className="relative w-14 h-14 rounded-[10px] overflow-hidden shrink-0 bg-s2 cursor-pointer"
                 >
-                  {thumbUrl ? (
-                    <img src={thumbUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)]">
-                      <Music className="w-4 h-4" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-nowrap">
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        isPlaying ? 'animate-pulse' : ''
-                      }`}
-                      style={{
-                        backgroundColor: isPlaying ? albumColor.primary : '#52525b'
-                      }}
-                    />
-                    <span className="text-xs sm:text-[13px] font-bold text-[var(--text-primary)] tracking-tight truncate group-hover:text-rose-400 transition-colors flex-1 min-w-0">
-                      {track.title}
-                    </span>
-                    {isPlayingOffline && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0" title="Offline playback from local storage">
-                        OFFLINE
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] sm:text-xs text-[var(--text-secondary)] font-medium truncate mt-0.5 pl-3 group-hover:text-[var(--text-primary)] transition-colors">
+                  {miniArt ? <img src={miniArt} alt="" className="w-full h-full object-cover" /> : <Music className="w-5 h-5 text-t3 m-auto" />}
+                </button>
+                <div className="min-w-0">
+                  <button type="button" onClick={() => setNowPlayingOpen(true)} className="block max-w-full text-[15px] font-bold truncate hover:underline cursor-pointer text-left">
+                    {track.title}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onGoToArtist?.(firstArtist(track.artist))}
+                    className="block max-w-full text-[13px] text-t2 truncate hover:underline hover:text-t1 cursor-pointer text-left"
+                  >
                     {track.artist}
-                  </div>
+                  </button>
                 </div>
                 {onToggleFavorite && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(track) }}
-                    title={isFav ? 'Remove from Favorites' : 'Save to Favorites'}
-                    aria-label="Toggle Favorite"
-                    className={`p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer shrink-0 ${
-                      isFav ? 'text-rose-400' : 'text-[var(--text-secondary)] hover:text-rose-400'
-                    }`}
-                  >
-                    <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
-                  </button>
-                )}
-                {track && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDownload(track) }}
-                    disabled={downloadState === 'downloading'}
-                    title={downloadState === 'downloading' ? 'Downloading...' : (downloadState === 'success' || isDownloaded) ? 'Downloaded (Offline ready)' : 'Download Track'}
-                    aria-label="Download Track"
-                    className={`hidden sm:flex p-1.5 rounded-full hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shrink-0 ${
-                      isDownloaded ? 'text-emerald-400' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    {downloadState === 'downloading' ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                    ) : (downloadState === 'success' || isDownloaded) ? (
-                      <Check className="w-4 h-4 text-emerald-400" />
-                    ) : (
-                      <Download className="w-4 h-4" />
-                    )}
-                  </button>
+                  <BarButton label={isFav ? 'Remove from liked songs' : 'Like'} onClick={() => onToggleFavorite(track)} active={isFav}>
+                    <Heart className={`w-5 h-5 ${isFav ? 'fill-accent text-accent' : ''}`} />
+                  </BarButton>
                 )}
               </>
             ) : (
-              <div className="text-xs text-[var(--text-muted)] font-mono py-2">
-                Tap any track to play
-              </div>
+              <span className="text-sm text-t3 pl-2">Pick something to play</span>
             )}
           </div>
 
-          {/* Mobile Compact Transport Controls */}
-          <div className="flex sm:hidden items-center gap-1.5 shrink-0">
-            {track && (
+          {/* Transport */}
+          <div className="flex flex-col items-center gap-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <BarButton label={isShuffle ? 'Shuffle on' : 'Shuffle off'} onClick={handleToggleShuffle} active={isShuffle} dot={isShuffle} disabled={!track}>
+                <Shuffle className="w-[18px] h-[18px]" />
+              </BarButton>
+              <BarButton label="Previous" onClick={isSafariMode ? () => onSafariControl('prev') : onPrev} disabled={!track} active>
+                <SkipBack className="w-5 h-5 fill-current" />
+              </BarButton>
               <button
-                onClick={() => {
-                  setShowLyrics(true)
-                  setNowPlayingOpen(true)
-                }}
-                className={`p-1.5 rounded-md active:scale-90 transition-all cursor-pointer ${
-                  nowPlayingOpen && showLyrics ? 'text-white bg-white/15' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                }`}
-                style={nowPlayingOpen && showLyrics ? { color: albumColor.primary } : undefined}
-                title="Live Synced Lyrics"
-                aria-label="Lyrics"
-              >
-                <Mic2 className="w-4 h-4" />
-              </button>
-            )}
-            {track && (
-              <button
-                onClick={() => setNowPlayingOpen(true)}
-                className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-90 transition-transform cursor-pointer"
-                title="Expand Now Playing"
-                aria-label="Expand Now Playing"
-              >
-                <ChevronUp className="w-4 h-4" />
-              </button>
-            )}
-            <button
-              onClick={isSafariMode ? () => onSafariControl('prev') : onPrev}
-              disabled={!track}
-              className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30 transition-transform cursor-pointer"
-              style={{ color: albumColor.primary }}
-              aria-label="Previous"
-            >
-              <SkipBack className="w-4 h-4 fill-current opacity-90" />
-            </button>
-            <button
-              onClick={isSafariMode ? () => onSafariControl('play_pause') : onTogglePlay}
-              disabled={!track}
-              className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-30 transition-all duration-150 active:scale-95 shadow-md cursor-pointer hover:brightness-110"
-              style={{
-                backgroundColor: albumColor.primary,
-                color: albumColor.contrastText,
-                boxShadow: isPlaying ? `0 4px 16px ${albumColor.glow}` : '0 2px 8px rgba(0,0,0,0.35)'
-              }}
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isLoadingStream ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : isPlaying ? (
-                <Pause className="w-4 h-4 fill-current" />
-              ) : (
-                <Play className="w-4 h-4 fill-current ml-0.5" />
-              )}
-            </button>
-            <button
-              onClick={isSafariMode ? () => onSafariControl('next') : onNext}
-              disabled={!track}
-              className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 disabled:opacity-30 transition-transform cursor-pointer"
-              style={{ color: albumColor.primary }}
-              aria-label="Next"
-            >
-              <SkipForward className="w-4 h-4 fill-current opacity-90" />
-            </button>
-            {onToggleQueue && (
-              <button
-                onClick={onToggleQueue}
-                title="Playback Queue"
-                aria-label="Open Queue"
-                className={`p-1.5 relative rounded-md transition-colors cursor-pointer ${
-                  isQueueOpen ? 'text-sky-300 bg-sky-500/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:text-white'
-                }`}
-              >
-                <ListMusic className="w-4 h-4" />
-                {queueCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full bg-sky-500 text-[9px] font-bold text-white flex items-center justify-center">
-                    {queueCount}
-                  </span>
-                )}
-              </button>
-            )}
-          </div>
-
-          {/* Desktop Center Transport & Scrubber */}
-          <div className="hidden sm:flex flex-col items-center gap-1.5 flex-1 max-w-xl px-4">
-            <div className="flex items-center gap-5">
-              <button
-                onClick={isSafariMode ? () => onSafariControl('prev') : onPrev}
-                disabled={!track}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-all duration-150 active:scale-90 disabled:opacity-30 cursor-pointer"
-                style={{ color: albumColor.primary }}
-                title="Previous Track"
-              >
-                <SkipBack className="w-4 h-4 fill-current opacity-90" />
-              </button>
-
-              <button
+                type="button"
                 onClick={isSafariMode ? () => onSafariControl('play_pause') : onTogglePlay}
                 disabled={!track}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center disabled:opacity-30 transition-all duration-150 active:scale-95 shadow-lg cursor-pointer hover:brightness-110 hover:scale-105"
-                style={{
-                  backgroundColor: albumColor.primary,
-                  color: albumColor.contrastText,
-                  boxShadow: isPlaying ? `0 4px 20px ${albumColor.glow}` : '0 2px 10px rgba(0,0,0,0.4)'
-                }}
-                title={isPlaying ? 'Pause' : 'Play'}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+                className="w-10 h-10 rounded-full bg-white text-[#0A0A0B] flex items-center justify-center hover:scale-105 transition-transform cursor-pointer disabled:opacity-40"
               >
-                {isLoadingStream ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : isPlaying ? (
-                  <Pause className="w-4 h-4 fill-current" />
-                ) : (
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                )}
+                {isLoadingStream ? <Loader2 className="w-5 h-5 animate-spin" /> : isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
               </button>
-
-              <button
-                onClick={isSafariMode ? () => onSafariControl('next') : onNext}
-                disabled={!track}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-all duration-150 active:scale-90 disabled:opacity-30 cursor-pointer"
-                style={{ color: albumColor.primary }}
-                title="Next Track"
-              >
-                <SkipForward className="w-4 h-4 fill-current opacity-90" />
-              </button>
+              <BarButton label="Next" onClick={isSafariMode ? () => onSafariControl('next') : onNext} disabled={!track} active>
+                <SkipForward className="w-5 h-5 fill-current" />
+              </BarButton>
+              <BarButton label={repeatMode === 'one' ? 'Repeat one' : repeatMode === 'all' ? 'Repeat all' : 'Repeat off'} onClick={cycleRepeat} active={repeatMode !== 'off'} dot={repeatMode !== 'off'} disabled={!track}>
+                {repeatMode === 'one' ? <Repeat1 className="w-[18px] h-[18px]" /> : <Repeat className="w-[18px] h-[18px]" />}
+              </BarButton>
             </div>
-
-            <div className="w-full flex items-center gap-3">
-              <span className="text-[11px] font-mono text-[var(--text-muted)] w-9 text-right">
-                {formatTime(displayTime)}
-              </span>
+            <div className="w-full max-w-[600px] flex items-center gap-2.5 text-xs text-t3 font-semibold tabular-nums">
+              <span className="w-10 text-right">{formatTime(displayTime)}</span>
               <input
                 type="range"
+                aria-label="Seek"
                 min="0"
                 max={effectiveDuration > 0 ? effectiveDuration : 100}
                 step="0.25"
@@ -1894,213 +1744,132 @@ export default function PlayerBar({
                 onTouchEnd={handleScrubEnd}
                 onMouseUp={handleScrubEnd}
                 disabled={!track || isSafariMode}
-                style={{
-                  background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${progressPct}%, var(--slider-track, #202028) ${progressPct}%, var(--slider-track, #202028) 100%)`
-                }}
-                className="flex-1 argon-slider cursor-pointer disabled:opacity-40"
+                className="ub-range sm flex-1"
+                style={{ '--pct': `${progressPct}%` }}
               />
-              <span className="text-[11px] font-mono text-[var(--text-muted)] w-9">
-                {effectiveDuration > 0 ? formatTime(effectiveDuration) : (track?.duration_text && track.duration_text !== '--:--' ? track.duration_text : '0:00')}
+              <span className="w-10">
+                {effectiveDuration > 0 ? formatTime(effectiveDuration) : track?.duration_text && track.duration_text !== '--:--' ? track.duration_text : '0:00'}
               </span>
             </div>
           </div>
 
-          {/* Desktop Right Controls */}
-          <div className="hidden sm:flex items-center justify-end gap-3 w-1/4 min-w-[180px]">
-            {hasBackend() && (
-              <div className="hidden md:flex items-center bg-[var(--surface-hover)] border border-[var(--border-subtle)] rounded-lg p-0.5 text-[11px] font-mono">
-                <button
-                  onClick={() => setPlaybackMode('app')}
-                  title="App Native Engine"
-                  className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                    playbackMode === 'app'
-                      ? 'bg-white dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 border border-slate-200 dark:border-emerald-500/40 shadow-xs font-semibold'
-                      : 'text-slate-500 dark:text-[#8e8e96] hover:text-slate-900 dark:hover:text-[#e4e4e7]'
-                  }`}
-                >
-                  <Monitor className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setPlaybackMode('safari')}
-                  title="Safari Web Engine"
-                  className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                    playbackMode === 'safari'
-                      ? 'bg-white dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 border border-slate-200 dark:border-emerald-500/40 shadow-xs font-semibold'
-                      : 'text-slate-500 dark:text-[#8e8e96] hover:text-slate-900 dark:hover:text-[#e4e4e7]'
-                  }`}
-                >
-                  <Compass className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {onToggleQueue && (
-              <button
-                onClick={onToggleQueue}
-                title="Open Playback Queue"
-                className={`p-1.5 rounded-md relative transition-colors cursor-pointer ${
-                  isQueueOpen
-                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
-                }`}
-              >
-                <ListMusic className="w-4 h-4" />
-                {queueCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full bg-sky-500 text-[9px] font-bold text-white flex items-center justify-center">
-                    {queueCount}
-                  </span>
-                )}
-              </button>
-            )}
-
-            <button
+          {/* Tools */}
+          <div className="flex items-center justify-end gap-0.5 min-w-0">
+            <BarButton
+              label="Lyrics"
+              disabled={!track}
+              active={nowPlayingOpen && showLyrics}
               onClick={() => {
                 if (nowPlayingOpen && showLyrics) {
                   setShowLyrics(false)
+                  setNowPlayingOpen(false)
                 } else {
                   setShowLyrics(true)
                   setNowPlayingOpen(true)
                 }
               }}
-              disabled={!track}
-              title="Live Synced Lyrics"
-              aria-label="Toggle Synced Lyrics"
-              className={`p-1.5 rounded-md border text-xs transition-all cursor-pointer disabled:opacity-30 ${
-                nowPlayingOpen && showLyrics
-                  ? 'text-white'
-                  : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
-              }`}
-              style={
-                nowPlayingOpen && showLyrics
-                  ? {
-                      backgroundColor: `${albumColor.primary}25`,
-                      borderColor: `${albumColor.primary}55`,
-                      color: albumColor.primary
-                    }
-                  : undefined
-              }
             >
-              <Mic2 className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => {
-                const nextShow = !showVideo
-                setShowVideo(nextShow)
-                if (nextShow) setUseIframeFallback(true)
-              }}
-              disabled={!track || playbackMode !== 'app'}
-              title="Toggle Video Preview"
-              className={`p-1.5 rounded-md border text-xs transition-colors cursor-pointer disabled:opacity-30 ${
-                showVideo
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                  : 'bg-transparent border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
-              }`}
-            >
-              <Video className="w-4 h-4" />
-            </button>
-
-            {track && (
-              <button
-                onClick={() => {
-                  if (onPushToSafari) {
-                    onPushToSafari(track)
-                  } else {
-                    const u = track.url || (track.video_id ? `https://www.youtube.com/watch?v=${track.video_id}` : (resolvedVid ? `https://www.youtube.com/watch?v=${resolvedVid}` : ''))
-                    if (u) openExternalUrl(u)
-                  }
-                }}
-                title="Open on YouTube / Browser"
-                className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </button>
-            )}
-
-            <button
+              <MessageSquareQuote className="w-5 h-5" />
+            </BarButton>
+            <BarButton label={rightPanelOpen ? 'Hide up next' : 'Show up next'} onClick={onToggleRightPanel} active={rightPanelOpen} badge={queueCount || null}>
+              <ListMusic className="w-5 h-5" />
+            </BarButton>
+            <BarButton label={jamActive ? 'Jam is live' : 'Listen with friends'} onClick={onOpenJam} active={jamActive} live={jamActive}>
+              <Users className="w-5 h-5" />
+            </BarButton>
+            <BarButton
+              label={sleepTimer.active ? (sleepTimer.mode === 'end_of_track' ? 'Sleep timer: end of song' : `Sleep timer: ${Math.ceil(sleepTimer.remainingSec / 60)} min left`) : 'Sleep timer'}
               onClick={() => setIsSleepModalOpen(true)}
-              title={
-                sleepTimer.active
-                  ? (sleepTimer.mode === 'end_of_track' ? 'Sleep Timer: End of song' : `Sleep Timer: ${Math.ceil(sleepTimer.remainingSec / 60)}m left`)
-                  : 'Sleep Timer'
-              }
-              aria-label="Sleep Timer"
-              className={`p-1.5 rounded-md transition-colors cursor-pointer relative ${
-                sleepTimer.active
-                  ? 'text-indigo-400 bg-indigo-500/15'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
-              }`}
+              active={sleepTimer.active}
+              badge={sleepTimer.active && sleepTimer.mode === 'minutes' ? `${Math.ceil(sleepTimer.remainingSec / 60)}` : null}
             >
-              <Moon className="w-4 h-4" />
-              {sleepTimer.active && sleepTimer.mode === 'minutes' && (
-                <span
-                  className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center pointer-events-none"
-                  style={{ backgroundColor: albumColor.primary }}
-                >
-                  {Math.ceil(sleepTimer.remainingSec / 60)}m
-                </span>
-              )}
-            </button>
-
-            <div className="hidden lg:flex items-center gap-2">
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-              >
-                {isMuted || volume === 0 ? (
-                  <VolumeX className="w-4 h-4 text-[#52525b]" />
-                ) : (
-                  <Volume2 className="w-4 h-4" />
-                )}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volumeVal}
-                onChange={(e) => {
-                  setVolume(Number(e.target.value))
-                  setIsMuted(false)
-                }}
-                style={{
-                  background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${volumeVal}%, var(--slider-track, #202028) ${volumeVal}%, var(--slider-track, #202028) 100%)`
-                }}
-                className="w-16 argon-slider cursor-pointer"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Scrubber Row */}
-        {track && (
-          <div className="flex sm:hidden items-center gap-2 w-full px-0.5">
-            <span className="text-[10px] font-mono text-[var(--text-muted)] w-7">
-              {formatTime(displayTime)}
-            </span>
+              <Moon className="w-5 h-5" />
+            </BarButton>
+            <BarButton label={isMuted || volume === 0 ? 'Unmute' : 'Mute'} onClick={() => setIsMuted(!isMuted)}>
+              {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </BarButton>
             <input
               type="range"
+              aria-label="Volume"
               min="0"
-              max={effectiveDuration > 0 ? effectiveDuration : 100}
-              step="0.25"
-              value={Math.min(displayTime, effectiveDuration > 0 ? effectiveDuration : 100)}
-              onPointerDown={handleScrubStart}
-              onTouchStart={handleScrubStart}
-              onChange={handleScrubChange}
-              onPointerUp={handleScrubEnd}
-              onTouchEnd={handleScrubEnd}
-              onMouseUp={handleScrubEnd}
-              disabled={!track || isSafariMode}
-              style={{
-                background: `linear-gradient(to right, ${albumColor.primary} 0%, ${albumColor.accent} ${progressPct}%, var(--slider-track, #202028) ${progressPct}%, var(--slider-track, #202028) 100%)`
+              max="100"
+              value={volumeVal}
+              onChange={(e) => {
+                setVolume(Number(e.target.value))
+                setIsMuted(false)
               }}
-              className="flex-1 argon-slider"
+              className="ub-range sm w-24 mr-1"
+              style={{ '--pct': `${volumeVal}%` }}
             />
-            <span className="text-[10px] font-mono text-[var(--text-muted)] w-7 text-right">
-              {effectiveDuration > 0 ? formatTime(effectiveDuration) : (track?.duration_text && track.duration_text !== '--:--' ? track.duration_text : '0:00')}
-            </span>
+            <BarButton label="Full-screen player" onClick={() => setNowPlayingOpen(true)} disabled={!track}>
+              <Maximize2 className="w-[18px] h-[18px]" />
+            </BarButton>
           </div>
-        )}
-      </footer>
+        </footer>
+      ) : track ? (
+        <footer
+          className="relative h-16 flex items-center gap-1 pl-3.5 pr-1.5 select-none shrink-0 transition-colors duration-500"
+          style={{ background: `color-mix(in srgb, ${albumColor.primary} 24%, #121214)` }}
+          onTouchStart={(e) => {
+            const t = e.touches[0]
+            swipeRef.current = { x: t.clientX, y: t.clientY, at: Date.now() }
+          }}
+          onTouchEnd={(e) => {
+            const start = swipeRef.current
+            swipeRef.current = null
+            if (!start) return
+            const t = e.changedTouches[0]
+            const dx = t.clientX - start.x
+            const dy = t.clientY - start.y
+            if (Date.now() - start.at > 600) return
+            if (Math.abs(dx) > 60 && Math.abs(dy) < 40) {
+              if (dx < 0) (isSafariMode ? () => onSafariControl('next') : onNext)()
+              else (isSafariMode ? () => onSafariControl('prev') : onPrev)()
+            } else if (dy < -40 && Math.abs(dx) < 40) {
+              setNowPlayingOpen(true)
+            }
+          }}
+        >
+          <div className="absolute left-0 right-0 top-0 h-[2px] bg-white/15" aria-hidden="true">
+            <div className="h-full bg-white" style={{ width: `${progressPct}%` }} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setNowPlayingOpen(true)}
+            aria-label={`Open player: ${track.title}`}
+            className="flex items-center gap-3 flex-1 min-w-0 h-full text-left cursor-pointer"
+          >
+            <span className="w-11 h-11 rounded-[10px] overflow-hidden shrink-0 bg-s2 flex items-center justify-center">
+              {miniArt ? <img src={miniArt} alt="" className="w-full h-full object-cover" /> : <Music className="w-5 h-5 text-t3" />}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-bold truncate">{track.title}</span>
+              <span className="block text-[13px] text-white/70 truncate">
+                {jamActive ? 'Jam · ' : ''}
+                {track.artist}
+              </span>
+            </span>
+          </button>
+          {onToggleFavorite && (
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(track)}
+              aria-label={isFav ? 'Remove from liked songs' : 'Like'}
+              className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
+            >
+              <Heart className={`w-[22px] h-[22px] ${isFav ? 'fill-accent text-accent' : 'text-white/80'}`} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={isSafariMode ? () => onSafariControl('play_pause') : onTogglePlay}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
+          >
+            {isLoadingStream ? <Loader2 className="w-6 h-6 animate-spin" /> : isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-0.5" />}
+          </button>
+        </footer>
+      ) : null}
 
       {/* Spotify & YouTube Music Style Full Now Playing Screen */}
       <NowPlayingView
@@ -2146,6 +1915,12 @@ export default function PlayerBar({
         onSeek={commitSeek}
         sleepTimer={sleepTimer}
         onOpenSleepTimer={() => setIsSleepModalOpen(true)}
+        playingFromTitle={playingFromTitle}
+        onGoToArtist={onGoToArtist}
+        onStartRadio={onStartRadio}
+        onAddToPlaylist={onAddToPlaylist}
+        jamActive={jamActive}
+        onOpenJam={onOpenJam}
       />
 
       <SleepTimerModal
@@ -2160,5 +1935,31 @@ export default function PlayerBar({
         albumColor={albumColor}
       />
     </>
+  )
+}
+
+function firstArtist(artist = '') {
+  return String(artist).split(/,|&| feat\.| ft\.| x /i)[0].trim()
+}
+
+function BarButton({ label, onClick, children, active = false, disabled = false, dot = false, badge = null, live = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      aria-pressed={active || undefined}
+      className={`relative w-10 h-10 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default ${
+        live ? 'text-live' : active ? 'text-t1' : 'text-t2 hover:text-t1'
+      }`}
+    >
+      {children}
+      {dot && <span className="absolute bottom-1 left-1/2 -ml-[2px] w-1 h-1 rounded-full bg-current" />}
+      {badge !== null && badge !== undefined && badge !== 0 && (
+        <span className="absolute top-0.5 right-0 min-w-4 h-4 px-1 rounded-full bg-t1 text-[#0A0A0B] text-[10px] font-extrabold flex items-center justify-center">{badge}</span>
+      )}
+    </button>
   )
 }

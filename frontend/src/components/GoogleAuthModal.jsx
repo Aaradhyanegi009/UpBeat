@@ -46,19 +46,22 @@ export default function GoogleAuthModal({
     try { return localStorage.getItem('upbeat_google_client_id') || '' } catch { return '' }
   })
   const [customAccessToken, setCustomAccessToken] = useState('')
+  // Old builds pre-filled one developer's name/email for everyone; ignore those values.
   const [customEmail, setCustomEmail] = useState(() => {
     try {
-      const saved = localStorage.getItem('upbeat_last_google_email') || ''
-      if (/divyansh|negi/i.test(saved)) return ''
-      return saved
-    } catch { return '' }
+      const v = localStorage.getItem('upbeat_last_google_email') || ''
+      return /divyanshnegi009/i.test(v) ? '' : v
+    } catch {
+      return ''
+    }
   })
   const [customName, setCustomName] = useState(() => {
     try {
-      const saved = localStorage.getItem('upbeat_last_google_name') || ''
-      if (/divyansh|negi/i.test(saved)) return ''
-      return saved
-    } catch { return '' }
+      const v = localStorage.getItem('upbeat_last_google_name') || ''
+      return /divyansh negi/i.test(v) ? '' : v
+    } catch {
+      return ''
+    }
   })
   const [customPicUrl, setCustomPicUrl] = useState('')
   const [showEditPic, setShowEditPic] = useState(false)
@@ -97,8 +100,8 @@ export default function GoogleAuthModal({
   const handleInstantConnect = async (e) => {
     if (e) e.preventDefault()
     setErrorMsg('')
-    const email = customEmail.trim() || 'guest@upbeat.app'
-    const name = customName.trim() || (customEmail.trim() ? customEmail.split('@')[0] : 'Music Lover')
+    const email = customEmail.trim()
+    const name = customName.trim() || (email ? email.split('@')[0] : 'You')
     const url = playlistUrl.trim()
 
     setIsLoggingIn(true)
@@ -283,348 +286,220 @@ export default function GoogleAuthModal({
 
   const userInitial = (googleUser?.name || googleUser?.email || 'U')[0].toUpperCase()
 
+  const displayName = googleUser?.name || (googleUser?.email ? googleUser.email.split('@')[0] : 'You')
+  const inputCls =
+    'w-full h-12 rounded-xl bg-s2 px-4 text-[15px] font-medium placeholder:text-t3 focus:outline-none focus:ring-1 focus:ring-white/25'
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 select-none">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 dark:bg-black/75 backdrop-blur-xs transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Modal Dialog */}
-      <div className="relative w-full max-w-md bg-white dark:bg-[#0e0e13]/95 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-3xl shadow-2xl flex flex-col z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] backdrop-blur-2xl">
-        {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-white/[0.08] flex items-center justify-between bg-slate-50/60 dark:bg-white/[0.03] shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/15 flex items-center justify-center shadow-xs">
-              <GoogleIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
-                {googleUser ? 'Google Account & YouTube Taste' : 'Connect Google & YouTube'}
-              </h3>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center select-none" role="dialog" aria-modal="true" aria-labelledby="google-title">
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/60 cursor-default" onClick={onClose} />
+      <div className="relative w-full sm:w-[460px] max-h-[90dvh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-s1 ring-1 ring-white/10 shadow-2xl text-t1 pb-safe overflow-hidden">
+        <div className="sm:hidden w-10 h-1.5 rounded-full bg-white/25 mx-auto mt-2.5 shrink-0" />
+        <div className="flex items-center justify-between px-5 pt-3 sm:pt-5 shrink-0">
+          <h2 id="google-title" className="text-xl font-extrabold tracking-[-0.015em] flex items-center gap-2.5">
+            <GoogleIcon className="w-5 h-5" />
+            {googleUser ? 'Your account' : 'Bring your music in'}
+          </h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 rounded-full flex items-center justify-center text-t2 hover:text-t1 hover:bg-white/[0.06] cursor-pointer">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-5 space-y-4 overflow-y-auto gpu-scroll">
+        <div className="px-5 pb-6 pt-3 overflow-y-auto flex flex-col gap-4">
           {errorMsg && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+            <div className="p-3.5 rounded-2xl bg-[#2A1512] text-[#FFB4A6] text-[13px] flex items-start gap-2" role="alert">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1 leading-relaxed">{errorMsg}</div>
             </div>
           )}
 
           {googleUser ? (
-            /* Logged-in State with Verified Profile */
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#0c0c12]/75 backdrop-blur-xl border border-emerald-500/30 flex items-center gap-3.5">
+            <>
+              <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-s2">
                 {googleUser.picture ? (
-                  <img
-                    src={googleUser.picture}
-                    alt=""
-                    className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500/50 shadow-md"
-                  />
+                  <img src={googleUser.picture} alt="" className="w-12 h-12 rounded-full object-cover" />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-rose-500 via-purple-600 to-indigo-600 text-white font-bold text-lg flex items-center justify-center border-2 border-white/20 shadow-md">
-                    {userInitial}
-                  </div>
+                  <div className="w-12 h-12 rounded-full bg-[#F2C6B4] text-[#0A0A0B] font-extrabold text-lg flex items-center justify-center">{userInitial}</div>
                 )}
-
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate">
-                      {googleUser.name || (googleUser.email ? googleUser.email.split('@')[0] : 'Google User')}
-                    </span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Connected" />
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-zinc-400 truncate mt-0.5 font-medium">
-                    {googleUser.email || 'Connected'}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
+                  <div className="text-base font-bold truncate">{displayName}</div>
+                  {googleUser.email && <div className="text-[13px] text-t2 truncate">{googleUser.email}</div>}
+                  <div className="text-xs font-semibold text-live mt-1 flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>
-                      {googleUser.provider === 'google_oauth'
-                        ? 'Google OAuth 2.0 Connected'
-                        : 'YouTube Music Profile Synced'}
-                    </span>
+                    {googleUser.provider === 'google_oauth' ? 'Signed in with Google' : 'YouTube profile connected'}
                   </div>
                 </div>
               </div>
 
-              {/* Avatar Management Options */}
-              <div className="flex items-center justify-between text-[11px] font-mono px-1">
+              <button
+                type="button"
+                onClick={() => onSyncYouTubeLikes()}
+                disabled={isSyncingLikes}
+                className="h-12 rounded-full bg-t1 text-[#0A0A0B] font-bold text-[15px] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                {isSyncingLikes ? <Loader2 className="w-5 h-5 animate-spin" /> : <Youtube className="w-5 h-5" />}
+                {isSyncingLikes ? 'Importing your likes…' : 'Import my YouTube likes again'}
+              </button>
+
+              <div className="flex items-center justify-between text-sm">
                 {hasBackend() && (
-                  <button
-                    onClick={handleRefreshFromSafari}
-                    disabled={isSyncingProfile}
-                    className="text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isSyncingProfile ? 'animate-spin' : ''}`} />
-                    <span>Sync from Safari Tab</span>
+                  <button type="button" onClick={handleRefreshFromSafari} disabled={isSyncingProfile} className="font-semibold text-t2 hover:text-t1 inline-flex items-center gap-1.5 cursor-pointer">
+                    <RefreshCw className={`w-4 h-4 ${isSyncingProfile ? 'animate-spin' : ''}`} />
+                    Photo from Safari
                   </button>
                 )}
-                <button
-                  onClick={() => setShowEditPic((p) => !p)}
-                  className="text-zinc-400 hover:text-white cursor-pointer ml-auto"
-                >
-                  {showEditPic ? 'Close Editor' : 'Customize Avatar'}
+                <button type="button" onClick={() => setShowEditPic((p) => !p)} className="font-semibold text-t2 hover:text-t1 ml-auto cursor-pointer">
+                  {showEditPic ? 'Done' : 'Change photo'}
                 </button>
               </div>
 
-              {/* Avatar Editor Drawer */}
               {showEditPic && (
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#121218] border border-slate-200 dark:border-white/10 space-y-2.5 animate-in fade-in duration-100">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-900 dark:text-white">Profile Photo Controls</span>
-                    <button
-                      onClick={handleUseLetterAvatar}
-                      className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 hover:text-rose-500 dark:hover:text-rose-300 cursor-pointer"
-                    >
-                      Use Letter Avatar ("{userInitial}")
-                    </button>
-                  </div>
+                <div className="flex flex-col gap-2.5">
                   <form onSubmit={handleSaveCustomPic} className="flex gap-2">
-                    <input
-                      type="url"
-                      value={customPicUrl}
-                      onChange={(e) => setCustomPicUrl(e.target.value)}
-                      placeholder="Paste image URL (e.g. https://...)"
-                      className="flex-1 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 font-mono"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!customPicUrl.trim()}
-                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-xs text-white font-medium cursor-pointer"
-                    >
-                      Apply
+                    <label htmlFor="pic-url" className="sr-only">
+                      Image link
+                    </label>
+                    <input id="pic-url" type="url" value={customPicUrl} onChange={(e) => setCustomPicUrl(e.target.value)} placeholder="Paste an image link" className={inputCls} />
+                    <button type="submit" disabled={!customPicUrl.trim()} className="h-12 px-4 rounded-xl bg-t1 text-[#0A0A0B] font-bold cursor-pointer disabled:opacity-40">
+                      Use
                     </button>
                   </form>
+                  <button type="button" onClick={handleUseLetterAvatar} className="text-sm font-semibold text-t2 hover:text-t1 self-start cursor-pointer">
+                    Use the letter “{userInitial}” instead
+                  </button>
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-1">
-                <button
-                  onClick={() => onSyncYouTubeLikes()}
-                  disabled={isSyncingLikes}
-                  className="w-full py-2.5 px-4 rounded-xl bg-rose-100 dark:bg-rose-500/15 hover:bg-rose-200 dark:hover:bg-rose-500/25 border border-rose-300 dark:border-rose-500/40 text-[#BE123C] dark:text-rose-200 text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50 btn-sync-liked"
-                >
-                  {isSyncingLikes ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-[#BE123C] dark:text-rose-400" />
-                  ) : (
-                    <Youtube className="w-4 h-4 text-[#BE123C] dark:text-rose-400" />
-                  )}
-                  <span>{isSyncingLikes ? 'Syncing Liked Songs & Recalculating DNA...' : 'Re-sync YouTube Likes & Refresh Seeds'}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onLogout()
-                    onClose()
-                  }}
-                  className="w-full py-2 px-4 rounded-xl bg-slate-100 dark:bg-[#16161f] hover:bg-rose-50 dark:hover:bg-rose-500/10 border border-slate-200 dark:border-[#242432] hover:border-rose-300 dark:hover:border-rose-500/30 text-slate-700 dark:text-[#a1a1aa] hover:text-rose-600 dark:hover:text-rose-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Disconnect Account</span>
-                </button>
-              </div>
-            </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onLogout()
+                  onClose()
+                }}
+                className="h-12 rounded-full ring-1 ring-inset ring-white/15 text-t1 font-semibold text-[15px] flex items-center justify-center gap-2 cursor-pointer hover:bg-white/[0.05]"
+              >
+                <LogOut className="w-4 h-4" />
+                Disconnect
+              </button>
+            </>
           ) : (
-            /* Sign-In State */
-            <div className="space-y-4">
-              {/* Tab Selector: Instant Connect vs Google Cloud OAuth */}
-              <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-2xl text-xs font-medium">
-                <button
-                  type="button"
-                  onClick={() => setAuthMode('instant')}
-                  className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    authMode === 'instant'
-                      ? 'bg-white dark:bg-gradient-to-r dark:from-rose-500/20 dark:to-purple-500/20 text-slate-900 dark:text-white border border-slate-200 dark:border-rose-500/30 shadow-xs font-bold'
-                      : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  <span>1-Click Instant Sync</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthMode('oauth')}
-                  className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    authMode === 'oauth'
-                      ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs font-bold border border-slate-200 dark:border-white/10'
-                      : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  <GoogleIcon className="w-3.5 h-3.5" />
-                  <span>Google Cloud OAuth</span>
-                </button>
+            <>
+              <p className="text-sm text-t2 leading-relaxed -mt-1">Import your YouTube likes so recommendations and AI mixes start from what you already love.</p>
+
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-s2" role="tablist">
+                {[
+                  { id: 'instant', label: 'Quick import' },
+                  { id: 'oauth', label: 'Sign in with Google' }
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={authMode === t.id}
+                    onClick={() => setAuthMode(t.id)}
+                    className={`h-9 rounded-[9px] text-sm font-bold cursor-pointer transition-colors ${authMode === t.id ? 'bg-t1 text-[#0A0A0B]' : 'text-t2 hover:text-t1'}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
               </div>
 
               {authMode === 'instant' ? (
-                /* TAB 1: 1-Click Instant YouTube & Google Sync (Zero Setup, No 401 errors) */
-                <form onSubmit={handleInstantConnect} className="space-y-3.5">
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                        Display Name
-                      </label>
-                      <input
-                        type="text"
-                        value={customName}
-                        onChange={(e) => setCustomName(e.target.value)}
-                        placeholder="e.g. Alex Rivera"
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                        Google / YT Email
-                      </label>
-                      <input
-                        type="email"
-                        value={customEmail}
-                        onChange={(e) => setCustomEmail(e.target.value)}
-                        placeholder="you@gmail.com"
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
-                      />
-                    </div>
-                  </div>
-
+                <form onSubmit={handleInstantConnect} className="flex flex-col gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
-                      YouTube Playlist Link or Liked Songs URL (Optional)
+                    <label htmlFor="g-name" className="block text-[13px] font-semibold text-t2 mb-1.5">
+                      Your name
                     </label>
-                    <input
-                      type="url"
-                      value={playlistUrl}
-                      onChange={(e) => setPlaylistUrl(e.target.value)}
-                      placeholder="https://music.youtube.com/playlist?list=..."
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 transition-colors"
-                    />
+                    <input id="g-name" type="text" value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="What friends see" className={inputCls} />
                   </div>
-
+                  <div>
+                    <label htmlFor="g-playlist" className="block text-[13px] font-semibold text-t2 mb-1.5">
+                      YouTube or YouTube Music playlist link
+                    </label>
+                    <input id="g-playlist" type="url" value={playlistUrl} onChange={(e) => setPlaylistUrl(e.target.value)} placeholder="https://music.youtube.com/playlist?list=…" className={inputCls} />
+                    <p className="text-xs text-t3 mt-1.5">Public or unlisted. Your liked-songs playlist works best.</p>
+                  </div>
                   <button
                     type="submit"
                     disabled={isLoggingIn}
-                    className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-500 hover:to-purple-500 active:scale-[0.99] disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                    className="h-12 rounded-full bg-accent text-on-accent font-extrabold text-[15px] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 mt-1"
                   >
-                    {isLoggingIn ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    ) : (
-                      <Sparkles className="w-4 h-4 text-white" />
-                    )}
-                    <span>{playlistUrl.trim() ? 'Connect & Sync Music Taste' : 'Connect Profile Directly'}</span>
+                    {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                    {playlistUrl.trim() ? 'Import and connect' : 'Connect without importing'}
                   </button>
                 </form>
               ) : (
-                /* TAB 2: Official Google Cloud OAuth 2.0 */
-                <div className="space-y-3.5">
-                  {/* Client ID Configuration Field */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                        Google Cloud Web Client ID
+                <div className="flex flex-col gap-3">
+                  <p className="text-[13px] text-t2 leading-relaxed">Reads your YouTube likes directly. Needs a Google Cloud web client ID (one-time setup).</p>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="g-client" className="text-[13px] font-semibold text-t2">
+                        Client ID
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setShowOAuthGuide((p) => !p)}
-                        className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-medium flex items-center gap-1 cursor-pointer"
-                      >
+                      <button type="button" onClick={() => setShowOAuthGuide((p) => !p)} className="text-[13px] font-semibold text-t1 hover:underline inline-flex items-center gap-1 cursor-pointer">
                         <HelpCircle className="w-3.5 h-3.5" />
-                        <span>{showOAuthGuide ? 'Hide Instructions' : 'How to get ID'}</span>
+                        {showOAuthGuide ? 'Hide steps' : 'How to get one'}
                       </button>
                     </div>
-
                     <input
+                      id="g-client"
                       type="text"
                       value={customClientId}
                       onChange={(e) => {
                         setCustomClientId(e.target.value)
-                        try { localStorage.setItem('upbeat_google_client_id', e.target.value.trim()) } catch {}
+                        try {
+                          localStorage.setItem('upbeat_google_client_id', e.target.value.trim())
+                        } catch {}
                       }}
-                      placeholder="...apps.googleusercontent.com"
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-sky-500 transition-colors"
+                      placeholder="…apps.googleusercontent.com"
+                      className={inputCls}
                     />
                   </div>
-
-                  {/* OAuth Guide Accordion */}
                   {showOAuthGuide && (
-                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#14141d] border border-slate-200 dark:border-white/10 text-[11px] text-slate-600 dark:text-[#a1a1aa] space-y-2 animate-in fade-in font-sans">
-                      <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-sky-500" />
-                        <span>Quick 2-minute Google Cloud Setup:</span>
-                      </div>
-                      <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-[#8e8e96] font-mono text-[10px] pl-1">
-                        <li>
-                          Open{' '}
-                          <a
-                            href="https://console.cloud.google.com/apis/credentials"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-0.5"
-                          >
-                            Google Cloud Credentials <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        </li>
-                        <li>Click <strong>Create Credentials</strong> &rarr; <strong>OAuth client ID</strong></li>
-                        <li>Select <strong>Application type: Web application</strong></li>
-                        <li>Under <strong>Authorized JavaScript origins</strong>, add: <code className="text-slate-900 dark:text-white bg-slate-200 dark:bg-black/50 px-1 py-0.5 rounded">http://localhost</code> and <code className="text-slate-900 dark:text-white bg-slate-200 dark:bg-black/50 px-1 py-0.5 rounded">capacitor://localhost</code></li>
-                        <li>Under <strong>Enabled APIs & Services</strong>, enable <strong>YouTube Data API v3</strong></li>
-                        <li>Copy and paste your Client ID above.</li>
-                      </ol>
-                    </div>
+                    <ol className="list-decimal pl-5 space-y-1 text-[13px] text-t2 rounded-xl bg-s2 p-3.5 pl-8">
+                      <li>
+                        Open{' '}
+                        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-t1 underline inline-flex items-center gap-0.5">
+                          Google Cloud credentials <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </li>
+                      <li>Create credentials → OAuth client ID → Web application</li>
+                      <li>
+                        Add <code className="text-t1">http://localhost</code> and <code className="text-t1">capacitor://localhost</code> as JavaScript origins
+                      </li>
+                      <li>Enable the YouTube Data API v3</li>
+                      <li>Paste the client ID above</li>
+                    </ol>
                   )}
-
-                  {/* Continue with Google Button */}
                   <button
                     type="button"
                     onClick={handleGoogleOAuthSignIn}
                     disabled={isLoggingIn}
-                    className="w-full py-2.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50 text-white dark:text-black text-xs font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md"
+                    className="h-12 rounded-full bg-t1 text-[#0A0A0B] font-bold text-[15px] flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60"
                   >
-                    {isLoggingIn ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-[#4285F4]" />
-                    ) : (
-                      <GoogleIcon className="w-4 h-4" />
-                    )}
-                    <span>Continue with Google OAuth</span>
+                    {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleIcon className="w-5 h-5" />}
+                    Continue with Google
                   </button>
-
-                  {/* Alternative: Direct Access Token */}
-                  <div className="pt-2 border-t border-slate-200 dark:border-white/10 space-y-2">
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                      Or Paste OAuth Access Token Directly
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        value={customAccessToken}
-                        onChange={(e) => setCustomAccessToken(e.target.value)}
-                        placeholder="ya29...."
-                        className="flex-1 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 text-xs focus:outline-none focus:border-sky-500"
-                      />
+                  <details className="text-[13px] text-t2">
+                    <summary className="cursor-pointer font-semibold hover:text-t1">Have an access token instead?</summary>
+                    <div className="flex gap-2 mt-2.5">
+                      <label htmlFor="g-token" className="sr-only">
+                        Access token
+                      </label>
+                      <input id="g-token" type="password" value={customAccessToken} onChange={(e) => setCustomAccessToken(e.target.value)} placeholder="ya29…" className={inputCls} />
                       <button
                         type="button"
                         onClick={handleDirectAccessTokenLogin}
                         disabled={!customAccessToken.trim() || isLoggingIn}
-                        className="px-4 py-2 rounded-2xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-xs text-white font-bold cursor-pointer transition-colors"
+                        className="h-12 px-4 rounded-xl bg-s3 text-t1 font-bold cursor-pointer disabled:opacity-40 shrink-0"
                       >
-                        Sign In
+                        Sign in
                       </button>
                     </div>
-                  </div>
+                  </details>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>

@@ -85,6 +85,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     private static final String PREFS_NAME = "upbeat_car_prefs";
     private static final String KEY_QUEUE = "car_queue_json";
     private static final String KEY_FAVS = "car_favs_json";
+    private static final String KEY_MIXES = "car_mixes_json";
 
     public static final String ACTION_TOGGLE_PLAY = "com.aaradhya.upbeat.ACTION_TOGGLE_PLAY";
     public static final String ACTION_PLAY = "com.aaradhya.upbeat.ACTION_PLAY";
@@ -169,6 +170,9 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private final Map<String, HotPlaylistDef> mPlaylists = new LinkedHashMap<>();
+    // Mixes and playlists saved in the phone app. Kept apart from mPlaylists so the
+    // background chart refresh never appends search results to them.
+    private final Map<String, HotPlaylistDef> mUserMixes = Collections.synchronizedMap(new LinkedHashMap<>());
     private final List<CarTrack> mUserFavorites = Collections.synchronizedList(new ArrayList<>());
     private final List<CarTrack> mUserQueue = Collections.synchronizedList(new ArrayList<>());
     private final List<CarTrack> mActiveCarQueue = Collections.synchronizedList(new ArrayList<>());
@@ -455,7 +459,56 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             parseJsonToTrackList(prefs.getString(KEY_FAVS, "[]"), mUserFavorites);
             parseJsonToTrackList(prefs.getString(KEY_QUEUE, "[]"), mUserQueue);
+            parseMixes(prefs.getString(KEY_MIXES, "[]"));
         } catch (Exception ignored) {}
+    }
+
+    /** Looks up a built-in chart playlist or one of the user's mixes. */
+    private HotPlaylistDef findPlaylist(String id) {
+        if (id == null) return null;
+        HotPlaylistDef pl = mPlaylists.get(id);
+        if (pl != null) return pl;
+        return mUserMixes.get(id);
+    }
+
+    private List<HotPlaylistDef> getUserMixes() {
+        synchronized (mUserMixes) {
+            return new ArrayList<>(mUserMixes.values());
+        }
+    }
+
+    /** JSON: [{ title, subtitle, kind, tracks: [{ title, artist, video_id }] }] */
+    private void parseMixes(String json) {
+        Map<String, HotPlaylistDef> next = new LinkedHashMap<>();
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length() && i < 20; i++) {
+                JSONObject obj = arr.getJSONObject(i);
+                String title = obj.optString("title", "").trim();
+                if (title.isEmpty()) continue;
+                JSONArray trackArr = obj.optJSONArray("tracks");
+                List<CarTrack> tracks = new ArrayList<>();
+                parseJsonToTrackList(trackArr != null ? trackArr.toString() : "[]", tracks);
+                if (tracks.isEmpty()) continue;
+                String kind = obj.optString("kind", "mix");
+                boolean isAi = "mix".equals(kind) || "foryou".equals(kind);
+                String id = "umix_" + i;
+                next.put(id, new HotPlaylistDef(
+                    id,
+                    title,
+                    obj.optString("subtitle", tracks.size() + " songs"),
+                    "Your",
+                    isAi ? "AI Mix" : "Playlist",
+                    isAi ? "#FF5E3A" : "#2A2A2F",
+                    "",
+                    tracks.toArray(new CarTrack[0])
+                ));
+            }
+        } catch (Exception ignored) {}
+        synchronized (mUserMixes) {
+            mUserMixes.clear();
+            mUserMixes.putAll(next);
+        }
     }
 
     private void parseJsonToTrackList(String json, List<CarTrack> target) {
@@ -1136,7 +1189,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     playQueueAtIndex(getEffectiveQueue(), 0);
                     return;
                 }
-                HotPlaylistDef pl = mPlaylists.get(targetId);
+                HotPlaylistDef pl = findPlaylist(targetId);
                 if (pl != null) {
                     playQueueAtIndex(pl.tracks, 0);
                     return;
@@ -1149,7 +1202,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 if (parts.length >= 3) {
                     String plId = parts[1];
                     int idx = parseIntSafe(parts[2], 0);
-                    HotPlaylistDef pl = mPlaylists.get(plId);
+                    HotPlaylistDef pl = findPlaylist(plId);
                     if (pl != null) {
                         playQueueAtIndex(pl.tracks, idx);
                         return;
@@ -1158,12 +1211,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             }
 
             // 3. Direct Playlist ID tapped
-            if (mPlaylists.containsKey(mediaId)) {
-                HotPlaylistDef pl = mPlaylists.get(mediaId);
-                if (pl != null) {
-                    playQueueAtIndex(pl.tracks, 0);
-                    return;
-                }
+            HotPlaylistDef directPl = findPlaylist(mediaId);
+            if (directPl != null) {
+                playQueueAtIndex(directPl.tracks, 0);
+                return;
             }
 
             // 4. Frequent Plays / Liked Song item ("fav_2" or "freq_2")
@@ -1264,6 +1315,12 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             addPlaylistCardToGroup(items, PL_JAPANESE_LATEST, hotGroup);
             addPlaylistCardToGroup(items, PL_INDIE_FRESH, hotGroup);
 
+            // Section A2: "Your Mixes" (AI mixes and playlists saved in the phone app)
+            List<HotPlaylistDef> homeMixes = getUserMixes();
+            for (int i = 0; i < homeMixes.size() && i < 6; i++) {
+                addPlaylistCardToGroup(items, homeMixes.get(i).id, "Your Mixes");
+            }
+
             // Section B: "Your Frequent Plays" (Screenshot 2: 1-Tap Playable Song Cards with Cover Art)
             String freqGroup = "Your Frequent Plays";
             List<CarTrack> freqTracks = getEffectiveFavorites();
@@ -1324,6 +1381,9 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 UpBeatArtProvider.buildCardUri("lib_discovery", "My", "Discovery Mix", "#2563EB", ""),
                 plGroup
             ));
+            for (HotPlaylistDef mix : getUserMixes()) {
+                addPlaylistCardToGroup(items, mix.id, plGroup);
+            }
 
             // Section B: Direct 1-Tap Liked Songs List right inside Library!
             String songsGroup = "Liked Songs (" + favs.size() + ")";
@@ -1338,8 +1398,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
 
         // 4. INSIDE A HOT PLAYLIST (e.g. Hindi Latest, English Latest, Japanese Latest, Hindi Trendy)
-        if (mPlaylists.containsKey(parentMediaId)) {
-            HotPlaylistDef pl = mPlaylists.get(parentMediaId);
+        if (findPlaylist(parentMediaId) != null) {
+            HotPlaylistDef pl = findPlaylist(parentMediaId);
             if (pl != null) {
                 Uri playAllArt = UpBeatArtProvider.buildCardUri("playall_" + pl.id, "Play All", pl.badgeRibbon, pl.badgeColor, pl.getHeroVideoId());
                 items.add(createPlayableListItem(
@@ -1509,7 +1569,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private void addPlaylistCardToGroup(List<MediaBrowserCompat.MediaItem> items, String plId, String groupTitle) {
-        HotPlaylistDef pl = mPlaylists.get(plId);
+        HotPlaylistDef pl = findPlaylist(plId);
         if (pl == null) return;
         Uri cardArtUri = UpBeatArtProvider.buildCardUri(
             pl.id,
@@ -1988,6 +2048,17 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             sInstance.notifyChildrenChanged(MEDIA_ID_TAB_HOME);
             sInstance.notifyChildrenChanged(MEDIA_ID_TAB_LIBRARY);
             sInstance.notifyChildrenChanged(MEDIA_ID_LIB_QUEUE);
+        }
+    }
+
+    public static void saveMixes(Context context, String mixesJson) {
+        if (context == null || mixesJson == null) return;
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_MIXES, mixesJson).apply();
+        if (sInstance != null) {
+            sInstance.parseMixes(mixesJson);
+            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_HOME);
+            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_LIBRARY);
         }
     }
 
