@@ -4,6 +4,22 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.0.1] - 2026-11-04
+
+### 💎 Studio UI Refinement: Movable Jam Widget, Removed Emoji Avatar Row & Pure Minimalist Aesthetic
+- **Movable / Draggable Floating Jam Widget (`JamFloatingBar.jsx`)**:
+  - Replaced the fixed static bar that obstructed the PlayerBar track scrubber and playback buttons with a movable floating Jam icon widget.
+  - Smooth pointer drag support across Desktop (mouse) and Mobile (touch) allowing users to place the widget anywhere on screen.
+  - Tapping the widget smoothly expands an understated frosted glass menu with Room Code, sync telemetry, listener count, participant avatars, and 1-click Hub access.
+- **Removed Useless Emoji Avatar Picker Row (`JamModal.jsx`)**:
+  - Completely purged the cartoon emoji avatar picker row (`[🎧] [🎸] [🎹] [🎷] [🥁] [🎤] [🎻] [⚡]`).
+  - Switched user identity display to clean letter-circle avatars and Google profile photos matching UpBeat's home page design.
+- **Zero-Emoji Studio Typography & Semantic Design Language**:
+  - Eliminated all cartoon emojis (`🎵`, `👥`, `🔥`, `❤️`, `🟢`, `⚫`, etc.) from modals, badges, notifications, and tabs in favor of clean Lucide icons and authentic UpBeat typography.
+  - Re-styled tabs, permissions toggles, and inputs with UpBeat's signature rounded-2xl / rounded-full studio glass tokens across Dark and Light modes.
+
+---
+
 ## [v7.0] - 2026-11-04
 
 ### 👥 Real-Time Friends + Live Jam Social Engine, Studio Glass Alignment & React Error #31 Fix

@@ -6,20 +6,17 @@ import {
 } from 'lucide-react'
 import {
   jamManager,
-  JAM_AVATARS,
-  JAM_REACTION_PRESETS,
   loadJamUserProfile,
-  normalizeFriendCode,
-  renderEmoji
+  normalizeFriendCode
 } from '../jamEngine'
 
 function formatLastSeen(ts) {
   if (!ts) return 'Offline'
   const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000))
-  if (diffSec < 60) return 'Last seen just now'
-  if (diffSec < 3600) return `Last seen ${Math.floor(diffSec / 60)}m ago`
-  if (diffSec < 86400) return `Last seen ${Math.floor(diffSec / 3600)}h ago`
-  return `Last seen ${Math.floor(diffSec / 86400)}d ago`
+  if (diffSec < 60) return 'Just now'
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`
+  return `${Math.floor(diffSec / 86400)}d ago`
 }
 
 export default function JamModal({
@@ -88,12 +85,6 @@ export default function JamModal({
     jamManager.updateUserProfile({ name: val })
   }
 
-  const handleSelectAvatar = (av) => {
-    const cleanEmoji = renderEmoji(av, '🎧')
-    setProfile((prev) => ({ ...prev, avatar: cleanEmoji }))
-    jamManager.updateUserProfile({ avatar: cleanEmoji })
-  }
-
   const handleStartHost = async () => {
     await jamManager.createJam(googleUser, djModePref)
   }
@@ -132,7 +123,7 @@ export default function JamModal({
     if (friend.currentTrack && onPlayTrack) {
       onPlayTrack(friend.currentTrack, 0, [friend.currentTrack])
       if (onNotify) {
-        onNotify(`Listening along to "${friend.currentTrack.title}" with ${friend.name}`, 'info')
+        onNotify(`Listening along with ${friend.name}`, 'info')
       }
     }
   }
@@ -177,234 +168,190 @@ export default function JamModal({
   const isInSync = syncTier === 'LOCKED' || syncTier === 'IN_SYNC'
 
   return (
-    <div
-      className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 select-none"
-      style={{ fontFamily: 'inherit' }}
-    >
-      {/* Translucent Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Squircle Studio Glass Modal (border-radius: 20px) */}
-      <div className="jam-glass-surface relative w-full max-w-lg rounded-[20px] shadow-2xl flex flex-col max-h-[88vh] z-10 overflow-hidden text-[var(--text-primary)]">
-        {/* Top Modal Header */}
-        <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-hover)]">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-[14px] bg-[#F43F5E]/15 border border-[#F43F5E]/30 flex items-center justify-center text-[#F43F5E] shrink-0 relative">
-              <Users className="w-5 h-5" />
-              {(jamState?.active || onlineFriendsCount > 0) && (
-                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] ring-2 ring-[var(--bg-primary)] absolute -top-0.5 -right-0.5" />
-              )}
+    <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
+      <div className="w-full max-w-lg bg-white dark:bg-[#101015]/95 border border-slate-200 dark:border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-2xl flex flex-col max-h-[88vh] overflow-hidden text-slate-900 dark:text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-rose-500/15 border border-rose-500/25 flex items-center justify-center text-rose-500">
+              <Radio className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-                  Friends & Live Jam
-                </h2>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30">
-                  P2P Studio Sync
-                </span>
-              </div>
-              <p className="text-xs text-[var(--text-secondary)] truncate">
-                Listen together in real time & see what friends are playing
-              </p>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Friends & Live Jam</h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">Real-time synchronized listening</p>
             </div>
           </div>
-
           <button
-            type="button"
             onClick={onClose}
-            className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shrink-0"
-            title="Close"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/10 cursor-pointer transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Two Top Primary Navigation Tabs: 🎵 Live Jam & 👥 Friends (Online Count) */}
-        <div className="px-5 pt-3.5 pb-2 border-b border-[var(--border-subtle)] bg-[var(--bg-card)]">
-          <div className="grid grid-cols-2 gap-2 p-1 rounded-[14px] bg-[var(--surface-hover)] border border-[var(--border-subtle)]">
-            <button
-              type="button"
-              onClick={() => setMainTab('jam')}
-              className={`py-2 px-3 rounded-[10px] text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                mainTab === 'jam'
-                  ? 'bg-[#F43F5E] text-white shadow-md'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <span>🎵 Live Jam</span>
-              {jamState?.active && (
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    mainTab === 'jam'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-[#10B981]/20 text-[#10B981]'
-                  }`}
-                >
-                  {jamState.participants?.length || 1}
-                </span>
-              )}
-            </button>
+        {/* Primary Navigation Tabs */}
+        <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-2xl text-xs font-semibold my-4 shrink-0">
+          <button
+            type="button"
+            onClick={() => setMainTab('jam')}
+            className={`py-2 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              mainTab === 'jam'
+                ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-white/10 font-bold'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5 text-rose-500" />
+            <span>Live Jam</span>
+            {jamState?.active && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            )}
+          </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setMainTab('friends')
-                jamManager.pingAllFriends()
-              }}
-              className={`py-2 px-3 rounded-[10px] text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer relative ${
-                mainTab === 'friends'
-                  ? 'bg-[#F43F5E] text-white shadow-md'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <span>👥 Friends ({onlineFriendsCount})</span>
-              {incomingRequests.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#F59E0B] text-white shadow-xs">
-                  +{incomingRequests.length}
-                </span>
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab('friends')
+              jamManager.pingAllFriends()
+            }}
+            className={`py-2 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              mainTab === 'friends'
+                ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-white/10 font-bold'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-sky-500" />
+            <span>Friends</span>
+            {onlineFriendsCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                {onlineFriendsCount}
+              </span>
+            )}
+            {incomingRequests.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-bold">
+                +{incomingRequests.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Body Content */}
-        <div className="p-5 overflow-y-auto space-y-5 flex-1 content-scroll-container">
-          {/* Identity Card (Shared across Jam & Friends) */}
-          <div className="p-3.5 rounded-[16px] bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                Your Studio Identity
-              </span>
-              <span className="text-[11px] font-mono font-bold text-[#F43F5E]">
-                ID: {myFriendCode}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-[#F43F5E]/15 border border-[#F43F5E]/30 flex items-center justify-center text-xl shrink-0">
-                {renderEmoji(profile.avatar, '🎧')}
+        {/* Identity Row (Clean inline display name + friend code) */}
+        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 mb-4 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {googleUser?.picture || profile?.picture ? (
+              <img
+                src={googleUser?.picture || profile?.picture}
+                alt=""
+                className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-white/10 shrink-0 shadow-sm"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-rose-500 via-purple-600 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md shrink-0">
+                {(profile?.name || googleUser?.name || 'U')[0].toUpperCase()}
               </div>
+            )}
+            <div className="min-w-0 flex-1">
               <input
                 type="text"
                 value={profile.name}
                 onChange={handleNameChange}
                 placeholder="Your display name..."
                 maxLength={28}
-                className="jam-input-field flex-1 rounded-[12px] px-3.5 py-2 text-sm font-semibold focus:outline-none transition-colors"
+                className="w-full bg-transparent text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none border-b border-transparent focus:border-rose-500 py-0.5 transition-colors"
               />
-            </div>
-
-            {/* Avatar Selector */}
-            <div className="flex items-center justify-between gap-1.5 pt-0.5">
-              {JAM_AVATARS.map((item) => {
-                const emojiChar = renderEmoji(item, '🎧')
-                const isSelected = renderEmoji(profile.avatar, '🎧') === emojiChar
-                return (
-                  <button
-                    key={emojiChar}
-                    type="button"
-                    onClick={() => handleSelectAvatar(emojiChar)}
-                    className={`w-9 h-9 rounded-[11px] text-base flex items-center justify-center transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#F43F5E]/20 border-2 border-[#F43F5E] scale-105 shadow-xs'
-                        : 'bg-[var(--surface-hover)] border border-[var(--border-subtle)] opacity-75 hover:opacity-100'
-                    }`}
-                  >
-                    {emojiChar}
-                  </button>
-                )
-              })}
             </div>
           </div>
 
-          {/* ================================================================ */}
-          {/* TAB 1: 🎵 LIVE JAM                                               */}
-          {/* ================================================================ */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-[11px] font-mono text-slate-600 dark:text-zinc-300 shrink-0">
+            <span>{myFriendCode}</span>
+            <button
+              type="button"
+              onClick={handleCopyFriendCode}
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer ml-0.5 transition-colors"
+              title="Copy friend code"
+            >
+              {copiedFriendCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Content Body */}
+        <div className="space-y-4 overflow-y-auto flex-1 content-scroll-container pr-0.5">
           {mainTab === 'jam' ? (
             !jamState?.active ? (
-              <>
-                {/* Host vs Join Switcher */}
-                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-[14px] bg-[var(--surface-hover)] border border-[var(--border-subtle)]">
+              /* NOT IN A JAM: Start or Join */
+              <div className="space-y-4">
+                <div className="flex gap-2 p-1 bg-slate-100 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/10">
                   <button
                     type="button"
                     onClick={() => setJamSubTab('host')}
-                    className={`py-2 rounded-[10px] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`flex-1 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       jamSubTab === 'host'
-                        ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] shadow-sm border border-[var(--border-subtle)]'
-                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs font-bold border border-slate-200 dark:border-white/10'
+                        : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    <Crown className="w-3.5 h-3.5 text-[#F59E0B]" />
-                    <span>Host a Jam</span>
+                    <Crown className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Host Room</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setJamSubTab('join')}
-                    className={`py-2 rounded-[10px] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`flex-1 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       jamSubTab === 'join'
-                        ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] shadow-sm border border-[var(--border-subtle)]'
-                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs font-bold border border-slate-200 dark:border-white/10'
+                        : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    <Radio className="w-3.5 h-3.5 text-[#10B981]" />
-                    <span>Join Friend's Jam</span>
+                    <Radio className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Join with Code</span>
                   </button>
                 </div>
 
                 {jamSubTab === 'host' ? (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-[var(--text-secondary)]">
-                        Room Control Permissions
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                        Playback Permissions
                       </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => setDjModePref('open_party')}
-                          className={`p-3.5 rounded-[16px] border text-left transition-all cursor-pointer ${
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                             djModePref === 'open_party'
-                              ? 'bg-[#10B981]/12 border-[#10B981]/45 text-[var(--text-primary)]'
-                              : 'bg-[var(--bg-card)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-950 dark:text-emerald-200'
+                              : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-600 dark:text-zinc-400'
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-bold flex items-center gap-1.5 text-[var(--text-primary)]">
-                              <Sparkles className="w-3.5 h-3.5 text-[#10B981]" />
-                              Open Party Mode
+                          <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                              Open Party
                             </span>
-                            {djModePref === 'open_party' && (
-                              <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-                            )}
+                            {djModePref === 'open_party' && <Check className="w-3.5 h-3.5 text-emerald-500" />}
                           </div>
-                          <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                            Anyone in the Jam can pause, skip, or add songs to the queue.
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-tight">
+                            Anyone can play, pause, or add songs to queue
                           </p>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setDjModePref('host_only')}
-                          className={`p-3.5 rounded-[16px] border text-left transition-all cursor-pointer ${
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                             djModePref === 'host_only'
-                              ? 'bg-[#F59E0B]/12 border-[#F59E0B]/45 text-[var(--text-primary)]'
-                              : 'bg-[var(--bg-card)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              ? 'bg-amber-500/10 border-amber-500/40 text-amber-950 dark:text-amber-200'
+                              : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-600 dark:text-zinc-400'
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-bold flex items-center gap-1.5 text-[var(--text-primary)]">
-                              <Shield className="w-3.5 h-3.5 text-[#F59E0B]" />
-                              Host Only (DJ)
+                          <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-1.5">
+                              <Shield className="w-3.5 h-3.5 text-amber-500" />
+                              Host Only
                             </span>
-                            {djModePref === 'host_only' && (
-                              <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
-                            )}
+                            {djModePref === 'host_only' && <Check className="w-3.5 h-3.5 text-amber-500" />}
                           </div>
-                          <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                            Only you control playback and seeking; friends listen in sync.
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-tight">
+                            Only you control playback; friends listen in sync
                           </p>
                         </button>
                       </div>
@@ -413,28 +360,28 @@ export default function JamModal({
                     <button
                       type="button"
                       onClick={handleStartHost}
-                      className="w-full py-3.5 rounded-[14px] bg-[#F43F5E] hover:bg-rose-600 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-rose-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-rose-600/20"
                     >
-                      <Users className="w-4 h-4" />
-                      <span>Start Live Jam Room</span>
+                      <Radio className="w-4 h-4" />
+                      <span>Start Live Jam Session</span>
                     </button>
                   </div>
                 ) : (
                   <form onSubmit={handleJoinRoom} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-[var(--text-secondary)] mb-1.5">
-                        Enter 4-Digit Jam Code
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                        Room Code
                       </label>
                       <input
                         type="text"
                         value={joinCodeInput}
                         onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                        placeholder="JAM-4829 or 4829"
+                        placeholder="JAM-XXXX or XXXX"
                         maxLength={10}
-                        className="jam-input-field w-full rounded-[14px] px-4 py-3 text-center font-mono text-lg font-bold tracking-widest uppercase focus:outline-none transition-colors"
+                        className="w-full bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 focus:border-rose-500 rounded-2xl px-4 py-3 text-center font-mono text-base font-bold tracking-widest uppercase text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none transition-colors"
                       />
                       {jamState?.error && (
-                        <p className="text-xs text-[#F43F5E] mt-2 text-center font-medium">
+                        <p className="text-xs text-rose-500 mt-2 text-center font-medium">
                           {jamState.error}
                         </p>
                       )}
@@ -443,25 +390,26 @@ export default function JamModal({
                     <button
                       type="submit"
                       disabled={!joinCodeInput.trim()}
-                      className="w-full py-3.5 rounded-[14px] bg-[#F43F5E] hover:bg-rose-600 disabled:opacity-40 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-rose-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-rose-600/20"
                     >
                       <Radio className="w-4 h-4" />
-                      <span>Connect & Sync Audio</span>
+                      <span>Connect to Jam</span>
                     </button>
                   </form>
                 )}
-              </>
+              </div>
             ) : (
-              /* ACTIVE JAM DASHBOARD */
+              /* ACTIVE JAM CONTROLS */
               <div className="space-y-4">
-                {/* Room Code & Invite Card */}
-                <div className="p-4 rounded-[16px] bg-[var(--bg-card)] border border-[#10B981]/35 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
+                {/* Room Info Card */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#10B981] block">
-                        {jamState.role === 'host' ? 'Hosting Live Jam' : `Connected to ${jamState.hostName || 'Host'}`}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        {jamState.role === 'host' ? 'Hosting Session' : `Listening with ${jamState.hostName || 'Host'}`}
                       </span>
-                      <div className="text-2xl font-black font-mono tracking-wider text-[var(--text-primary)] mt-0.5">
+                      <div className="text-xl font-bold font-mono text-slate-900 dark:text-white tracking-wider mt-0.5">
                         {jamState.roomCode}
                       </div>
                     </div>
@@ -470,104 +418,97 @@ export default function JamModal({
                       <button
                         type="button"
                         onClick={handleCopyRoomCode}
-                        className="px-3 py-2 rounded-[12px] bg-[var(--surface-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer"
-                        title="Copy Room Code"
+                        className="px-3 py-1.5 rounded-full bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/15 text-slate-700 dark:text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Copy code"
                       >
-                        {copiedRoomCode ? <Check className="w-3.5 h-3.5 text-[#10B981]" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedRoomCode ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{copiedRoomCode ? 'Copied' : 'Code'}</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={handleCopyRoomLink}
-                        className="px-3 py-2 rounded-[12px] bg-[#F43F5E] hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-                        title="Copy Instant Join Link"
+                        className="px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
+                        title="Copy invite link"
                       >
                         {copiedRoomLink ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                        <span>{copiedRoomLink ? 'Link Copied' : 'Invite Link'}</span>
+                        <span>{copiedRoomLink ? 'Copied' : 'Invite'}</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => setShowQr((prev) => !prev)}
-                        className="p-2 rounded-[12px] bg-[var(--surface-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-                        title="Show QR Code"
+                        onClick={() => setShowQr((p) => !p)}
+                        className="p-1.5 rounded-full bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/15 text-slate-700 dark:text-zinc-300 transition-colors cursor-pointer"
+                        title="Toggle QR code"
                       >
                         <QrCode className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Optional QR Code Drawer */}
+                  {/* QR Code */}
                   {showQr && shareJamUrl && (
-                    <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-col items-center gap-2">
+                    <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex flex-col items-center gap-2">
                       <div className="p-2.5 bg-white rounded-2xl shadow-md">
                         <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(shareJamUrl)}`}
-                          alt="Jam QR Code"
-                          className="w-32 h-32 rounded-lg"
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(shareJamUrl)}`}
+                          alt="Jam QR"
+                          className="w-28 h-28 rounded-lg"
                         />
                       </div>
-                      <span className="text-[11px] text-[var(--text-secondary)]">
-                        Scan with phone camera to join {jamState.roomCode}
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        Scan with camera to join {jamState.roomCode}
                       </span>
                     </div>
                   )}
 
-                  {/* Acoustic Telemetry Bar */}
-                  <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between text-[11px] text-[var(--text-secondary)] font-mono">
+                  {/* Telemetry */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
                     <span className="flex items-center gap-1.5">
-                      <Wifi className="w-3.5 h-3.5 text-[#10B981]" />
-                      <span>
-                        Status:{' '}
-                        <strong className={isInSync ? 'text-[#10B981]' : 'text-[#F59E0B]'}>
-                          {isInSync ? 'In Sync' : syncTier === 'RAMPING' ? 'Aligning' : 'Syncing'}
-                        </strong>
-                      </span>
+                      <Wifi className="w-3 h-3 text-emerald-500" />
+                      <span>Status: <strong className={isInSync ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}>{isInSync ? 'In Sync' : 'Aligning'}</strong></span>
                     </span>
-                    <span>
-                      RTT: {jamState.rttMs || 12}ms • Drift: {Math.abs(jamState.syncDeltaMs || 0)}ms
-                    </span>
+                    <span>RTT: {jamState.rttMs || 12}ms</span>
                   </div>
                 </div>
 
-                {/* Currently Playing in Jam */}
+                {/* Now Playing in Room */}
                 {currentTrack && (
-                  <div className="p-3 rounded-[14px] bg-[var(--bg-card)] border border-[var(--border-subtle)] flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 flex items-center gap-3">
                     {currentTrack.thumbnail ? (
                       <img
                         src={currentTrack.thumbnail}
                         alt=""
-                        className="w-11 h-11 rounded-[10px] object-cover shrink-0"
+                        className="w-10 h-10 rounded-xl object-cover shrink-0"
                       />
                     ) : (
-                      <div className="w-11 h-11 rounded-[10px] bg-[#F43F5E]/15 flex items-center justify-center text-[#F43F5E] shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-500 shrink-0">
                         <Music className="w-5 h-5" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#10B981]">
-                        {isPlaying ? '▶ Playing in Sync' : '⏸ Paused in Room'}
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        {isPlaying ? 'Playing in Sync' : 'Paused in Room'}
                       </div>
-                      <div className="text-xs font-bold text-[var(--text-primary)] truncate">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
                         {currentTrack.title}
                       </div>
-                      <div className="text-[11px] text-[var(--text-secondary)] truncate">
+                      <div className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
                         {currentTrack.artist}
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Host DJ Mode Switch */}
+                {/* Host Mode Toggle */}
                 {jamState.role === 'host' && (
-                  <div className="flex items-center justify-between p-3 rounded-[14px] bg-[var(--bg-card)] border border-[var(--border-subtle)]">
+                  <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10">
                     <div>
-                      <div className="text-xs font-bold text-[var(--text-primary)]">
-                        Open Party DJ Mode
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">
+                        Open Party Permissions
                       </div>
-                      <div className="text-[11px] text-[var(--text-secondary)]">
-                        Allow guests to change tracks & control playback
+                      <div className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        Allow guests to change songs and control playback
                       </div>
                     </div>
                     <button
@@ -575,10 +516,10 @@ export default function JamModal({
                       onClick={() =>
                         jamManager.setDjMode(jamState.djMode === 'open_party' ? 'host_only' : 'open_party')
                       }
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
                         jamState.djMode === 'open_party'
-                          ? 'bg-[#10B981]/15 border-[#10B981]/40 text-[#10B981]'
-                          : 'bg-[#F59E0B]/15 border-[#F59E0B]/40 text-[#F59E0B]'
+                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-300'
+                          : 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-300'
                       }`}
                     >
                       {jamState.djMode === 'open_party' ? 'Open Party' : 'Host Only'}
@@ -586,104 +527,74 @@ export default function JamModal({
                   </div>
                 )}
 
-                {/* Live Emoji Reactions Bar */}
+                {/* Listeners in Room */}
                 <div>
-                  <span className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-2">
-                    Send Live Reaction
+                  <span className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-2">
+                    Listeners ({jamState.participants?.length || 1})
                   </span>
-                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
-                    {JAM_REACTION_PRESETS.map((item) => {
-                      const emojiChar = renderEmoji(item, '🔥')
-                      const labelText = typeof item === 'object' && item?.label ? item.label : emojiChar
-                      return (
-                        <button
-                          key={emojiChar}
-                          type="button"
-                          onClick={() => jamManager.sendReaction(emojiChar)}
-                          className="py-2 rounded-[12px] bg-[var(--surface-hover)] hover:bg-[var(--bg-elevated)] active:scale-90 border border-[var(--border-subtle)] flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer"
-                          title={labelText}
-                        >
-                          <span className="text-lg">{emojiChar}</span>
-                          <span className="text-[9px] font-semibold text-[var(--text-muted)]">
-                            {labelText}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Participants List */}
-                <div>
-                  <span className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-2">
-                    Listeners in Room ({jamState.participants?.length || 1})
-                  </span>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                    {(jamState.participants || []).map((p, idx) => {
-                      const avatarEmoji = renderEmoji(p?.avatar, '🎧')
-                      return (
-                        <div
-                          key={p?.id || p?.peerId || idx}
-                          className="flex items-center justify-between px-3 py-2 rounded-[12px] bg-[var(--bg-card)] border border-[var(--border-subtle)]"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="w-8 h-8 rounded-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] flex items-center justify-center text-sm shrink-0">
-                              {avatarEmoji}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-[var(--text-primary)] truncate flex items-center gap-1.5">
-                                <span>{p?.name || 'Listener'}</span>
-                                {p?.isHost && (
-                                  <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded-full bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/30">
-                                    Host
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-[var(--text-muted)] font-mono">
-                                {p?.friendCode || 'Synced Audio'}
-                              </div>
-                            </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                    {(jamState.participants || []).map((p, idx) => (
+                      <div
+                        key={p.peerId || p.id || idx}
+                        className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
+                            {(p.name || 'U')[0].toUpperCase()}
                           </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-semibold text-slate-900 dark:text-white truncate block">
+                              {p.name || 'Listener'}
+                            </span>
+                          </div>
+                        </div>
 
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                        {p.isHost ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            Host
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                             Synced
                           </span>
-                        </div>
-                      )
-                    })}
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Quick Invite Online Friends inside Active Jam */}
+                {/* Quick Invite Friends */}
                 {friends.length > 0 && (
                   <div>
-                    <span className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-2">
-                      Quick Invite Friends
+                    <span className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-2">
+                      Invite Friends
                     </span>
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
                       {friends.map((f) => (
                         <div
                           key={f.friendCode}
-                          className="flex items-center justify-between px-3 py-2 rounded-[12px] bg-[var(--bg-card)] border border-[var(--border-subtle)]"
+                          className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-base">{renderEmoji(f.avatar, '🎧')}</span>
-                            <span className="text-xs font-bold text-[var(--text-primary)] truncate">
+                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-700 dark:text-zinc-300 text-[10px] font-bold shrink-0">
+                              {(f.name || 'U')[0].toUpperCase()}
+                            </div>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                               {f.name}
                             </span>
                             <span
-                              className={`w-2 h-2 rounded-full ${
-                                f.online ? 'bg-[#10B981]' : 'bg-[var(--text-muted)] opacity-50'
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                f.online ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-zinc-600'
                               }`}
                             />
                           </div>
+
                           <button
                             type="button"
                             onClick={() => handleInviteFriend(f.friendCode)}
-                            className="px-2.5 py-1 rounded-full bg-[#F43F5E]/15 hover:bg-[#F43F5E] text-[#F43F5E] hover:text-white border border-[#F43F5E]/30 text-[11px] font-bold transition-all cursor-pointer"
+                            className="px-2.5 py-1 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition-colors cursor-pointer"
                           >
-                            {invitedCodes[f.friendCode] ? 'Invited ✓' : 'Invite'}
+                            {invitedCodes[f.friendCode] ? 'Invited' : 'Invite'}
                           </button>
                         </div>
                       ))}
@@ -691,97 +602,61 @@ export default function JamModal({
                   </div>
                 )}
 
-                {/* Leave / End Jam Button */}
+                {/* Leave Room Button */}
                 <button
                   type="button"
                   onClick={() => jamManager.leaveJam(false)}
-                  className="w-full py-2.5 rounded-[14px] bg-[#F43F5E]/15 hover:bg-[#F43F5E]/25 border border-[#F43F5E]/35 text-[#F43F5E] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-rose-50 dark:bg-white/[0.05] dark:hover:bg-rose-500/10 border border-slate-200 dark:border-white/10 hover:border-rose-300 dark:hover:border-rose-500/30 text-slate-600 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>{jamState.role === 'host' ? 'End Jam Session for All' : 'Leave Jam Session'}</span>
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{jamState.role === 'host' ? 'End Session for All' : 'Leave Session'}</span>
                 </button>
               </div>
             )
           ) : (
-            /* ================================================================ */
-            /* TAB 2: 👥 FRIENDS (Real-Time Presence, Now Playing & Jam Invites) */
-            /* ================================================================ */
+            /* TAB 2: FRIENDS (Online status, now playing, invite) */
             <div className="space-y-4">
-              {/* Share Your Friend Code Card */}
-              <div className="p-3.5 rounded-[16px] bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)] block">
-                      Your Personal Friend Code
-                    </span>
-                    <span className="text-lg font-black font-mono tracking-wider text-[var(--text-primary)]">
-                      {myFriendCode}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={handleCopyFriendCode}
-                      className="px-3 py-1.5 rounded-[10px] bg-[var(--surface-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      {copiedFriendCode ? <Check className="w-3.5 h-3.5 text-[#10B981]" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedFriendCode ? 'Copied' : 'Copy ID'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleCopyFriendLink}
-                      className="px-3 py-1.5 rounded-[10px] bg-[#F43F5E]/15 hover:bg-[#F43F5E]/25 border border-[#F43F5E]/35 text-[#F43F5E] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      {copiedFriendLink ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                      <span>{copiedFriendLink ? 'Link Copied' : 'Share Link'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Send Friend Request Form */}
-              <form onSubmit={handleAddFriendSubmit} className="flex items-center gap-2">
+              {/* Add Friend Form */}
+              <form onSubmit={handleAddFriendSubmit} className="flex gap-2">
                 <input
                   type="text"
                   value={friendCodeInput}
                   onChange={(e) => setFriendCodeInput(e.target.value.toUpperCase())}
-                  placeholder="Enter friend's code (e.g. UP-7K4M9P)"
+                  placeholder="Enter Friend Code (e.g. UP-7K4M9P)"
                   maxLength={12}
-                  className="jam-input-field flex-1 rounded-[12px] px-3.5 py-2.5 text-xs font-mono font-bold uppercase tracking-wider focus:outline-none transition-colors"
+                  className="flex-1 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 focus:border-rose-500 rounded-2xl px-3.5 py-2 text-xs font-mono font-bold uppercase text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none transition-colors"
                 />
                 <button
                   type="submit"
                   disabled={!friendCodeInput.trim()}
-                  className="px-4 py-2.5 rounded-[12px] bg-[#F43F5E] hover:bg-rose-600 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0"
+                  className="px-4 py-2 rounded-2xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  <span>Send Request</span>
+                  <span>Add Friend</span>
                 </button>
               </form>
 
-              {/* Incoming Friend Requests */}
+              {/* Incoming Requests */}
               {incomingRequests.length > 0 && (
                 <div className="space-y-2">
-                  <span className="block text-[11px] font-bold uppercase tracking-wider text-[#F59E0B]">
-                    Incoming Friend Requests ({incomingRequests.length})
+                  <span className="block text-xs font-semibold text-amber-600 dark:text-amber-400">
+                    Incoming Requests ({incomingRequests.length})
                   </span>
                   <div className="space-y-1.5">
                     {incomingRequests.map((req) => (
                       <div
                         key={req.friendCode}
-                        className="flex items-center justify-between p-3 rounded-[14px] bg-[#F59E0B]/10 border border-[#F59E0B]/30"
+                        className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="w-9 h-9 rounded-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex items-center justify-center text-base shrink-0">
-                            {renderEmoji(req.avatar, '🎧')}
-                          </span>
+                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-700 dark:text-white text-xs font-bold shrink-0">
+                            {(req.name || 'U')[0].toUpperCase()}
+                          </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-[var(--text-primary)] truncate">
+                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
                               {req.name}
                             </div>
-                            <div className="text-[10px] font-mono text-[var(--text-secondary)]">
+                            <div className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">
                               {req.friendCode}
                             </div>
                           </div>
@@ -791,17 +666,18 @@ export default function JamModal({
                           <button
                             type="button"
                             onClick={() => jamManager.acceptFriendRequest(req.friendCode)}
-                            className="px-3 py-1.5 rounded-[10px] bg-[#10B981] hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                            className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
                           >
-                            <Check className="w-3.5 h-3.5" />
+                            <Check className="w-3 h-3" />
                             <span>Accept</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => jamManager.declineFriendRequest(req.friendCode)}
-                            className="px-2.5 py-1.5 rounded-[10px] bg-[var(--surface-hover)] hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] text-xs font-bold transition-colors cursor-pointer"
+                            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer"
+                            title="Decline"
                           >
-                            ✕
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -810,30 +686,22 @@ export default function JamModal({
                 </div>
               )}
 
-              {/* Outgoing Pending Requests */}
+              {/* Outgoing Requests */}
               {outgoingRequests.length > 0 && (
                 <div className="space-y-1.5">
-                  <span className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                    Outgoing Pending ({outgoingRequests.length})
+                  <span className="block text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    Pending ({outgoingRequests.length})
                   </span>
                   {outgoingRequests.map((req) => (
                     <div
                       key={req.friendCode}
-                      className="flex items-center justify-between px-3 py-2 rounded-[12px] bg-[var(--bg-card)] border border-[var(--border-subtle)]"
+                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-xs"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm">{renderEmoji(req.avatar, '🎧')}</span>
-                        <span className="text-xs font-mono font-bold text-[var(--text-primary)]">
-                          {req.friendCode}
-                        </span>
-                        <span className="text-[10px] text-[var(--text-muted)]">
-                          • Waiting for acceptance
-                        </span>
-                      </div>
+                      <span className="font-mono text-slate-700 dark:text-zinc-300 font-semibold">{req.friendCode}</span>
                       <button
                         type="button"
                         onClick={() => jamManager.cancelOutgoingRequest(req.friendCode)}
-                        className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[#F43F5E] transition-colors cursor-pointer"
+                        className="text-[11px] text-slate-400 hover:text-rose-500 cursor-pointer transition-colors"
                       >
                         Cancel
                       </button>
@@ -842,17 +710,16 @@ export default function JamModal({
                 </div>
               )}
 
-              {/* My Friends List & Live Activity Feed */}
+              {/* Friends List */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                    My Friends ({friends.length})
+                  <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Friends ({friends.length})
                   </span>
                   <button
                     type="button"
                     onClick={() => jamManager.pingAllFriends()}
-                    className="text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 cursor-pointer"
-                    title="Refresh friend status"
+                    className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <RefreshCw className="w-3 h-3" />
                     <span>Refresh</span>
@@ -860,67 +727,59 @@ export default function JamModal({
                 </div>
 
                 {friends.length === 0 ? (
-                  <div className="p-6 rounded-[16px] bg-[var(--bg-card)] border border-[var(--border-subtle)] text-center space-y-1.5">
-                    <UserCheck className="w-7 h-7 text-[var(--text-muted)] mx-auto opacity-60" />
-                    <div className="text-xs font-bold text-[var(--text-primary)]">
+                  <div className="p-6 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 text-center space-y-1.5">
+                    <UserCheck className="w-7 h-7 text-slate-400 dark:text-zinc-500 mx-auto opacity-60" />
+                    <div className="text-xs font-bold text-slate-900 dark:text-white">
                       No friends added yet
                     </div>
-                    <p className="text-[11px] text-[var(--text-secondary)] max-w-xs mx-auto leading-relaxed">
-                      Share your <span className="font-mono font-bold text-[var(--text-primary)]">{myFriendCode}</span> code or enter a friend's code above to see their live music activity and send 1-click Jam invites.
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
+                      Share your code <span className="font-mono font-bold text-slate-900 dark:text-white">{myFriendCode}</span> with friends to listen together.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {friends.map((f) => {
-                      const friendEmoji = renderEmoji(f.avatar, '🎧')
                       const isOnline = Boolean(f.online)
                       const hasTrack = Boolean(f.currentTrack?.title)
                       return (
                         <div
                           key={f.friendCode}
-                          className="p-3.5 rounded-[16px] bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-2.5"
+                          className="p-3 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 space-y-2"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-10 h-10 rounded-full bg-[var(--surface-hover)] border border-[var(--border-subtle)] flex items-center justify-center text-lg shrink-0 relative">
-                                <span>{friendEmoji}</span>
+                              <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-800 dark:text-white text-xs font-bold shrink-0 relative">
+                                <span>{(f.name || 'U')[0].toUpperCase()}</span>
                                 <span
-                                  className={`w-2.5 h-2.5 rounded-full ring-2 ring-[var(--bg-primary)] absolute -bottom-0.5 -right-0.5 ${
-                                    isOnline ? 'bg-[#10B981]' : 'bg-[var(--text-muted)]'
+                                  className={`w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-[#101015] absolute -bottom-0.5 -right-0.5 ${
+                                    isOnline ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-zinc-600'
                                   }`}
                                 />
                               </div>
 
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-bold text-[var(--text-primary)] truncate">
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                     {f.name}
                                   </span>
-                                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                  <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500">
                                     ({f.friendCode})
                                   </span>
                                 </div>
 
-                                {/* Real-Time Status Line */}
                                 {isOnline ? (
                                   hasTrack ? (
-                                    <div className="text-[11px] text-[#10B981] font-medium truncate">
-                                      🟢 Online — Listening to{' '}
-                                      <span className="font-bold text-[var(--text-primary)]">
-                                        {f.currentTrack.title}
-                                      </span>{' '}
-                                      <span className="text-[var(--text-secondary)]">
-                                        - {f.currentTrack.artist}
-                                      </span>
+                                    <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
+                                      Listening to <strong className="font-bold text-slate-900 dark:text-white">{f.currentTrack.title}</strong> • {f.currentTrack.artist}
                                     </div>
                                   ) : (
-                                    <div className="text-[11px] text-[#10B981] font-medium">
-                                      🟢 Online — Idle in Studio
+                                    <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                      Online in Studio
                                     </div>
                                   )
                                 ) : (
-                                  <div className="text-[11px] text-[var(--text-muted)]">
-                                    ⚫ Offline • {formatLastSeen(f.lastSeen)}
+                                  <div className="text-[11px] text-slate-400 dark:text-zinc-500">
+                                    Offline • {formatLastSeen(f.lastSeen)}
                                   </div>
                                 )}
                               </div>
@@ -929,37 +788,32 @@ export default function JamModal({
                             <button
                               type="button"
                               onClick={() => jamManager.removeFriend(f.friendCode)}
-                              className="p-1.5 rounded-full text-[var(--text-muted)] hover:text-[#F43F5E] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer shrink-0"
+                              className="p-1 rounded-full text-slate-400 hover:text-rose-500 transition-colors cursor-pointer shrink-0"
                               title="Remove friend"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
 
-                          {/* Action Buttons: Listen Along & 1-Click Invite to Jam */}
-                          <div className="flex items-center justify-end gap-2 pt-1">
+                          <div className="flex items-center justify-end gap-2 pt-0.5">
                             {(hasTrack || f.activeJamCode) && (
                               <button
                                 type="button"
                                 onClick={() => handleListenAlong(f)}
-                                className="px-3 py-1.5 rounded-full bg-[#10B981]/15 hover:bg-[#10B981]/25 border border-[#10B981]/35 text-[#10B981] text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                className="px-3 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
                               >
                                 <Play className="w-3 h-3 fill-current" />
-                                <span>
-                                  {f.activeJamCode ? `Join Jam (${f.activeJamCode})` : 'Listen Along'}
-                                </span>
+                                <span>{f.activeJamCode ? `Join Jam (${f.activeJamCode})` : 'Listen Along'}</span>
                               </button>
                             )}
 
                             <button
                               type="button"
                               onClick={() => handleInviteFriend(f.friendCode)}
-                              className="px-3 py-1.5 rounded-full bg-[#F43F5E] hover:bg-rose-600 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                              className="px-3 py-1 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
                             >
                               <Send className="w-3 h-3" />
-                              <span>
-                                {invitedCodes[f.friendCode] ? 'Invite Sent ✓' : 'Invite to Jam'}
-                              </span>
+                              <span>{invitedCodes[f.friendCode] ? 'Invited' : 'Invite to Jam'}</span>
                             </button>
                           </div>
                         </div>

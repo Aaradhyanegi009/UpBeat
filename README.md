@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.0)
+# 🎵 UpBeat (v7.0.1)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -10,8 +10,10 @@ Built as a clean cross-platform project for **Android**, **Android Auto**, **mac
 
 ##  Features & Highlights
 
-###  Real-Time Friends & Live P2P Jam Social Engine (v7.0)
-- **Persistent Friend Code (`UP-XXXXXX`) & Live Activity Feed**: Every user gets a shareable Friend ID with an always-on WebRTC + `BroadcastChannel` presence mesh. Add friends, accept/decline requests, and see when friends are **🟢 Online — Listening to *[Song Title] - [Artist]*** (with 1-click **Listen Along**) or **Idle in Studio**.
+###  Real-Time Friends & Live P2P Jam Social Engine (v7.0.1)
+- **Movable Floating Jam Widget**: Drag anywhere on screen so it never obstructs audio playback or seek controls; tap to expand the sleek glass room menu or full Jam Hub.
+- **Pure Studio Aesthetic & Zero Emojis**: Fully aligned with UpBeat's minimalist design language, typography, and letter avatars without tacky cartoon emojis.
+- **Persistent Friend Code (`UP-XXXXXX`) & Live Activity Feed**: Every user gets a shareable Friend ID with an always-on WebRTC + `BroadcastChannel` presence mesh. Add friends, accept/decline requests, and see when friends are **Online — Listening to *[Song Title] - [Artist]*** (with 1-click **Listen Along**) or **In Studio**.
 - **1-Click Jam Invites & Synchronized Listening (`JAM-XXXX`)**: Send instant live Jam invites to online friends with an interactive floating glass Join banner. Features NTP clock calibration and 3-tier acoustic drift compensation (`< 150ms` locked, `150ms–850ms` micro-speed ramping, `>= 850ms` hard seek).
 
 ###  Atmosphere Themes & Day/Night Engine

@@ -410,9 +410,8 @@ export default function App() {
           }
           return nextQ
         })
-        const cleanAv = renderEmoji(addedBy?.avatar, '🎧')
         showNotify(
-          `${cleanAv} ${addedBy?.name || 'Friend'} added "${track.title}" to Jam queue`,
+          `${addedBy?.name || 'Friend'} added "${track.title}" to Jam queue`,
           'info'
         )
       },
