@@ -70,6 +70,16 @@ export default function GoogleAuthModal({
   const [isSyncingProfile, setIsSyncingProfile] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
+  // Clean any stale hardcoded personal developer email/name on mount
+  useEffect(() => {
+    try {
+      const storedEmail = localStorage.getItem('upbeat_last_google_email') || ''
+      const storedName = localStorage.getItem('upbeat_last_google_name') || ''
+      if (/divyansh|negi/i.test(storedEmail)) localStorage.removeItem('upbeat_last_google_email')
+      if (/divyansh|negi/i.test(storedName)) localStorage.removeItem('upbeat_last_google_name')
+    } catch {}
+  }, [])
+
   // Try to sync authentic avatar from active Safari YouTube Music session
   useEffect(() => {
     if (isOpen && googleUser && hasBackend()) {
@@ -107,8 +117,8 @@ export default function GoogleAuthModal({
       }
 
       try {
-        localStorage.setItem('upbeat_last_google_email', email)
-        localStorage.setItem('upbeat_last_google_name', name)
+        if (customEmail.trim()) localStorage.setItem('upbeat_last_google_email', customEmail.trim())
+        if (customName.trim()) localStorage.setItem('upbeat_last_google_name', customName.trim())
       } catch {}
 
       const userObj = {

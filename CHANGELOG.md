@@ -20,6 +20,11 @@ All notable changes to the UpBeat client, backend, and native apps are documente
   - Added 1-tap `navigator.share` integration with automatic fallback to clipboard copy across both the active Jam Hub and the movable floating Jam widget.
 - **macOS Native URL Scheme Support (`macos/Info.plist`, `macos/UpBeatApp.swift`)**:
   - Registered `upbeat://` custom protocol in `Info.plist` and added `application(_:open:)` URL forwarding to WKWebView for instant native deep linking.
+- **Removed Hardcoded Credentials & Clean Seed State for Android / New Users (`GoogleAuthModal.jsx`, `App.jsx`, `Sidebar.jsx`)**:
+  - Completely purged hardcoded developer personal email (`divyanshnegi009@gmail.com`) and name (`Divyansh Negi`) from login forms, placeholders, and profile initializers.
+  - Form placeholders now use clean, generic examples (`e.g. Alex Rivera`, `you@gmail.com`) and default form state is empty.
+  - Cleared all developer anime/J-pop seeds (`DEFAULT_SEEDS = []`) and replaced hardcoded anime preset prompts with clean cinematic soundtrack mixes.
+  - Added robust boot-time sanitizers across all platforms (Android, macOS, Web) to purge any residual personal credentials or developer seed data stored in `localStorage`.
 
 ---
 
