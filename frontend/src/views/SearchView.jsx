@@ -81,6 +81,7 @@ export default function SearchView({
           <h1 className="text-[30px] font-extrabold tracking-[-0.025em] mt-4">Search</h1>
           <SearchField
             className="mt-4"
+            autoFocus
             inputRef={inputRef}
             value={query}
             onChange={setQuery}

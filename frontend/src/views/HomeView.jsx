@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Play, Users, RefreshCw, Sparkles, Shuffle } from 'lucide-react'
+import { Play, Users, RefreshCw, Sparkles, Shuffle, Search } from 'lucide-react'
+import { navigate } from '../ui/router'
 import { Art, Avatar, Chip, ChipRow, IconButton, LikedTile, SectionHeader, Collage, Spinner, artUrl } from '../ui/primitives'
 import { MediaCard } from '../ui/AppContext'
 import { getInitialDiscoveryBlocks, fetchListenTogetherFeed, advanceRotationCursor } from '../standaloneApi'
@@ -76,10 +77,15 @@ export default function HomeView({
           <button type="button" onClick={onOpenProfile} aria-label="Your profile" className="cursor-pointer rounded-full">
             <Avatar name={user?.name || 'You'} picture={user?.picture} size={40} />
           </button>
-          <IconButton label={onlineCount ? `Friends, ${onlineCount} online` : 'Friends'} variant="filled" onClick={onOpenFriends} className="relative">
-            <Users className="w-5 h-5" />
-            {onlineCount > 0 && <span className="absolute right-2 bottom-2 w-2.5 h-2.5 rounded-full bg-live ring-2 ring-[#1C1C1F]" />}
-          </IconButton>
+          <div className="flex items-center gap-2">
+            <IconButton label="Search" variant="filled" onClick={() => navigate('/search')}>
+              <Search className="w-5 h-5" />
+            </IconButton>
+            <IconButton label={onlineCount ? `Friends, ${onlineCount} online` : 'Friends'} variant="filled" onClick={onOpenFriends} className="relative">
+              <Users className="w-5 h-5" />
+              {onlineCount > 0 && <span className="absolute right-2 bottom-2 w-2.5 h-2.5 rounded-full bg-live ring-2 ring-[#1C1C1F]" />}
+            </IconButton>
+          </div>
         </div>
       )}
 
