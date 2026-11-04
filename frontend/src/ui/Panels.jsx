@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { X, Heart, Plus, ListMusic, MessageSquareQuote, Users } from 'lucide-react'
 import { Art, Avatar, IconButton, Collage, Chip, EmptyState } from './primitives'
 import { SongRow, sameTrack } from './AppContext'
+import { LyricsCard, usePlaybackClock } from '../lyrics/Lyrics'
 
 /* ------------------------------------------------------------------ */
 /* Desktop right panel                                                 */
@@ -9,6 +10,8 @@ import { SongRow, sameTrack } from './AppContext'
 
 export function RightPanel({ track, contextTitle, upNext = [], queueCount = 0, friends = [], tab, setTab, isFav, onToggleFav, onClose, onOpenLyrics, onListenAlong, onOpenFriends }) {
   const online = friends.filter((f) => f.online)
+  const lyricsTab = tab === 'lyrics'
+  const clock = usePlaybackClock(lyricsTab && Boolean(track))
   return (
     <aside aria-label="Now playing" className="relative rounded-[14px] bg-bg overflow-hidden w-[344px] flex flex-col min-h-0">
       {track && (
@@ -28,7 +31,18 @@ export function RightPanel({ track, contextTitle, upNext = [], queueCount = 0, f
           </IconButton>
         </div>
 
-        {track ? (
+        {track && lyricsTab ? (
+          <div className="px-5 mt-3.5 flex items-center gap-3">
+            <Art track={track} className="w-12 h-12 !rounded-[10px]" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-extrabold truncate">{track.title}</div>
+              <div className="text-[13px] text-white/70 truncate">{track.artist}</div>
+            </div>
+            <IconButton label={isFav ? 'Remove from liked songs' : 'Like'} onClick={onToggleFav} active={isFav}>
+              <Heart className={`w-5 h-5 ${isFav ? 'fill-accent text-accent' : ''}`} />
+            </IconButton>
+          </div>
+        ) : track ? (
           <div className="px-5">
             <Art track={track} hi className="w-full aspect-square !rounded-[18px] mt-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.5)]" />
             <div className="flex items-center mt-4">
@@ -56,7 +70,7 @@ export function RightPanel({ track, contextTitle, upNext = [], queueCount = 0, f
               type="button"
               role="tab"
               aria-selected={tab === t.id}
-              onClick={() => (t.id === 'lyrics' ? onOpenLyrics() : setTab(t.id))}
+              onClick={() => setTab(t.id)}
               className={`flex-1 h-[34px] rounded-full text-[13px] font-bold cursor-pointer transition-colors ${tab === t.id ? 'bg-white/[0.14] text-white' : 'text-white/70 hover:text-white'}`}
             >
               {t.label}
@@ -64,7 +78,21 @@ export function RightPanel({ track, contextTitle, upNext = [], queueCount = 0, f
           ))}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4">
+        {lyricsTab && track && (
+          <div className="flex-1 min-h-0 px-3 pb-3 pt-1">
+            <LyricsCard
+              fill
+              track={track}
+              time={clock}
+              duration={window.UpBeatControls?.getDuration?.() || 0}
+              color="var(--album)"
+              onExpand={onOpenLyrics}
+              onShare={onOpenLyrics}
+            />
+          </div>
+        )}
+
+        <div className={`flex-1 min-h-0 overflow-y-auto px-5 pb-4 ${lyricsTab && track ? 'hidden' : ''}`}>
           {tab === 'next' &&
             (upNext.length === 0 ? (
               <p className="text-sm text-t2 py-4">Nothing queued. Songs from the current list play next.</p>
