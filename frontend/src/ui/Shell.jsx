@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings, PanelLeftClose } from 'lucide-react'
 import { Avatar, IconButton, LikedTile, Collage, Chip } from './primitives'
 import { SearchField } from '../views/SearchView'
 import { useMediaQuery } from './router'
@@ -87,9 +87,8 @@ export function SideNav({
     <div className="flex flex-col gap-2 min-h-0 flex-1 select-none">
       <div className="rounded-[14px] bg-bg p-3 shrink-0">
         <div className="flex items-center justify-between gap-2 px-2 pt-1 pb-3.5">
-          <div className="flex items-center gap-2.5 text-xl font-extrabold tracking-[-0.02em]">
+          <div className="flex items-center">
             <UpBeatLogo size={32} />
-            <span>UpBeat</span>
           </div>
           {onCollapseSidebar && (
             <button
@@ -229,19 +228,6 @@ export function TopBar({
 
   return (
     <div className="flex items-center gap-3 px-7 py-4">
-      {!sidebarOpen && onToggleSidebar && (
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          title="Open sidebar (⌘B)"
-          aria-label="Open sidebar"
-          className="h-9 pl-1.5 pr-3 rounded-full bg-s2 hover:bg-s3 flex items-center gap-2 text-sm font-extrabold tracking-tight text-t1 transition-all cursor-pointer shrink-0 shadow-sm"
-        >
-          <UpBeatLogo size={26} />
-          <span>UpBeat</span>
-          <PanelLeftOpen className="w-4 h-4 text-t2 ml-0.5" />
-        </button>
-      )}
       <IconButton label="Back" variant="filled" size={36} onClick={() => window.history.back()}>
         <ChevronLeft className="w-5 h-5" />
       </IconButton>
