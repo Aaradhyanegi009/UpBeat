@@ -4,7 +4,7 @@ A minimalist, high-fidelity AI music studio that understands what you actually l
 
 UpBeat pairs Google Gemini with YouTube Music to sequence harmonic DJ sets, decode your personal musical taste into a **Sonic DNA profile**, connect with friends via **Real-Time Friends & Live P2P Jam Sessions**, and stream music with zero ads, zero trackers, and zero subscription paywalls.
 
-Built as a clean cross-platform project for **Android**, **Android Auto**, **macOS**, and the **Web**.
+Built as a clean cross-platform project for **Windows**, **macOS**, **Android**, **Android Auto**, and the **Web**.
 
 ---
 
@@ -104,6 +104,11 @@ UpBeat/
 ├── macos/            # Native macOS App
 │   ├── UpBeatApp.swift                 # Native Swift + AppKit + WebKit wrapper
 │   └── Info.plist                      # macOS Bundle & App Permissions
+├── electron/         # Native Windows Desktop App (Electron)
+│   ├── main.cjs                        # Windows Window, System Tray & Media Controls
+│   ├── preload.cjs                     # Native IPC Bridge
+│   ├── server.cjs                      # Embedded Zero-Config Audio Microserver
+│   └── resources/                      # Windows Icons (icon.ico & icon.png)
 ├── api/              # Vercel Serverless Edge Functions (Web & iOS PWA)
 │   ├── innertube.js                    # High-speed Edge CORS proxy for YouTube Music
 │   ├── audio.js                        # 302 Redirector directly to Google CDN audio stream
@@ -159,7 +164,22 @@ cp -R UpBeat.app /Applications/UpBeat.app
 open /Applications/UpBeat.app
 ```
 
-### 3. Web & iPhone / iOS (Safari PWA)
+### 3. Windows Desktop App
+Download the Windows release from [GitHub Releases](https://github.com/AaradhyaNegi009/UpBeat/releases):
+- **`UpBeat-Windows-Setup.exe`**: One-click Windows installer (creates Desktop & Start menu shortcuts).
+- **`UpBeat-Windows.zip`**: Standalone portable version (extract and double-click `UpBeat.exe` without installation).
+
+Features:
+- Native Windows 10 & 11 taskbar & notification area System Tray with playback controls (`♫`).
+- Global hardware/keyboard media keys (`Play/Pause`, `Next`, `Prev`, `Stop`).
+- Embedded zero-config audio streaming engine — runs completely standalone without requiring Python, ffmpeg, or external setup.
+
+To package manually on Windows:
+```bash
+npm run build:win
+```
+
+### 4. Web & iPhone / iOS (Safari PWA)
 UpBeat can be deployed to **Vercel** with zero configuration:
 1. Import this repository into [Vercel](https://vercel.com).
 2. The included `vercel.json` and Edge Functions in `api/` automatically configure API routing, Edge proxies, and Vite builds.

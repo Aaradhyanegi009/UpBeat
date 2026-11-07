@@ -1,0 +1,64 @@
+{
+  "name": "upbeat-desktop",
+  "version": "7.3.1",
+  "description": "UpBeat — Minimalist AI Music Curator & Player for Windows",
+  "main": "main.cjs",
+  "author": "Aaradhya Negi",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.upbeat.desktop",
+    "productName": "UpBeat",
+    "copyright": "Copyright © 2026 UpBeat",
+    "asar": true,
+    "directories": {
+      "output": "dist-win"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "server.cjs",
+      "resources/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "frontend"
+      }
+    ],
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "UpBeat",
+      "uninstallDisplayName": "UpBeat Music Studio"
+    }
+  }
+}

@@ -10,6 +10,7 @@
 !/backend/
 !/frontend/
 !/macos/
+!/electron/
 !/api/
 !/vercel.json
 !/package.json
@@ -18,6 +19,8 @@
 
 # Build caches & dependencies
 frontend/node_modules/
+electron/node_modules/
+electron/dist-win/
 node_modules/
 android/.gradle/
 android/build/
