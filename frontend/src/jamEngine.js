@@ -11,8 +11,8 @@ const SEEN_PACKETS_STORAGE_KEY = 'upbeat_seen_social_packets_v1'
 const JAM_PEER_PREFIX = 'upbeat-jam-v70-'
 const PRESENCE_PEER_PREFIX = 'upbeat-user-'
 const CLOUD_RELAY_BASE = 'https://ntfy.hostux.net'
-const CLOUD_RELAY_FALLBACK = 'https://ntfy.envs.net'
-const CLOUD_RELAY_TERTIARY = 'https://ntfy.sh'
+const CLOUD_RELAY_FALLBACK = 'https://ntfy.adminforge.de'
+const CLOUD_RELAY_TERTIARY = 'https://ntfy.tedomum.fr'
 const CLOUD_RELAYS = [CLOUD_RELAY_BASE, CLOUD_RELAY_FALLBACK, CLOUD_RELAY_TERTIARY]
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
@@ -51,24 +51,7 @@ const ICE_SERVERS = [
   { urls: 'stun:stun3.l.google.com:19302' },
   { urls: 'stun:stun4.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
-  {
-    urls: [
-      'turn:eu-0.turn.peerjs.com:3478',
-      'turn:us-0.turn.peerjs.com:3478'
-    ],
-    username: 'peerjs',
-    credential: 'peerjsp'
-  },
-  {
-    urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443',
-      'turn:openrelay.metered.ca:443?transport=tcp'
-    ],
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  }
+  { urls: 'stun:global.stun.twilio.com:3478' }
 ]
 
 const PEER_OPTIONS = {
@@ -901,11 +884,9 @@ class JamSessionManager {
       this.pingAllFriends()
       this.retryOutgoingRequests()
       this.pruneStaleFriendPresence()
-      // Poll cloud inbox gently (at most once every 15s when pending requests exist) to avoid HTTP 429
-      if ((this.state.outgoingRequests?.length || 0) > 0 || this.isModalOpen) {
-        this.pollSocialCloudInbox(this.userProfile?.friendCode || myFriendCode, false)
-      }
-    }, 3000)
+      // Always poll cloud inbox on every tick so incoming friend requests & acceptances are received in real time
+      this.pollSocialCloudInbox(this.userProfile?.friendCode || myFriendCode, false)
+    }, 3500)
 
     if (this.backendPollTimer) clearInterval(this.backendPollTimer)
     this.backendPollTimer = setInterval(() => {
@@ -1042,12 +1023,13 @@ class JamSessionManager {
         try {
           this.socialEventSource.close()
         } catch {}
+        this.socialEventSource = null
       }
-      const connectRelayIndex = (idx) => {
-        if (idx >= CLOUD_RELAYS.length) return
-        const base = CLOUD_RELAYS[idx]
+      let relayIdx = 0
+      const connect = () => {
+        const base = CLOUD_RELAYS[relayIdx % CLOUD_RELAYS.length]
         try {
-          const es = new EventSource(`${base}/${topic}/sse?since=10m`)
+          const es = new EventSource(`${base}/${topic}/sse?since=1h`)
           this.socialEventSource = es
           es.onmessage = (ev) => {
             try {
@@ -1064,33 +1046,42 @@ class JamSessionManager {
             try {
               if (this.socialEventSource === es) {
                 es.close()
-                connectRelayIndex(idx + 1)
+                this.socialEventSource = null
+                relayIdx = (relayIdx + 1) % CLOUD_RELAYS.length
+                // Reconnect automatically with backoff — never give up!
+                setTimeout(() => {
+                  if (!this.socialEventSource) {
+                    connect()
+                  }
+                }, 3000)
               }
             } catch {}
           }
         } catch {
-          connectRelayIndex(idx + 1)
+          relayIdx = (relayIdx + 1) % CLOUD_RELAYS.length
+          setTimeout(() => connect(), 3000)
         }
       }
-      connectRelayIndex(0)
+      connect()
     } catch {}
   }
 
   async pollSocialCloudInbox(myFriendCode, force = false) {
-    const topic = getSocialCloudTopic(myFriendCode || this.userProfile?.friendCode)
-    if (!topic || typeof fetch === 'undefined') return
+    const cleanCode = normalizeFriendCode(myFriendCode || this.userProfile?.friendCode)
+    if (!cleanCode || typeof fetch === 'undefined') return
+    const topic = getSocialCloudTopic(cleanCode)
+    if (!topic) return
     const now = Date.now()
-    // Enforce minimum 8s interval between HTTP cloud polls so we NEVER hit HTTP 429 rate limits
-    if (!force && this.lastCloudPollAt && now - this.lastCloudPollAt < 8000) return
+    if (!force && this.lastCloudPollAt && now - this.lastCloudPollAt < 3000) return
     this.lastCloudPollAt = now
 
-    const sinceWindow = this.initialCloudPollDone ? '45s' : '15m'
+    // Use since=all so pending friend requests/acceptances are never missed
     for (const base of CLOUD_RELAYS) {
       try {
         const res = await fetchWithTimeout(
-          `${base}/${topic}/json?poll=1&since=${sinceWindow}`,
+          `${base}/${topic}/json?poll=1&since=all`,
           {},
-          3000
+          2500
         )
         if (!res || !res.ok) continue
         this.initialCloudPollDone = true
@@ -1116,19 +1107,22 @@ class JamSessionManager {
     const topic = getSocialCloudTopic(targetFriendCode)
     if (!topic || typeof fetch === 'undefined') return
     const body = JSON.stringify(fullPacket)
-    for (const base of CLOUD_RELAYS) {
-      try {
-        const res = await fetchWithTimeout(
-          `${base}/${topic}`,
-          {
-            method: 'POST',
-            body
-          },
-          2500
+    // Broadcast to ALL healthy cloud relays in parallel so the receiver catches it on ANY relay
+    try {
+      await Promise.allSettled(
+        CLOUD_RELAYS.map((base) =>
+          fetchWithTimeout(
+            `${base}/${topic}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body
+            },
+            2500
+          )
         )
-        if (res && res.ok) break
-      } catch {}
-    }
+      )
+    } catch {}
   }
 
   getEdgeSocialUrls() {
@@ -1656,7 +1650,8 @@ class JamSessionManager {
         conn.send(ackPkt)
       } catch {}
     }
-    this.sendSocialPacket(senderFriendCode, ackPkt, { useCloud: false })
+    this.sendSocialPacket(senderFriendCode, ackPkt, { useCloud: true })
+    this.sendSocialCloudPacket(senderFriendCode, ackPkt)
   }
 
   processIncomingFriendRequest(sender, data, conn) {
@@ -2332,32 +2327,49 @@ class JamSessionManager {
       } catch {}
     }
 
-    // 2. Cloud SSE Relay (ntfy.sh) for cross-network Jam sync fallback
+    // 2. Cloud SSE Relay for cross-network Jam sync fallback
     const topic = getRoomCloudTopic(roomCode)
     if (topic && typeof EventSource !== 'undefined') {
       try {
-        const es = new EventSource(`${CLOUD_RELAY_BASE}/${topic}/sse?since=2m`)
-        this.roomEventSource = es
-        es.onmessage = (ev) => {
+        let roomRelayIdx = 0
+        const connectRoomSse = () => {
+          const base = CLOUD_RELAYS[roomRelayIdx % CLOUD_RELAYS.length]
           try {
-            const wrapper = JSON.parse(ev.data)
-            if (wrapper?.event === 'message' && wrapper.message) {
-              const pkt = JSON.parse(wrapper.message)
-              if (pkt && pkt._senderInstanceId !== this.instanceId) {
-                this.handleIncomingPacket(pkt, null)
-              }
+            const es = new EventSource(`${base}/${topic}/sse?since=5m`)
+            this.roomEventSource = es
+            es.onmessage = (ev) => {
+              try {
+                const wrapper = JSON.parse(ev.data)
+                if (wrapper?.event === 'message' && wrapper.message) {
+                  const pkt = JSON.parse(wrapper.message)
+                  if (pkt && pkt._senderInstanceId !== this.instanceId) {
+                    this.handleIncomingPacket(pkt, null)
+                  }
+                }
+              } catch {}
             }
-          } catch {}
-        }
-        es.onerror = () => {
-          try {
-            if (this.roomEventSource === es) {
-              es.close()
-              this.roomEventSource = new EventSource(`${CLOUD_RELAY_FALLBACK}/${topic}/sse?since=2m`)
-              this.roomEventSource.onmessage = es.onmessage
+            es.onerror = () => {
+              try {
+                if (this.roomEventSource === es) {
+                  es.close()
+                  this.roomEventSource = null
+                  roomRelayIdx = (roomRelayIdx + 1) % CLOUD_RELAYS.length
+                  setTimeout(() => {
+                    if (!this.roomEventSource && this.state.active) {
+                      connectRoomSse()
+                    }
+                  }, 2500)
+                }
+              } catch {}
             }
-          } catch {}
+          } catch {
+            roomRelayIdx = (roomRelayIdx + 1) % CLOUD_RELAYS.length
+            setTimeout(() => {
+              if (!this.roomEventSource && this.state.active) connectRoomSse()
+            }, 2500)
+          }
         }
+        connectRoomSse()
       } catch {}
     }
 
@@ -2424,19 +2436,21 @@ class JamSessionManager {
     const topic = getRoomCloudTopic(roomCode)
     if (!topic || typeof fetch === 'undefined') return
     const body = JSON.stringify(payload)
-    for (const base of CLOUD_RELAYS) {
-      try {
-        const res = await fetchWithTimeout(
-          `${base}/${topic}`,
-          {
-            method: 'POST',
-            body
-          },
-          2500
+    try {
+      await Promise.allSettled(
+        CLOUD_RELAYS.map((base) =>
+          fetchWithTimeout(
+            `${base}/${topic}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body
+            },
+            2500
+          )
         )
-        if (res && res.ok) break
-      } catch {}
-    }
+      )
+    } catch {}
   }
 
   async pollBackendRoom(roomCode) {

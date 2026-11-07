@@ -4,6 +4,24 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.4.4] - 2026-11-07
+
+### 🚀 Bulletproof Real-Time Cross-Device Social & Jam Synchronization
+- **Universal Multi-Cloud Parallel Pub/Sub Relay (`jamEngine.js`)**:
+  - Replaced rate-limited/unreachable cloud relays (`ntfy.envs.net`, `ntfy.sh`) with tested, high-availability public relays (`https://ntfy.hostux.net`, `https://ntfy.adminforge.de`, `https://ntfy.tedomum.fr`).
+  - Upgraded `sendSocialCloudPacket` and `sendCloudRoomPacket` to broadcast in parallel across all relays via `Promise.allSettled`, guaranteeing that receivers on any relay will catch the message.
+- **Deaf Receiver Elimination & Unbounded Polling Window (`jamEngine.js`)**:
+  - Fixed bug where receivers without outgoing requests never polled the cloud relay: polling now runs unconditionally every 3.5s for all connected clients.
+  - Replaced the restrictive `45s` window with `since=all` so incoming friend requests or acceptances sent earlier are never dropped or omitted.
+- **Continuous Self-Healing SSE Streams (`jamEngine.js`)**:
+  - Replaced terminating failover with continuous circular reconnection with jittered backoff, ensuring EventSource streams automatically resume after mobile screen dimming, lockscreen sleep, or cellular IP shifts.
+- **PACKET_ACK Cloud Dispatch (`jamEngine.js`)**:
+  - Fixed `sendPacketAck` to broadcast ACK packets over cloud relays (`useCloud: true`), immediately confirming packet receipt to the sender across mobile networks.
+- **Cleaned WebRTC ICE Gathering (`jamEngine.js`)**:
+  - Removed nonexistent TURN hostnames that stalled candidate gathering for 15–30 seconds, maintaining fast STUN resolution across Google, Cloudflare, and Twilio servers.
+
+---
+
 ## [v7.4.3] - 2026-11-07
 
 ### 🛡️ Bulletproof Bidirectional Inter-Device Friend Requests + 📬 Serverless Edge Signaling Mailbox + 🔄 ACK-Verified Handshake
