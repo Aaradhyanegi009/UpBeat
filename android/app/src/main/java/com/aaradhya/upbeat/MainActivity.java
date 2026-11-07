@@ -141,7 +141,7 @@ public class MainActivity extends BridgeActivity {
         android.net.Uri data = intent.getData();
         if (data != null) {
             String url = data.toString();
-            if (url.startsWith("upbeat://")) {
+            if (url.startsWith("upbeat://") || url.contains("addFriend") || url.contains("jam=")) {
                 dispatchDeepLink(url);
             }
         }

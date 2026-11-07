@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.4.4)
+# 🎵 UpBeat (v7.4.5)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,12 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ##  Features & Highlights
+
+###  Bulletproof Two-Way Friend Acceptance & Jam Participant Sync (v7.4.5)
+- **Jam Room Cloud Polling & Participant Discovery (`jamEngine.js`)**: Resolved the missing-participants bug in Jam sessions. Added active cloud room polling (`pollCloudRoom`) inside the 1.5s room transport interval, periodic Host participant broadcasting (`JAM_PARTICIPANTS` with `{ useCloud: true }`), and continuous Guest `JAM_HELLO` re-announcements when solo in a room. Connected guest devices and host profiles now instantly reflect on both sides across all mobile networks.
+- **Two-Way Friend Acceptance Reflection (`jamEngine.js`)**: Fixed asymmetric friend acceptance where Sender remained in "Outgoing Pending". `handleSocialPacket` now dynamically reloads missing friend codes, ensures duplicate ACK suppression does not block promotion while an outgoing request is pending, and triggers mutual bidirectional auto-promotion upon receiving `FRIEND_ACCEPTED`, `FRIEND_SYNC_ACK`, or confirmed status summaries.
+- **Zero-Rate-Limit Cloud Relays (`jamEngine.js`)**: Purged 429-rate-limited relays (`hostux.net` and `adminforge.de`) in favor of verified, high-throughput instances (`https://ntfy.tedomum.fr`, `https://ntfy.sp-codes.de`, `https://ntfy.envs.net`) using `?poll=1&since=10m` parameterization.
+- **Deep-Link Auto-Discovery (`MainActivity.java`)**: Added enhanced intent pattern matching for friend codes and room pins (`upbeat://`, `addFriend`, `jam=`) so scanning QR codes or clicking invite links immediately routes into the app with one-tap accept/join modals.
 
 ###  Bulletproof Real-Time Cross-Device Social & Jam Synchronization (v7.4.4)
 - **Universal Multi-Cloud Parallel Pub/Sub Relay (`jamEngine.js`)**: Purged dead/rate-limited relays in favor of high-capacity, low-latency instances (`https://ntfy.hostux.net`, `https://ntfy.adminforge.de`, `https://ntfy.tedomum.fr`). All outgoing social packets (`FRIEND_REQUEST`, `FRIEND_ACCEPTED`, `JAM_INVITE`, `PACKET_ACK`) are broadcast in parallel to all active relays using `Promise.allSettled`, guaranteeing receipt across any combination of mobile devices and networks.

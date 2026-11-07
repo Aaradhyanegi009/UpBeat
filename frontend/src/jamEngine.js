@@ -10,9 +10,9 @@ const SEEN_PACKETS_STORAGE_KEY = 'upbeat_seen_social_packets_v1'
 
 const JAM_PEER_PREFIX = 'upbeat-jam-v70-'
 const PRESENCE_PEER_PREFIX = 'upbeat-user-'
-const CLOUD_RELAY_BASE = 'https://ntfy.hostux.net'
-const CLOUD_RELAY_FALLBACK = 'https://ntfy.adminforge.de'
-const CLOUD_RELAY_TERTIARY = 'https://ntfy.tedomum.fr'
+const CLOUD_RELAY_BASE = 'https://ntfy.tedomum.fr'
+const CLOUD_RELAY_FALLBACK = 'https://ntfy.sp-codes.de'
+const CLOUD_RELAY_TERTIARY = 'https://ntfy.envs.net'
 const CLOUD_RELAYS = [CLOUD_RELAY_BASE, CLOUD_RELAY_FALLBACK, CLOUD_RELAY_TERTIARY]
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
@@ -1075,11 +1075,11 @@ class JamSessionManager {
     if (!force && this.lastCloudPollAt && now - this.lastCloudPollAt < 3000) return
     this.lastCloudPollAt = now
 
-    // Use since=all so pending friend requests/acceptances are never missed
+    // Use poll=1 (and since=10m) so pending friend requests/acceptances are never missed and all relays respond
     for (const base of CLOUD_RELAYS) {
       try {
         const res = await fetchWithTimeout(
-          `${base}/${topic}/json?poll=1&since=all`,
+          `${base}/${topic}/json?poll=1&since=10m`,
           {},
           2500
         )
@@ -1722,20 +1722,21 @@ class JamSessionManager {
   }
 
   handleSocialPacket(data, conn) {
-    if (!data || typeof data !== 'object' || !data.from) return
+    if (!data || typeof data !== 'object') return
     if (data._senderInstanceId && data._senderInstanceId === this.instanceId) return
 
-    const myCode = normalizeFriendCode(this.userProfile?.friendCode)
-    if (data.targetFriendCode && normalizeFriendCode(data.targetFriendCode) !== myCode) {
+    const myCode = normalizeFriendCode(this.userProfile?.friendCode || loadJamUserProfile()?.friendCode)
+    if (data.targetFriendCode && myCode && normalizeFriendCode(data.targetFriendCode) !== myCode) {
       return
     }
 
+    const rawSender = data.from && typeof data.from === 'object' ? data.from : data
     const sender = {
-      ...data.from,
-      friendCode: normalizeFriendCode(data.from.friendCode || data._fromFriendCode),
+      ...rawSender,
+      friendCode: normalizeFriendCode(rawSender.friendCode || data._fromFriendCode || data.friendCode),
       avatar: ''
     }
-    if (!sender.friendCode || sender.friendCode === myCode) return
+    if (!sender.friendCode || (myCode && sender.friendCode === myCode)) return
 
     // Save incoming connection in activeFriendConnections for reverse-path piggybacking
     if (conn && conn.open) {
@@ -1760,9 +1761,13 @@ class JamSessionManager {
         data.type === 'JAM_INVITE')
     ) {
       this.sendPacketAck(sender.friendCode, incomingMsgId, conn)
-      if (this.markPacketSeen(incomingMsgId)) {
+      const isAlreadySeen = this.markPacketSeen(incomingMsgId)
+      if (isAlreadySeen) {
         this.updateFriendPresence(sender, data)
-        return
+        const isStillPending = this.state.outgoingRequests.some((r) => r.friendCode === sender.friendCode)
+        if (!isStillPending || (data.type !== 'FRIEND_ACCEPTED' && data.type !== 'FRIEND_SYNC_ACK')) {
+          return
+        }
       }
     }
 
@@ -1771,8 +1776,8 @@ class JamSessionManager {
     const senderConfirmedMe = this.hasSenderConfirmedMe(sender, data)
     const senderRequestedMe = this.hasSenderRequestedMe(sender, data)
 
-    // Layer 3 Auto-Reconciliation: If we have an outgoing request to sender AND sender already has us in their confirmed friends, promote immediately!
-    if (isOutgoingPending && senderConfirmedMe && data.type !== 'FRIEND_REMOVED') {
+    // Layer 3 Auto-Reconciliation: If we have an outgoing request to sender AND sender already has us in their confirmed friends (or sends acceptance), promote immediately!
+    if (isOutgoingPending && (senderConfirmedMe || data.type === 'FRIEND_ACCEPTED' || data.type === 'FRIEND_SYNC_ACK') && data.type !== 'FRIEND_REMOVED') {
       this.promoteToConfirmedFriend(sender)
       const ackReply = this.buildPresencePayload('FRIEND_SYNC_ACK', {
         targetFriendCode: sender.friendCode,
@@ -1821,7 +1826,7 @@ class JamSessionManager {
               conn.send(pongReply)
             } catch {}
           } else {
-            this.sendSocialPacket(sender.friendCode, pongReply, { useCloud: false })
+            this.sendSocialPacket(sender.friendCode, pongReply, { useCloud: true })
           }
 
           if (data.type === 'FRIEND_STATUS_PROBE' || data.isPendingOutgoing) {
@@ -2177,6 +2182,7 @@ class JamSessionManager {
       isPendingOutgoing: true
     })
     this.sendWithAck(targetCode, reqPacket, 4)
+    this.sendSocialCloudPacket(targetCode, reqPacket)
     this.triggerRapidSocialSync()
 
     if (this.eventHandlers.onNotify) {
@@ -2202,6 +2208,7 @@ class JamSessionManager {
       isConfirmedFriend: true
     })
     this.sendWithAck(cleanCode, acceptPacket, 4)
+    this.sendSocialCloudPacket(cleanCode, acceptPacket)
 
     this.triggerRapidSocialSync()
     if (this.eventHandlers.onNotify) {
@@ -2373,10 +2380,11 @@ class JamSessionManager {
       } catch {}
     }
 
-    // 3. Local FastAPI Backend Room Polling
+    // 3. Local FastAPI Backend & Cloud Room Polling
     this.lastRoomServerTs = Date.now() - 120000
     this.roomPollTimer = setInterval(() => {
       this.pollBackendRoom(roomCode)
+      this.pollCloudRoom(roomCode)
     }, 1500)
     setTimeout(() => {
       this.pollBackendRoom(roomCode)
@@ -2409,9 +2417,9 @@ class JamSessionManager {
     for (const base of CLOUD_RELAYS) {
       try {
         const res = await fetchWithTimeout(
-          `${base}/${topic}/json?poll=1&since=2m`,
+          `${base}/${topic}/json?poll=1&since=5m`,
           {},
-          3000
+          2500
         )
         if (!res || !res.ok) continue
         const text = await res.text()
@@ -2749,25 +2757,42 @@ class JamSessionManager {
 
   startHostLoops() {
     this.stopLoops()
+    let hostTick = 0
     this.syncInterval = setInterval(() => {
-      this.broadcastSyncNow(null, { useCloud: false })
+      hostTick++
+      const useCloudNow = hostTick % 2 === 0
+      this.broadcastSyncNow(null, { useCloud: useCloudNow })
+      if (hostTick % 2 === 0) {
+        this.broadcastParticipants()
+      }
     }, 2000)
   }
 
   startGuestPingLoop() {
     this.stopLoops()
     const sendPing = () => {
+      const isDirectOpen = Boolean(this.hostConn && this.hostConn.open)
       this.sendToHost(
         {
           type: 'JAM_PING',
           t1: Date.now(),
           senderId: this.getSelfParticipantId()
         },
-        { useCloud: false }
+        { useCloud: !isDirectOpen }
       )
+      // If guest sees only itself in the room, re-announce JAM_HELLO to ensure Host registers it!
+      if (this.state.active && this.state.role === 'guest' && (this.state.participants?.length || 0) <= 1) {
+        this.sendToHost(
+          {
+            type: 'JAM_HELLO',
+            profile: this.buildSelfParticipant(false)
+          },
+          { useCloud: true }
+        )
+      }
     }
     sendPing()
-    this.pingInterval = setInterval(sendPing, 6000)
+    this.pingInterval = setInterval(sendPing, 3500)
   }
 
   stopLoops() {

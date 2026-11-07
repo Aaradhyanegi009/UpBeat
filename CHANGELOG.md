@@ -4,6 +4,27 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.4.5] - 2026-11-07
+
+### 🚀 Bulletproof Two-Way Friend Acceptance & Jam Participant Synchronization
+- **Jam Room Cloud Polling & Participant Discovery (`jamEngine.js`)**:
+  - Fixed missing-participants bug in Jam sessions where Host and Guest could hear synchronized audio but did not display each other in the participant list.
+  - Added periodic active cloud room polling (`pollCloudRoom`) inside `this.roomPollTimer` interval (every 1.5s), resolving the defect where cloud polling previously ran only once at 250ms.
+  - Configured Host to broadcast `JAM_PARTICIPANTS` and `JAM_SYNC` over cloud relays every 2s (`{ useCloud: true }`).
+  - Added automatic Guest re-announcement: when a guest's local participant count is `<= 1`, Guest re-dispatches `JAM_HELLO` to the room topic every 3.5s until Host acknowledges with updated participants.
+- **Two-Way Friend Acceptance Reflection (`jamEngine.js`)**:
+  - Fixed asymmetric acceptance where Sender stayed stuck in "Outgoing Pending" after Receiver clicked Accept.
+  - Upgraded `handleSocialPacket` to dynamically reload the local friend code from storage if uninitialized, and loosened target checks.
+  - Ensured duplicate packet ID deduplication does not suppress friend promotion if an outgoing request is still pending for the sender.
+  - Added parallel direct cloud dispatch to `acceptFriendRequest`, `sendFriendRequest`, and `removeFriend`.
+- **Zero-Rate-Limit Cloud Relays (`jamEngine.js`)**:
+  - Purged rate-limited relays (`hostux.net` returning 429 on all requests and `adminforge.de` returning 429 on GET/poll).
+  - Switched to verified high-throughput public instances (`https://ntfy.tedomum.fr`, `https://ntfy.sp-codes.de`, `https://ntfy.envs.net`) using compatible `?poll=1&since=10m` query parameters.
+- **Deep-Link Auto-Discovery (`MainActivity.java`)**:
+  - Expanded deep-link intent handling to match `addFriend` and `jam=` across scanned URLs, automatically launching the app and opening the interactive confirmation card.
+
+---
+
 ## [v7.4.4] - 2026-11-07
 
 ### 🚀 Bulletproof Real-Time Cross-Device Social & Jam Synchronization
