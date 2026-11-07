@@ -32,6 +32,8 @@ public class MainActivity extends BridgeActivity {
     }
     private static final java.util.concurrent.ConcurrentLinkedQueue<CarActionItem> sPendingActionsQueue =
         new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final java.util.concurrent.ConcurrentLinkedQueue<String> sPendingDeepLinksQueue =
+        new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
 
     @Override
@@ -73,6 +75,7 @@ public class MainActivity extends BridgeActivity {
         }
 
         handleCarIntent(getIntent());
+        handleDeepLinkIntent(getIntent());
         registerBackHandler();
     }
 
@@ -130,6 +133,58 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleCarIntent(intent);
+        handleDeepLinkIntent(intent);
+    }
+
+    private void handleDeepLinkIntent(Intent intent) {
+        if (intent == null) return;
+        android.net.Uri data = intent.getData();
+        if (data != null) {
+            String url = data.toString();
+            if (url.startsWith("upbeat://")) {
+                dispatchDeepLink(url);
+            }
+        }
+    }
+
+    public synchronized void dispatchDeepLink(final String url) {
+        if (url == null || url.trim().isEmpty()) return;
+        sPendingDeepLinksQueue.add(url.trim());
+        tryDeliverPendingDeepLink(0);
+    }
+
+    public synchronized void tryDeliverPendingDeepLink(final int attempt) {
+        if (sPendingDeepLinksQueue.isEmpty()) return;
+        if (this.bridge == null || this.bridge.getWebView() == null) {
+            if (attempt < 50) {
+                mHandler.postDelayed(() -> tryDeliverPendingDeepLink(attempt + 1), 300);
+            }
+            return;
+        }
+
+        final WebView wv = this.bridge.getWebView();
+        wv.post(() -> {
+            if (sPendingDeepLinksQueue.isEmpty()) return;
+            final java.util.List<String> batch = new java.util.ArrayList<>(sPendingDeepLinksQueue);
+            StringBuilder sb = new StringBuilder();
+            sb.append("(function() {");
+            for (String link : batch) {
+                String safe = link.replace("\\", "\\\\").replace("'", "\\'");
+                sb.append("  window.dispatchEvent(new CustomEvent('upbeat-deep-link', { detail: '").append(safe).append("' }));");
+            }
+            sb.append("  return 'ok';");
+            sb.append("})();");
+
+            wv.evaluateJavascript(sb.toString(), value -> {
+                if (value != null && value.contains("ok")) {
+                    sPendingDeepLinksQueue.removeAll(batch);
+                } else {
+                    if (attempt < 50) {
+                        mHandler.postDelayed(() -> tryDeliverPendingDeepLink(attempt + 1), 350);
+                    }
+                }
+            });
+        });
     }
 
     private void handleCarIntent(Intent intent) {
@@ -214,7 +269,10 @@ public class MainActivity extends BridgeActivity {
     public class UpBeatJsBridge {
         @JavascriptInterface
         public void readyForCarActions() {
-            mHandler.post(() -> tryDeliverPendingCarAction(0));
+            mHandler.post(() -> {
+                tryDeliverPendingCarAction(0);
+                tryDeliverPendingDeepLink(0);
+            });
         }
 
         @JavascriptInterface

@@ -1,7 +1,6 @@
-import React, { useRef, useEffect, useState } from 'react'
-import { Sparkles, Heart, Play, X, Clock, KeyRound, Mic } from 'lucide-react'
+import React, { useRef, useEffect } from 'react'
+import { Sparkles, Heart, Play, X, Clock, KeyRound } from 'lucide-react'
 import { Chip, ChipRow, IconButton, Collage, SectionHeader } from '../ui/primitives'
-import { isSpeechSupported, createSpeechRecognizer } from '../utils/speechRecognition'
 
 export const VIBES = [
   'Rainy evening, mellow and warm',
@@ -54,53 +53,11 @@ export default function CreateView({
   onOpenSettings
 }) {
   const inputRef = useRef(null)
-  const recognizerRef = useRef(null)
-  const [isListening, setIsListening] = useState(false)
-  const [speechError, setSpeechError] = useState('')
   const canMake = Boolean(prompt.trim() || seed) && !busy
 
   useEffect(() => {
     if (isDesktop) inputRef.current?.focus()
   }, [isDesktop])
-
-  useEffect(() => {
-    return () => {
-      recognizerRef.current?.stop()
-    }
-  }, [])
-
-  const toggleSpeak = () => {
-    if (isListening) {
-      recognizerRef.current?.stop()
-      setIsListening(false)
-      return
-    }
-
-    setSpeechError('')
-    const recognizer = createSpeechRecognizer({
-      onStart: () => {
-        setIsListening(true)
-        setSpeechError('')
-      },
-      onResult: (text) => {
-        if (text) {
-          setPrompt(text)
-        }
-      },
-      onError: (errMsg) => {
-        setIsListening(false)
-        setSpeechError(errMsg)
-        setTimeout(() => setSpeechError(''), 5000)
-      },
-      onEnd: () => {
-        setIsListening(false)
-      }
-    })
-    recognizerRef.current = recognizer
-    recognizer.start()
-  }
-
-  const canSpeak = isSpeechSupported()
 
   return (
     <div className={`px-5 lg:px-8 pb-10 w-full ${isDesktop ? 'max-w-3xl' : ''}`}>
@@ -133,32 +90,7 @@ export default function CreateView({
           placeholder="Describe a moment, a mood, a memory…"
           className="w-full bg-transparent resize-none text-xl leading-snug font-semibold tracking-[-0.01em] placeholder:text-t3 placeholder:font-medium focus:outline-none min-h-[84px]"
         />
-        <div className="flex items-center justify-between gap-2 mt-2.5">
-          <div className="flex items-center gap-2 min-w-0">
-            {canSpeak ? (
-              <button
-                type="button"
-                onClick={toggleSpeak}
-                title={isListening ? 'Listening… Click to stop' : 'Speak your prompt'}
-                aria-label={isListening ? 'Stop listening' : 'Speak prompt'}
-                className={`h-10 px-3.5 rounded-full flex items-center gap-2 text-xs font-bold transition-all cursor-pointer ${
-                  isListening
-                    ? 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-500/50 shadow-[0_0_12px_rgba(244,63,94,0.4)] animate-pulse'
-                    : 'bg-s2 hover:bg-s3 text-t2 hover:text-t1'
-                }`}
-              >
-                <Mic className={`w-4 h-4 ${isListening ? 'text-rose-400 animate-bounce' : ''}`} />
-                <span>{isListening ? 'Listening…' : 'Voice'}</span>
-              </button>
-            ) : (
-              <span />
-            )}
-            {speechError && (
-              <span className="text-xs text-rose-400 font-medium truncate max-w-[260px] animate-fade-in" title={speechError}>
-                {speechError}
-              </span>
-            )}
-          </div>
+        <div className="flex items-center justify-end gap-2 mt-2.5">
           <button
             type="submit"
             disabled={!canMake}

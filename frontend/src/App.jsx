@@ -432,14 +432,6 @@ export default function App() {
       setInitialFriendCode(friendCode)
       setInitialJamSection('friends')
       setIsJamModalOpen(true)
-      const res = jamManager.sendFriendRequest(friendCode)
-      if (res && res.ok && res.status === 'sent') {
-        showNotify(`Sent friend request to ${friendCode}!`, 'success')
-      } else if (res && res.status === 'already_friends') {
-        showNotify(`Already connected with ${friendCode}`, 'info')
-      } else if (res && res.status === 'accepted') {
-        showNotify(`Accepted friend request from ${friendCode}!`, 'success')
-      }
     }
   }, [googleUser, showNotify])
 

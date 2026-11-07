@@ -4,6 +4,23 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.4.2] - 2026-11-07
+
+### 🌐 Cross-Device Friend/Jam Connectivity + 🔗 Native Deep-Link Redirection & Accept/Reject + 🎙️ Removed Mic Options
+- **Multi-Device & Cross-Network Connectivity Fix (`jamEngine.js`)**:
+  - Replaced blocked/timing-out `ntfy.sh` with reliable, CORS-enabled primary cloud relay `https://ntfy.envs.net` with automatic graceful fallback to `https://ntfy.sh`.
+  - Added strict 2.5–3.0s abort timeouts (`fetchWithTimeout`) across all cloud relay and companion backend HTTP calls, preventing connection pool exhaustion and infinite hanging on cellular networks (e.g. Android 16).
+  - Purged unresponsive TURN servers (`turn:openrelay.metered.ca`) from WebRTC configuration in favor of high-availability Google STUN and Cloudflare STUN servers (`stun:stun.cloudflare.com:3478`), eliminating 15–30s ICE candidate gathering stalls.
+- **Native Android & macOS Deep-Link Redirection (`AndroidManifest.xml`, `MainActivity.java`, `JamModal.jsx`, `App.jsx`)**:
+  - Replaced broken dummy Vercel share URLs with standard `upbeat://` URI scheme (`upbeat://addFriend?code=UP-XXXXXX` and `upbeat://jam?code=JAM-YYYYYY`).
+  - Added `<intent-filter>` for scheme `upbeat` to Android `MainActivity` and bridged incoming deep links into the web view via `window.dispatchEvent(new CustomEvent('upbeat-deep-link', ...))`.
+  - Fixed deep link parser in `jamEngine.js` to disambiguate friend codes (`UP-`) from room codes (`JAM-`).
+  - Added an interactive **"Incoming Friend Invite: Connect with [Code]? Accept & Connect / Decline"** card at the top of the Friends tab when launching from a QR code or deep link.
+- **Removed Mic / Tap to Speak Options (`CreateView.jsx`, `speechRecognition.js`)**:
+  - Cleaned all non-functional voice/mic buttons and dictation utilities from the studio Create View.
+
+---
+
 ## [v7.4.1] - 2026-11-07
 
 ### 🔗 3+ Node Jam Star-Topology Stability + ⏸️ Authoritative Host Pause Sync + 📌 Stable Friends List Ordering

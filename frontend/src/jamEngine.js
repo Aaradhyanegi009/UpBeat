@@ -10,7 +10,25 @@ const SEEN_PACKETS_STORAGE_KEY = 'upbeat_seen_social_packets_v1'
 
 const JAM_PEER_PREFIX = 'upbeat-jam-v70-'
 const PRESENCE_PEER_PREFIX = 'upbeat-user-'
-const CLOUD_RELAY_BASE = 'https://ntfy.sh'
+const CLOUD_RELAY_BASE = 'https://ntfy.envs.net'
+const CLOUD_RELAY_FALLBACK = 'https://ntfy.sh'
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
+  if (typeof fetch === 'undefined') return null
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller ? controller.signal : undefined
+    })
+    return res
+  } catch (e) {
+    return null
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 export const renderEmoji = (val, fallback = '') => {
   if (!val) return fallback
@@ -28,22 +46,9 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  }
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' }
 ]
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
@@ -109,25 +114,27 @@ export function normalizeFriendCode(raw) {
 }
 
 export function getAppBaseUrl() {
-  if (typeof window === 'undefined') return 'https://upbeat-music.vercel.app/'
+  if (typeof window === 'undefined') return 'upbeat://'
   try {
     const origin = window.location.origin
+    // Only use web URL if hosted on a real custom web domain (not localhost, capacitor, file, or dummy vercel)
     if (
       origin &&
       !origin.includes('127.0.0.1') &&
       !origin.includes('localhost') &&
       !origin.startsWith('file:') &&
-      !origin.startsWith('capacitor:')
+      !origin.startsWith('capacitor:') &&
+      !origin.includes('vercel.app')
     ) {
-      return `${origin}${window.location.pathname}`
+      return `${origin}${window.location.pathname}`.replace(/\/+$/, '') + '/'
     }
     const savedWeb = localStorage.getItem('upbeat_jam_share_origin')
-    if (savedWeb && savedWeb.startsWith('http')) {
+    if (savedWeb && savedWeb.startsWith('http') && !savedWeb.includes('vercel.app')) {
       return savedWeb.replace(/\/+$/, '') + '/'
     }
-    return 'https://upbeat-music.vercel.app/'
+    return 'upbeat://'
   } catch {
-    return 'https://upbeat-music.vercel.app/'
+    return 'upbeat://'
   }
 }
 
@@ -135,6 +142,9 @@ export function buildJamInviteUrl(roomCode) {
   const norm = normalizeRoomCode(roomCode)
   if (!norm) return ''
   const base = getAppBaseUrl()
+  if (base.startsWith('upbeat://')) {
+    return `upbeat://jam?code=${encodeURIComponent(norm)}`
+  }
   const sep = base.includes('?') ? '&' : '?'
   return `${base}${sep}jam=${encodeURIComponent(norm)}`
 }
@@ -143,22 +153,38 @@ export function buildFriendInviteUrl(friendCode) {
   const norm = normalizeFriendCode(friendCode)
   if (!norm) return ''
   const base = getAppBaseUrl()
+  if (base.startsWith('upbeat://')) {
+    return `upbeat://addFriend?code=${encodeURIComponent(norm)}`
+  }
   const sep = base.includes('?') ? '&' : '?'
   return `${base}${sep}addFriend=${encodeURIComponent(norm)}`
 }
 
 export function extractDeepLinkParams(urlStr = '') {
   try {
+    const raw = String(urlStr || '').trim()
+    if (!raw && typeof window === 'undefined') {
+      return { jamCode: null, friendCode: null }
+    }
+
     let search = ''
     let hash = ''
-    if (urlStr) {
-      const normalizedUrl = String(urlStr).replace(/^upbeat:\/\//i, 'http://upbeat.local/')
-      const u = new URL(normalizedUrl, 'http://upbeat.local')
-      search = u.search
-      hash = u.hash
+    let pathname = ''
+
+    if (raw) {
+      const normalizedUrl = raw.replace(/^upbeat:\/\//i, 'http://upbeat.local/')
+      try {
+        const u = new URL(normalizedUrl, 'http://upbeat.local')
+        search = u.search
+        hash = u.hash
+        pathname = u.pathname || ''
+      } catch {
+        search = raw
+      }
     } else if (typeof window !== 'undefined') {
       search = window.location.search
       hash = window.location.hash
+      pathname = window.location.pathname || ''
     }
 
     const searchParams = new URLSearchParams(search)
@@ -168,15 +194,18 @@ export function extractDeepLinkParams(urlStr = '') {
       hashParams = new URLSearchParams(cleanHash)
     }
 
-    const jamRaw =
-      searchParams.get('jam') ||
-      searchParams.get('join') ||
-      searchParams.get('room') ||
-      searchParams.get('code') ||
-      hashParams.get('jam') ||
-      hashParams.get('join') ||
-      hashParams.get('room') ||
-      hashParams.get('code')
+    // Direct check for UP- or JAM- anywhere in raw string or parameters
+    const codeParam = searchParams.get('code') || hashParams.get('code') || ''
+    const isFriendContext =
+      pathname.toLowerCase().includes('friend') ||
+      raw.toLowerCase().includes('addfriend') ||
+      raw.toLowerCase().includes('friend=') ||
+      codeParam.toUpperCase().startsWith('UP-')
+
+    const isJamContext =
+      pathname.toLowerCase().includes('jam') ||
+      raw.toLowerCase().includes('jam=') ||
+      codeParam.toUpperCase().startsWith('JAM-')
 
     const friendRaw =
       searchParams.get('addFriend') ||
@@ -184,7 +213,20 @@ export function extractDeepLinkParams(urlStr = '') {
       searchParams.get('user') ||
       hashParams.get('addFriend') ||
       hashParams.get('friend') ||
-      hashParams.get('user')
+      hashParams.get('user') ||
+      (isFriendContext && codeParam ? codeParam : null) ||
+      (raw.match(/\b(UP-[A-Z0-9]{4,8})\b/i) ? raw.match(/\b(UP-[A-Z0-9]{4,8})\b/i)[1] : null)
+
+    const jamRaw =
+      searchParams.get('jam') ||
+      searchParams.get('join') ||
+      searchParams.get('room') ||
+      hashParams.get('jam') ||
+      hashParams.get('join') ||
+      hashParams.get('room') ||
+      (isJamContext && codeParam ? codeParam : null) ||
+      (!isFriendContext && codeParam && codeParam.toUpperCase().startsWith('JAM-') ? codeParam : null) ||
+      (raw.match(/\b(JAM-[A-Z0-9]{3,6})\b/i) ? raw.match(/\b(JAM-[A-Z0-9]{3,6})\b/i)[1] : null)
 
     return {
       jamCode: jamRaw ? normalizeRoomCode(jamRaw) : null,
@@ -750,11 +792,19 @@ class JamSessionManager {
       })
       this.auxClientPeer = aux
       aux.on('open', () => {
+        for (const targetCode of Array.from(this.pendingPeerPackets.keys())) {
+          this.connectToPeerFriend(targetCode)
+        }
         this.pingAllFriends()
         this.retryOutgoingRequests()
       })
       aux.on('connection', (conn) => {
         this.setupPresenceConn(conn)
+      })
+      aux.on('disconnected', () => {
+        try {
+          if (!aux.destroyed) aux.reconnect()
+        } catch {}
       })
       return aux
     } catch {
@@ -770,6 +820,32 @@ class JamSessionManager {
       return this.auxClientPeer
     }
     return this.ensureAuxClientPeer()
+  }
+
+  connectToPeerFriend(cleanTarget) {
+    if (!cleanTarget || cleanTarget === this.userProfile?.friendCode) return
+    const activePeer = this.getActiveSocialPeer()
+    if (!activePeer || !activePeer.open || activePeer.destroyed) return
+    if (this.pendingPeerConns.has(cleanTarget)) return
+    const existing = this.presenceConns.get(cleanTarget)
+    if (existing && existing.open) return
+
+    try {
+      const targetPeerId = getPresencePeerId(cleanTarget)
+      const conn = activePeer.connect(targetPeerId, {
+        reliable: true,
+        serialization: 'json'
+      })
+      if (conn) {
+        this.pendingPeerConns.set(cleanTarget, conn)
+        this.setupPresenceConn(conn, cleanTarget)
+        setTimeout(() => {
+          if (this.pendingPeerConns.get(cleanTarget) === conn && !conn.open) {
+            this.pendingPeerConns.delete(cleanTarget)
+          }
+        }, 7000)
+      }
+    } catch {}
   }
 
   initSocialCloudRelay(myFriendCode) {
@@ -794,42 +870,67 @@ class JamSessionManager {
           }
         } catch {}
       }
-    } catch {}
-  }
-
-  async pollSocialCloudInbox(myFriendCode) {
-    const topic = getSocialCloudTopic(myFriendCode || this.userProfile?.friendCode)
-    if (!topic || typeof fetch === 'undefined') return
-    try {
-      const sinceWindow = this.initialCloudPollDone ? '30s' : '15m'
-      const res = await fetch(`${CLOUD_RELAY_BASE}/${topic}/json?poll=1&since=${sinceWindow}`)
-      if (!res.ok) return
-      this.initialCloudPollDone = true
-      const text = await res.text()
-      const lines = text.split('\n').filter(Boolean)
-      for (const line of lines) {
+      es.onerror = () => {
+        // Try fallback relay if primary encounters connection trouble
         try {
-          const wrapper = JSON.parse(line)
-          if (wrapper?.event === 'message' && wrapper.message) {
-            const payload = JSON.parse(wrapper.message)
-            if (payload && payload._senderInstanceId !== this.instanceId) {
-              this.handleSocialPacket(payload, null)
-            }
+          if (this.socialEventSource === es) {
+            es.close()
+            this.socialEventSource = new EventSource(`${CLOUD_RELAY_FALLBACK}/${topic}/sse?since=5m`)
+            this.socialEventSource.onmessage = es.onmessage
           }
         } catch {}
       }
     } catch {}
   }
 
+  async pollSocialCloudInbox(myFriendCode) {
+    const topic = getSocialCloudTopic(myFriendCode || this.userProfile?.friendCode)
+    if (!topic || typeof fetch === 'undefined') return
+    const sinceWindow = this.initialCloudPollDone ? '30s' : '15m'
+    for (const base of [CLOUD_RELAY_BASE, CLOUD_RELAY_FALLBACK]) {
+      try {
+        const res = await fetchWithTimeout(
+          `${base}/${topic}/json?poll=1&since=${sinceWindow}`,
+          {},
+          3000
+        )
+        if (!res || !res.ok) continue
+        this.initialCloudPollDone = true
+        const text = await res.text()
+        const lines = text.split('\n').filter(Boolean)
+        for (const line of lines) {
+          try {
+            const wrapper = JSON.parse(line)
+            if (wrapper?.event === 'message' && wrapper.message) {
+              const payload = JSON.parse(wrapper.message)
+              if (payload && payload._senderInstanceId !== this.instanceId) {
+                this.handleSocialPacket(payload, null)
+              }
+            }
+          } catch {}
+        }
+        break
+      } catch {}
+    }
+  }
+
   async sendSocialCloudPacket(targetFriendCode, fullPacket) {
     const topic = getSocialCloudTopic(targetFriendCode)
     if (!topic || typeof fetch === 'undefined') return
-    try {
-      await fetch(`${CLOUD_RELAY_BASE}/${topic}`, {
-        method: 'POST',
-        body: JSON.stringify(fullPacket)
-      })
-    } catch {}
+    const body = JSON.stringify(fullPacket)
+    for (const base of [CLOUD_RELAY_BASE, CLOUD_RELAY_FALLBACK]) {
+      try {
+        const res = await fetchWithTimeout(
+          `${base}/${topic}`,
+          {
+            method: 'POST',
+            body
+          },
+          2500
+        )
+        if (res && res.ok) break
+      } catch {}
+    }
   }
 
   async pollBackendSocial() {
@@ -840,17 +941,21 @@ class JamSessionManager {
         ...(this.state.outgoingRequests || []).map((r) => r.friendCode)
       ].filter(Boolean)
 
-      const res = await fetch(`${getApiBase()}/jam/social/poll`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          friendCode: this.userProfile.friendCode,
-          summary: this.getMyPublicSummary(),
-          friendCodes,
-          since: this.lastSocialServerTs
-        })
-      })
-      if (!res.ok) return
+      const res = await fetchWithTimeout(
+        `${getApiBase()}/jam/social/poll`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            friendCode: this.userProfile.friendCode,
+            summary: this.getMyPublicSummary(),
+            friendCodes,
+            since: this.lastSocialServerTs
+          })
+        },
+        2500
+      )
+      if (!res || !res.ok) return
       const data = await res.json()
       if (data?.serverTs) {
         this.lastSocialServerTs = data.serverTs
@@ -875,14 +980,18 @@ class JamSessionManager {
   async sendBackendSocialPacket(targetFriendCode, fullPacket) {
     if (!hasBackend()) return
     try {
-      await fetch(`${getApiBase()}/jam/social/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetFriendCode,
-          packet: fullPacket
-        })
-      })
+      await fetchWithTimeout(
+        `${getApiBase()}/jam/social/send`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetFriendCode,
+            packet: fullPacket
+          })
+        },
+        2500
+      )
     } catch {}
   }
 
@@ -1798,6 +1907,15 @@ class JamSessionManager {
             }
           } catch {}
         }
+        es.onerror = () => {
+          try {
+            if (this.roomEventSource === es) {
+              es.close()
+              this.roomEventSource = new EventSource(`${CLOUD_RELAY_FALLBACK}/${topic}/sse?since=2m`)
+              this.roomEventSource.onmessage = es.onmessage
+            }
+          } catch {}
+        }
       } catch {}
     }
 
@@ -1834,43 +1952,60 @@ class JamSessionManager {
   async pollCloudRoom(roomCode) {
     const topic = getRoomCloudTopic(roomCode)
     if (!topic || typeof fetch === 'undefined') return
-    try {
-      const res = await fetch(`${CLOUD_RELAY_BASE}/${topic}/json?poll=1&since=2m`)
-      if (!res.ok) return
-      const text = await res.text()
-      const lines = text.split('\n').filter(Boolean)
-      for (const line of lines) {
-        try {
-          const wrapper = JSON.parse(line)
-          if (wrapper?.event === 'message' && wrapper.message) {
-            const pkt = JSON.parse(wrapper.message)
-            if (pkt && pkt._senderInstanceId !== this.instanceId) {
-              this.handleIncomingPacket(pkt, null)
+    for (const base of [CLOUD_RELAY_BASE, CLOUD_RELAY_FALLBACK]) {
+      try {
+        const res = await fetchWithTimeout(
+          `${base}/${topic}/json?poll=1&since=2m`,
+          {},
+          3000
+        )
+        if (!res || !res.ok) continue
+        const text = await res.text()
+        const lines = text.split('\n').filter(Boolean)
+        for (const line of lines) {
+          try {
+            const wrapper = JSON.parse(line)
+            if (wrapper?.event === 'message' && wrapper.message) {
+              const pkt = JSON.parse(wrapper.message)
+              if (pkt && pkt._senderInstanceId !== this.instanceId) {
+                this.handleIncomingPacket(pkt, null)
+              }
             }
-          }
-        } catch {}
-      }
-    } catch {}
+          } catch {}
+        }
+        break
+      } catch {}
+    }
   }
 
   async sendCloudRoomPacket(roomCode, payload) {
     const topic = getRoomCloudTopic(roomCode)
     if (!topic || typeof fetch === 'undefined') return
-    try {
-      await fetch(`${CLOUD_RELAY_BASE}/${topic}`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-    } catch {}
+    const body = JSON.stringify(payload)
+    for (const base of [CLOUD_RELAY_BASE, CLOUD_RELAY_FALLBACK]) {
+      try {
+        const res = await fetchWithTimeout(
+          `${base}/${topic}`,
+          {
+            method: 'POST',
+            body
+          },
+          2500
+        )
+        if (res && res.ok) break
+      } catch {}
+    }
   }
 
   async pollBackendRoom(roomCode) {
     if (!hasBackend() || !roomCode) return
     try {
-      const res = await fetch(
-        `${getApiBase()}/jam/room/poll?roomCode=${encodeURIComponent(roomCode)}&since=${this.lastRoomServerTs}`
+      const res = await fetchWithTimeout(
+        `${getApiBase()}/jam/room/poll?roomCode=${encodeURIComponent(roomCode)}&since=${this.lastRoomServerTs}`,
+        {},
+        2500
       )
-      if (!res.ok) return
+      if (!res || !res.ok) return
       const data = await res.json()
       if (data?.serverTs) {
         this.lastRoomServerTs = data.serverTs
@@ -1892,14 +2027,18 @@ class JamSessionManager {
   async sendBackendRoomPacket(roomCode, payload) {
     if (!hasBackend() || !roomCode) return
     try {
-      await fetch(`${getApiBase()}/jam/room/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomCode,
-          packet: payload
-        })
-      })
+      await fetchWithTimeout(
+        `${getApiBase()}/jam/room/send`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomCode,
+            packet: payload
+          })
+        },
+        2500
+      )
     } catch {}
   }
 

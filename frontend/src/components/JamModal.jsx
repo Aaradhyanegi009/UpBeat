@@ -36,6 +36,7 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
   const [tab, setTab] = useState('jam')
   const [joinCode, setJoinCode] = useState(initialJoinCode || '')
   const [friendCode, setFriendCode] = useState(initialFriendCode || '')
+  const [pendingInviteCode, setPendingInviteCode] = useState(initialFriendCode || '')
   const [everyoneControls, setEveryoneControls] = useState(true)
   const [profile, setProfile] = useState(() => loadJamUserProfile(googleUser))
   const [qrFor, setQrFor] = useState('') // '' | 'room' | 'friend'
@@ -54,6 +55,7 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
     if (initialFriendCode) {
       setTab('friends')
       setFriendCode(initialFriendCode)
+      setPendingInviteCode(initialFriendCode)
     } else if (initialSection === 'friends') setTab('friends')
     else if (initialSection === '') setTab('jam')
   }, [initialFriendCode, initialSection, isOpen])
@@ -379,6 +381,51 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
 
           {tab === 'friends' && (
             <div className="flex flex-col gap-5">
+              {/* Incoming Friend Invite Prompt (from QR code scan or deep link) */}
+              {pendingInviteCode &&
+                pendingInviteCode !== myCode &&
+                !friends.some((f) => f.friendCode === pendingInviteCode) && (
+                  <div className="rounded-2xl bg-gradient-to-r from-blue-950/60 via-purple-950/40 to-s2 border border-blue-500/40 p-4 flex flex-col gap-3 shadow-lg animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-lg shrink-0">
+                        <UserPlus className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-t1">Incoming Friend Invite</div>
+                        <div className="text-xs text-t2 truncate">
+                          Connect with <span className="font-mono text-white font-semibold">{pendingInviteCode}</span>?
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const code = pendingInviteCode
+                          setPendingInviteCode('')
+                          const res = jamManager.sendFriendRequest(code)
+                          if (res?.ok) {
+                            onNotify?.(`Connected with ${code}!`, 'success')
+                          }
+                        }}
+                        className="flex-1 h-10 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Check className="w-4 h-4" /> Accept & Connect
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          jamManager.declineFriendRequest(pendingInviteCode)
+                          setPendingInviteCode('')
+                        }}
+                        className="px-4 h-10 rounded-xl bg-s3 hover:bg-s4 text-t2 font-semibold text-sm transition-colors cursor-pointer"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                )}
+
               {/* You */}
               <div className="rounded-2xl bg-s2 p-4">
                 <div className="flex items-center gap-3">

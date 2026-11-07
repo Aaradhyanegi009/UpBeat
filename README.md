@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.4.1)
+# 🎵 UpBeat (v7.4.2)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,11 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ##  Features & Highlights
+
+###  Cross-Device Jam/Friend Connectivity & Native Deep-Link Redirection (v7.4.2)
+- **Ultra-Resilient Cross-Device & Cross-Network Connectivity (`jamEngine.js`)**: Replaced blocked/stalled cloud relays with high-speed primary Cloud Pub/Sub relay (`https://ntfy.envs.net`) and automatic fallback (`https://ntfy.sh`), bounded all network fetches with 2.5–3.0s abort timeouts to prevent HTTP connection pool stalls on restricted cellular/mobile networks (e.g. Android 16), and cleaned up WebRTC ICE STUN servers (Google STUN + Cloudflare STUN) to eliminate candidate gathering timeouts.
+- **Native Android & macOS Deep-Link Redirection & Friend Invite Confirmation (`AndroidManifest.xml`, `MainActivity.java`, `JamModal.jsx`, `App.jsx`)**: Replaced broken external Vercel URLs with native `upbeat://` deep link protocol (`upbeat://addFriend?code=UP-XXXXXX` and `upbeat://jam?code=JAM-YYYYYY`). Scanning QR codes or opening invite links seamlessly opens the UpBeat app and presents an interactive **"Incoming Friend Invite: Accept & Connect / Decline"** card directly in the Friends tab.
+- **Cleaned Non-Functional Voice/Mic Prompts**: Completely removed non-functional mic and voice dictation controls from the studio Create View for a clean, stable UI.
 
 ###  Multi-Node (3+ Peers) Jam Stability, Authoritative Pause Sync & Stable Friends Ordering (v7.4.1)
 - **Strict Hub-and-Spoke (Star Topology) Multi-Node Jam Engine (`jamEngine.js`)**: Eliminates N-squared broadcast echo loops when 3 or more nodes connect to a Jam room. Guests strictly apply canonical state broadcasts originating from the Host (`_fromRole: 'host'`), while the Host routes guest connections in `hostConnections` (`Map<peerKey, DataConnection>`) with automatic stale-socket pruning and monotonic packet sequence numbers (`seq`).
