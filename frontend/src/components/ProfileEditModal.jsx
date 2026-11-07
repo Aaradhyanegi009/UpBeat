@@ -231,12 +231,12 @@ export default function ProfileEditModal({ isOpen, onClose, user, onSave, onNoti
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
       onPaste={handlePaste}
     >
       <div
-        className={`relative w-full max-w-md rounded-3xl bg-[#141417] border p-6 shadow-2xl text-white select-none transition-colors ${
+        className={`relative w-full max-w-md max-h-[calc(100dvh-24px)] overflow-y-auto overflow-x-hidden box-border rounded-3xl bg-[#141417] border p-5 sm:p-6 shadow-2xl text-white select-none transition-colors ${
           isDraggingOver ? 'border-accent bg-[#181B22]' : 'border-white/10'
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -314,18 +314,18 @@ export default function ProfileEditModal({ isOpen, onClose, user, onSave, onNoti
             </div>
 
             {showUrlField && (
-              <div className="w-full flex items-center gap-2 mt-1">
+              <div className="w-full min-w-0 flex items-center gap-2 mt-1">
                 <input
                   type="url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="https://example.com/avatar.jpg"
-                  className="flex-1 h-9 px-3 rounded-xl bg-white/[0.06] border border-white/10 text-xs text-white placeholder:text-white/35 focus:outline-none focus:border-white/30"
+                  className="flex-1 min-w-0 h-9 px-3 rounded-xl bg-white/[0.06] border border-white/10 text-xs text-white placeholder:text-white/35 focus:outline-none focus:border-white/30"
                 />
                 <button
                   type="button"
                   onClick={handleApplyUrl}
-                  className="h-9 px-3 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-bold cursor-pointer"
+                  className="h-9 px-3 shrink-0 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-bold cursor-pointer whitespace-nowrap"
                 >
                   Use URL
                 </button>

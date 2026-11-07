@@ -6,6 +6,7 @@ const LEGACY_PROFILE_KEYS = ['upbeat_jam_profile_v1', 'upbeat_jam_profile', 'upb
 const FRIENDS_LIST_STORAGE_KEY = 'upbeat_friends_list'
 const FRIEND_REQ_IN_STORAGE_KEY = 'upbeat_friend_requests_in'
 const FRIEND_REQ_OUT_STORAGE_KEY = 'upbeat_friend_requests_out'
+const SEEN_PACKETS_STORAGE_KEY = 'upbeat_seen_social_packets_v1'
 
 const JAM_PEER_PREFIX = 'upbeat-jam-v70-'
 const PRESENCE_PEER_PREFIX = 'upbeat-user-'
@@ -367,7 +368,9 @@ class JamSessionManager {
   constructor() {
     // Unique runtime instance ID per tab/window so multiple tabs on the same browser don't collide
     this.instanceId = `inst_${Math.random().toString(36).slice(2, 10)}`
-    this.seenPacketIds = new Set()
+    this.seenPacketIds = new Set(loadJsonArray(SEEN_PACKETS_STORAGE_KEY))
+    this.cloudRetryTick = 0
+    this.initialCloudPollDone = false
 
     this.peer = null
     this.connections = new Map() // peerId -> DataConnection (used by Host)
@@ -448,10 +451,11 @@ class JamSessionManager {
     if (!packetId) return false
     if (this.seenPacketIds.has(packetId)) return true
     this.seenPacketIds.add(packetId)
-    if (this.seenPacketIds.size > 600) {
+    if (this.seenPacketIds.size > 500) {
       const first = this.seenPacketIds.values().next().value
       this.seenPacketIds.delete(first)
     }
+    saveJsonArray(SEEN_PACKETS_STORAGE_KEY, Array.from(this.seenPacketIds))
     return false
   }
 
@@ -596,17 +600,20 @@ class JamSessionManager {
           const data = ev?.data
           if (!data || data._senderInstanceId === this.instanceId) return
 
-          // Instant cross-tab sync of friends, incoming and outgoing requests
+          // Instant cross-tab sync of friends, incoming and outgoing requests for the SAME user profile
           if (data.type === 'LOCAL_SOCIAL_STATE_SYNC') {
-            this.updateState({
-              friends: data.friends || [],
-              incomingRequests: data.incomingRequests || [],
-              outgoingRequests: data.outgoingRequests || []
-            })
+            if (!data.userProfile?.friendCode || data.userProfile.friendCode === this.userProfile?.friendCode) {
+              this.updateState({
+                friends: data.friends || [],
+                incomingRequests: data.incomingRequests || [],
+                outgoingRequests: data.outgoingRequests || []
+              })
+            }
             return
           }
 
-          if (!data.targetFriendCode || data.targetFriendCode === myFriendCode) {
+          const currentCode = this.userProfile?.friendCode || myFriendCode
+          if (!data.targetFriendCode || normalizeFriendCode(data.targetFriendCode) === currentCode) {
             this.handleSocialPacket(data, null)
           }
         }
@@ -635,7 +642,8 @@ class JamSessionManager {
 
       window.addEventListener('focus', () => {
         this.pingAllFriends()
-        this.pollSocialCloudInbox(myFriendCode)
+        this.retryOutgoingRequests()
+        this.pollSocialCloudInbox(this.userProfile?.friendCode)
         this.pollBackendSocial()
       })
     }
@@ -686,7 +694,7 @@ class JamSessionManager {
       this.pingAllFriends()
       this.retryOutgoingRequests()
       this.pruneStaleFriendPresence()
-      this.pollSocialCloudInbox(myFriendCode)
+      this.pollSocialCloudInbox(this.userProfile?.friendCode || myFriendCode)
     }, 2500)
 
     if (this.backendPollTimer) clearInterval(this.backendPollTimer)
@@ -742,7 +750,7 @@ class JamSessionManager {
           this.socialEventSource.close()
         } catch {}
       }
-      const es = new EventSource(`${CLOUD_RELAY_BASE}/${topic}/sse?since=12h`)
+      const es = new EventSource(`${CLOUD_RELAY_BASE}/${topic}/sse?since=10m`)
       this.socialEventSource = es
       es.onmessage = (ev) => {
         try {
@@ -762,8 +770,10 @@ class JamSessionManager {
     const topic = getSocialCloudTopic(myFriendCode || this.userProfile?.friendCode)
     if (!topic || typeof fetch === 'undefined') return
     try {
-      const res = await fetch(`${CLOUD_RELAY_BASE}/${topic}/json?poll=1&since=12h`)
+      const sinceWindow = this.initialCloudPollDone ? '30s' : '15m'
+      const res = await fetch(`${CLOUD_RELAY_BASE}/${topic}/json?poll=1&since=${sinceWindow}`)
       if (!res.ok) return
+      this.initialCloudPollDone = true
       const text = await res.text()
       const lines = text.split('\n').filter(Boolean)
       for (const line of lines) {
@@ -848,12 +858,14 @@ class JamSessionManager {
   setupPresenceConn(conn, knownFriendCode = null) {
     if (!conn) return
     conn.on('open', () => {
+      conn._lastDataAt = Date.now()
       if (knownFriendCode) {
-        this.presenceConns.set(knownFriendCode, conn)
-        this.pendingPeerConns.delete(knownFriendCode)
+        const cleanKnown = normalizeFriendCode(knownFriendCode)
+        this.presenceConns.set(cleanKnown, conn)
+        this.pendingPeerConns.delete(cleanKnown)
         // Flush any queued social packets for this friend
-        const queued = this.pendingPeerPackets.get(knownFriendCode) || []
-        this.pendingPeerPackets.delete(knownFriendCode)
+        const queued = this.pendingPeerPackets.get(cleanKnown) || []
+        this.pendingPeerPackets.delete(cleanKnown)
         for (const pkt of queued) {
           try {
             conn.send(pkt)
@@ -861,8 +873,15 @@ class JamSessionManager {
         }
       }
       try {
+        const isConfirmed =
+          knownFriendCode &&
+          (this.state.friends || []).some(
+            (f) => normalizeFriendCode(f.friendCode) === normalizeFriendCode(knownFriendCode)
+          )
         conn.send({
-          ...this.buildPresencePayload('PRESENCE_PING'),
+          ...this.buildPresencePayload('PRESENCE_PING', {
+            isConfirmedFriend: Boolean(isConfirmed)
+          }),
           _packetId: makePacketId(),
           _senderInstanceId: this.instanceId
         })
@@ -870,15 +889,19 @@ class JamSessionManager {
     })
 
     conn.on('data', (data) => {
+      conn._lastDataAt = Date.now()
       if (data?._fromFriendCode) {
-        this.presenceConns.set(data._fromFriendCode, conn)
+        const cleanFrom = normalizeFriendCode(data._fromFriendCode)
+        if (cleanFrom) {
+          this.presenceConns.set(cleanFrom, conn)
+        }
       }
       this.handleSocialPacket(data, conn)
     })
 
     const cleanup = () => {
       if (knownFriendCode) {
-        this.pendingPeerConns.delete(knownFriendCode)
+        this.pendingPeerConns.delete(normalizeFriendCode(knownFriendCode))
       }
       for (const [code, activeConn] of this.presenceConns.entries()) {
         if (activeConn === conn) {
@@ -894,12 +917,16 @@ class JamSessionManager {
     const snap = this.eventHandlers.getHostPlaybackSnapshot
       ? this.eventHandlers.getHostPlaybackSnapshot()
       : null
+    const confirmedFriendCodes = (this.state?.friends || [])
+      .map((f) => normalizeFriendCode(f.friendCode))
+      .filter(Boolean)
     return {
       id: this.userProfile.id,
       friendCode: this.userProfile.friendCode,
       name: this.userProfile.name,
       avatar: '',
       picture: this.userProfile.picture || '',
+      confirmedFriendCodes,
       currentTrack: snap?.track
         ? {
             video_id: snap.track.video_id,
@@ -922,6 +949,7 @@ class JamSessionManager {
       _fromFriendCode: this.userProfile.friendCode,
       _senderInstanceId: this.instanceId,
       _packetId: makePacketId(),
+      sentAt: Date.now(),
       ...extra
     }
   }
@@ -948,10 +976,11 @@ class JamSessionManager {
     // 2. Local FastAPI Backend Relay
     this.sendBackendSocialPacket(cleanTarget, fullPacket)
 
-    // 3. Cloud Pub/Sub Relay (for friend requests, accepts, jam invites, and initial pings)
+    // 3. Cloud Pub/Sub Relay (for friend requests, accepts, acks, removals, jam invites, and probes)
     const isHighPriority =
       fullPacket.type === 'FRIEND_REQUEST' ||
       fullPacket.type === 'FRIEND_ACCEPTED' ||
+      fullPacket.type === 'FRIEND_SYNC_ACK' ||
       fullPacket.type === 'FRIEND_REMOVED' ||
       fullPacket.type === 'JAM_INVITE' ||
       options?.useCloud === true
@@ -959,14 +988,17 @@ class JamSessionManager {
       this.sendSocialCloudPacket(cleanTarget, fullPacket)
     }
 
-    // 4. PeerJS WebRTC DataChannel (with queue so simultaneous packets never drop)
+    // 4. PeerJS WebRTC DataChannel (with outbound fallback so stale inbound conns never drop FRIEND_ACCEPTED)
     if (cleanTarget === this.userProfile.friendCode) return
 
     const existing = this.presenceConns.get(cleanTarget)
+    const isConnFresh = existing && existing.open && existing._lastDataAt && Date.now() - existing._lastDataAt < 12000
     if (existing && existing.open) {
       try {
         existing.send(fullPacket)
-        return
+        if (!options?.forceOutboundPeer && isConnFresh) {
+          return
+        }
       } catch {}
     }
 
@@ -977,7 +1009,7 @@ class JamSessionManager {
       this.pendingPeerPackets.set(cleanTarget, q)
     }
 
-    if (this.pendingPeerConns.has(cleanTarget)) {
+    if (this.pendingPeerConns.has(cleanTarget) && !options?.forceOutboundPeer) {
       return
     }
 
@@ -1006,9 +1038,11 @@ class JamSessionManager {
     const friends = this.state.friends || []
     for (const f of friends) {
       if (f.friendCode) {
-        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_PING'), {
-          useCloud: false
-        })
+        this.sendSocialPacket(
+          f.friendCode,
+          this.buildPresencePayload('PRESENCE_PING', { isConfirmedFriend: true }),
+          { useCloud: false }
+        )
       }
     }
     this.pollBackendSocial()
@@ -1016,11 +1050,22 @@ class JamSessionManager {
 
   retryOutgoingRequests() {
     const outgoing = this.state.outgoingRequests || []
+    if (!outgoing.length) return
+    this.cloudRetryTick = (this.cloudRetryTick || 0) + 1
+    // Every 2nd cycle (~5s), also use Cloud Relay so cross-network friends reconcile automatically
+    const useCloudNow = this.cloudRetryTick % 2 === 0
     for (const req of outgoing) {
       if (req.friendCode) {
-        this.sendSocialPacket(req.friendCode, this.buildPresencePayload('FRIEND_REQUEST'), {
-          useCloud: false
-        })
+        this.sendSocialPacket(
+          req.friendCode,
+          this.buildPresencePayload('FRIEND_STATUS_PROBE', { isPendingOutgoing: true }),
+          { useCloud: useCloudNow }
+        )
+        this.sendSocialPacket(
+          req.friendCode,
+          this.buildPresencePayload('FRIEND_REQUEST', { isPendingOutgoing: true }),
+          { useCloud: false }
+        )
       }
     }
   }
@@ -1029,9 +1074,11 @@ class JamSessionManager {
     const friends = this.state.friends || []
     for (const f of friends) {
       if (f.friendCode) {
-        this.sendSocialPacket(f.friendCode, this.buildPresencePayload('PRESENCE_STATUS'), {
-          useCloud: true
-        })
+        this.sendSocialPacket(
+          f.friendCode,
+          this.buildPresencePayload('PRESENCE_STATUS', { isConfirmedFriend: true }),
+          { useCloud: true }
+        )
       }
     }
     this.pollBackendSocial()
@@ -1053,15 +1100,32 @@ class JamSessionManager {
     }
   }
 
+  hasSenderConfirmedMe(sender, packetData = null) {
+    if (packetData?.isConfirmedFriend === true) return true
+    const myCode = normalizeFriendCode(this.userProfile?.friendCode)
+    if (!myCode) return false
+    if (Array.isArray(sender?.confirmedFriendCodes)) {
+      return sender.confirmedFriendCodes.some((c) => normalizeFriendCode(c) === myCode)
+    }
+    return false
+  }
+
   handleSocialPacket(data, conn) {
     if (!data || typeof data !== 'object' || !data.from) return
     if (data._senderInstanceId && data._senderInstanceId === this.instanceId) return
 
-    // For idempotent state-changing packets, deduplicate by _packetId
+    const myCode = normalizeFriendCode(this.userProfile?.friendCode)
+    if (data.targetFriendCode && normalizeFriendCode(data.targetFriendCode) !== myCode) {
+      return
+    }
+
+    // For idempotent state-changing packets, deduplicate by _packetId (persisted across reloads)
     if (
       data._packetId &&
       (data.type === 'FRIEND_REQUEST' ||
         data.type === 'FRIEND_ACCEPTED' ||
+        data.type === 'FRIEND_SYNC_ACK' ||
+        data.type === 'FRIEND_REMOVED' ||
         data.type === 'JAM_INVITE')
     ) {
       if (this.markPacketSeen(data._packetId)) return
@@ -1069,50 +1133,130 @@ class JamSessionManager {
 
     const sender = {
       ...data.from,
-      friendCode: normalizeFriendCode(data.from.friendCode),
+      friendCode: normalizeFriendCode(data.from.friendCode || data._fromFriendCode),
       avatar: ''
     }
-    if (!sender.friendCode) return
+    if (!sender.friendCode || sender.friendCode === myCode) return
+
+    const isAlreadyFriend = this.state.friends.some((f) => f.friendCode === sender.friendCode)
+    const isOutgoingPending = this.state.outgoingRequests.some((r) => r.friendCode === sender.friendCode)
+    const senderConfirmedMe = this.hasSenderConfirmedMe(sender, data)
+
+    // Layer 3 Auto-Reconciliation: If we have an outgoing request to sender AND sender already has us in their confirmed friends, promote immediately!
+    if (isOutgoingPending && senderConfirmedMe && data.type !== 'FRIEND_REMOVED') {
+      this.promoteToConfirmedFriend(sender)
+      const ackReply = this.buildPresencePayload('FRIEND_SYNC_ACK', {
+        targetFriendCode: sender.friendCode,
+        isConfirmedFriend: true
+      })
+      if (conn && conn.open) {
+        try { conn.send(ackReply) } catch {}
+      }
+      this.sendSocialPacket(sender.friendCode, ackReply, { useCloud: true })
+      if (this.eventHandlers.onNotify) {
+        this.eventHandlers.onNotify(`${sender.name} accepted your friend request!`, 'success')
+      }
+      return
+    }
 
     switch (data.type) {
+      case 'FRIEND_STATUS_PROBE':
       case 'PRESENCE_PING': {
-        this.updateFriendPresence(sender)
+        this.updateFriendPresence(sender, data)
+
+        // If sender is already a confirmed friend on our side, tell them explicitly so their Outgoing Pending upgrades immediately!
+        if (isAlreadyFriend) {
+          const pongReply = this.buildPresencePayload('PRESENCE_PONG', {
+            targetFriendCode: sender.friendCode,
+            isConfirmedFriend: true
+          })
+          if (conn && conn.open) {
+            try {
+              conn.send(pongReply)
+            } catch {}
+          } else {
+            this.sendSocialPacket(sender.friendCode, pongReply, { useCloud: true })
+          }
+
+          if (data.type === 'FRIEND_STATUS_PROBE' || data.isPendingOutgoing) {
+            const acceptReply = this.buildPresencePayload('FRIEND_ACCEPTED', {
+              targetFriendCode: sender.friendCode,
+              isConfirmedFriend: true
+            })
+            if (conn && conn.open) {
+              try { conn.send(acceptReply) } catch {}
+            }
+            this.sendSocialPacket(sender.friendCode, acceptReply, { useCloud: true })
+          }
+          break
+        }
+
+        // If both users sent requests to each other (mutual pending), auto-promote both sides!
+        if (isOutgoingPending && (data.type === 'FRIEND_STATUS_PROBE' || data.isPendingOutgoing)) {
+          this.promoteToConfirmedFriend(sender)
+          const acceptReply = this.buildPresencePayload('FRIEND_ACCEPTED', {
+            targetFriendCode: sender.friendCode,
+            isConfirmedFriend: true
+          })
+          if (conn && conn.open) {
+            try { conn.send(acceptReply) } catch {}
+          }
+          this.sendSocialPacket(sender.friendCode, acceptReply, { useCloud: true })
+          if (this.eventHandlers.onNotify) {
+            this.eventHandlers.onNotify(`You and ${sender.name} are now friends!`, 'success')
+          }
+          break
+        }
+
         const reply = this.buildPresencePayload('PRESENCE_PONG', {
-          targetFriendCode: sender.friendCode
+          targetFriendCode: sender.friendCode,
+          isConfirmedFriend: false
         })
         if (conn && conn.open) {
           try {
             conn.send(reply)
           } catch {}
         } else {
-          this.sendSocialPacket(sender.friendCode, reply, { useCloud: true })
+          this.sendSocialPacket(sender.friendCode, reply, { useCloud: false })
         }
         break
       }
 
       case 'PRESENCE_PONG':
       case 'PRESENCE_STATUS': {
-        this.updateFriendPresence(sender)
+        this.updateFriendPresence(sender, data)
         break
       }
 
       case 'FRIEND_REQUEST': {
-        const alreadyFriend = this.state.friends.some((f) => f.friendCode === sender.friendCode)
-        if (alreadyFriend) {
-          this.updateFriendPresence(sender)
-          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'), {
-            useCloud: true
+        if (isAlreadyFriend) {
+          this.updateFriendPresence(sender, data)
+          const acceptReply = this.buildPresencePayload('FRIEND_ACCEPTED', {
+            targetFriendCode: sender.friendCode,
+            isConfirmedFriend: true
+          })
+          if (conn && conn.open) {
+            try { conn.send(acceptReply) } catch {}
+          }
+          this.sendSocialPacket(sender.friendCode, acceptReply, {
+            useCloud: true,
+            forceOutboundPeer: true
           })
           return
         }
 
-        const isOutgoingMatch = this.state.outgoingRequests.some(
-          (r) => r.friendCode === sender.friendCode
-        )
-        if (isOutgoingMatch) {
+        if (isOutgoingPending) {
           this.promoteToConfirmedFriend(sender)
-          this.sendSocialPacket(sender.friendCode, this.buildPresencePayload('FRIEND_ACCEPTED'), {
-            useCloud: true
+          const acceptReply = this.buildPresencePayload('FRIEND_ACCEPTED', {
+            targetFriendCode: sender.friendCode,
+            isConfirmedFriend: true
+          })
+          if (conn && conn.open) {
+            try { conn.send(acceptReply) } catch {}
+          }
+          this.sendSocialPacket(sender.friendCode, acceptReply, {
+            useCloud: true,
+            forceOutboundPeer: true
           })
           if (this.eventHandlers.onNotify) {
             this.eventHandlers.onNotify(`You and ${sender.name} are now friends!`, 'success')
@@ -1140,6 +1284,7 @@ class JamSessionManager {
           incomingRequests: nextIn,
           latestFriendRequestToast: reqEntry
         })
+        this.broadcastLocalSocialState()
         if (!existsIn && this.eventHandlers.onNotify) {
           this.eventHandlers.onNotify(`${sender.name} sent you a friend request`, 'info')
         }
@@ -1149,14 +1294,52 @@ class JamSessionManager {
       case 'FRIEND_ACCEPTED': {
         const wasAlreadyFriend = this.state.friends.some((f) => f.friendCode === sender.friendCode)
         this.promoteToConfirmedFriend(sender)
+        // Layer 2 Bidirectional Handshake: Send FRIEND_SYNC_ACK back to the accepter so both sides lock in online presence & latest profile immediately
+        const ackReply = this.buildPresencePayload('FRIEND_SYNC_ACK', {
+          targetFriendCode: sender.friendCode,
+          isConfirmedFriend: true
+        })
+        if (conn && conn.open) {
+          try { conn.send(ackReply) } catch {}
+        }
+        this.sendSocialPacket(sender.friendCode, ackReply, {
+          useCloud: true,
+          forceOutboundPeer: true
+        })
         if (!wasAlreadyFriend && this.eventHandlers.onNotify) {
           this.eventHandlers.onNotify(`${sender.name} accepted your friend request!`, 'success')
         }
         break
       }
 
+      case 'FRIEND_SYNC_ACK': {
+        const wasAlreadyFriend = this.state.friends.some((f) => f.friendCode === sender.friendCode)
+        const wasPending =
+          this.state.outgoingRequests.some((r) => r.friendCode === sender.friendCode) ||
+          this.state.incomingRequests.some((r) => r.friendCode === sender.friendCode)
+        if (wasAlreadyFriend || wasPending) {
+          this.promoteToConfirmedFriend(sender)
+          if (!wasAlreadyFriend && this.eventHandlers.onNotify) {
+            this.eventHandlers.onNotify(`${sender.name} accepted your friend request!`, 'success')
+          }
+        }
+        break
+      }
+
       case 'FRIEND_REMOVED': {
         const cleanSender = sender.friendCode
+        const packetTs = Number(data.sentAt || data.from?.timestamp || 0)
+        const existingFriend = (this.state.friends || []).find((f) => f.friendCode === cleanSender)
+        const existingOut = (this.state.outgoingRequests || []).find((r) => r.friendCode === cleanSender)
+        const newestLocalTs = Math.max(
+          Number(existingFriend?.acceptedAt || 0),
+          Number(existingOut?.sentAt || 0)
+        )
+        // Ignore stale historical FRIEND_REMOVED packets that predate our latest friend action
+        if (packetTs > 0 && newestLocalTs > 0 && packetTs + 2000 < newestLocalTs) {
+          return
+        }
+
         const activeConn = this.presenceConns.get(cleanSender)
         if (activeConn) {
           try { activeConn.close() } catch {}
@@ -1211,11 +1394,21 @@ class JamSessionManager {
     }
   }
 
-  updateFriendPresence(sender) {
+  updateFriendPresence(sender, packetData = null) {
     if (!sender?.friendCode) return
-    // Update outgoing request with real name/online status if pending
-    const outIdx = this.state.outgoingRequests.findIndex((r) => r.friendCode === sender.friendCode)
+    const cleanCode = normalizeFriendCode(sender.friendCode)
+    if (!cleanCode) return
+
+    // If sender is in outgoingRequests AND their summary confirms they already added us, auto-promote to confirmed friend!
+    const outIdx = this.state.outgoingRequests.findIndex((r) => r.friendCode === cleanCode)
     if (outIdx !== -1) {
+      if (this.hasSenderConfirmedMe(sender, packetData)) {
+        this.promoteToConfirmedFriend(sender)
+        if (this.eventHandlers.onNotify) {
+          this.eventHandlers.onNotify(`${sender.name || cleanCode} accepted your friend request!`, 'success')
+        }
+        return
+      }
       const nextOut = [...this.state.outgoingRequests]
       nextOut[outIdx] = {
         ...nextOut[outIdx],
@@ -1227,7 +1420,7 @@ class JamSessionManager {
       this.updateState({ outgoingRequests: nextOut })
     }
 
-    const idx = this.state.friends.findIndex((f) => f.friendCode === sender.friendCode)
+    const idx = this.state.friends.findIndex((f) => f.friendCode === cleanCode)
     if (idx === -1) return
     const updatedFriend = {
       ...this.state.friends[idx],
@@ -1255,20 +1448,21 @@ class JamSessionManager {
     saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
     saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
 
-    const exists = this.state.friends.some((f) => f.friendCode === cleanCode)
+    const existing = this.state.friends.find((f) => f.friendCode === cleanCode)
     const friendEntry = {
       friendCode: cleanCode,
-      name: sender.name || `Friend ${cleanCode.slice(-4)}`,
+      name: sender.name || existing?.name || `Friend ${cleanCode.slice(-4)}`,
       avatar: '',
-      picture: sender.picture || '',
+      picture: sender.picture || existing?.picture || '',
       online: true,
       lastSeen: Date.now(),
-      currentTrack: sender.currentTrack || null,
-      isPlaying: Boolean(sender.isPlaying),
-      activeJamCode: sender.activeJamCode || ''
+      acceptedAt: existing?.acceptedAt || Date.now(),
+      currentTrack: sender.currentTrack ?? existing?.currentTrack ?? null,
+      isPlaying: sender.isPlaying !== undefined ? Boolean(sender.isPlaying) : Boolean(existing?.isPlaying),
+      activeJamCode: sender.activeJamCode ?? existing?.activeJamCode ?? ''
     }
 
-    const nextFriends = exists
+    const nextFriends = existing
       ? this.state.friends.map((f) => (f.friendCode === cleanCode ? { ...f, ...friendEntry } : f))
       : [friendEntry, ...this.state.friends]
 
@@ -1305,9 +1499,11 @@ class JamSessionManager {
     }
 
     if (this.state.friends.some((f) => f.friendCode === targetCode)) {
-      this.sendSocialPacket(targetCode, this.buildPresencePayload('PRESENCE_PING'), {
-        useCloud: true
-      })
+      this.sendSocialPacket(
+        targetCode,
+        this.buildPresencePayload('PRESENCE_PING', { isConfirmedFriend: true }),
+        { useCloud: true }
+      )
       if (this.eventHandlers.onNotify) {
         this.eventHandlers.onNotify('Already in your Friends list!', 'info')
       }
@@ -1337,12 +1533,16 @@ class JamSessionManager {
     this.updateState({ outgoingRequests: nextOut })
     this.broadcastLocalSocialState()
 
-    this.sendSocialPacket(targetCode, this.buildPresencePayload('FRIEND_REQUEST'), {
-      useCloud: true
-    })
-    this.sendSocialPacket(targetCode, this.buildPresencePayload('PRESENCE_PING'), {
-      useCloud: true
-    })
+    this.sendSocialPacket(
+      targetCode,
+      this.buildPresencePayload('FRIEND_REQUEST', { isPendingOutgoing: true }),
+      { useCloud: true, forceOutboundPeer: true }
+    )
+    this.sendSocialPacket(
+      targetCode,
+      this.buildPresencePayload('FRIEND_STATUS_PROBE', { isPendingOutgoing: true }),
+      { useCloud: true }
+    )
     this.triggerRapidSocialSync()
 
     if (this.eventHandlers.onNotify) {
@@ -1353,18 +1553,49 @@ class JamSessionManager {
 
   acceptFriendRequest(friendCode) {
     const cleanCode = normalizeFriendCode(friendCode)
+    if (!cleanCode) return
     const req = this.state.incomingRequests.find((r) => r.friendCode === cleanCode) || {
       friendCode: cleanCode,
       name: `Friend ${cleanCode.slice(-4)}`,
       avatar: ''
     }
+    // 1. Promote locally FIRST so getMyPublicSummary().confirmedFriendCodes immediately includes cleanCode
     this.promoteToConfirmedFriend(req)
-    this.sendSocialPacket(cleanCode, this.buildPresencePayload('FRIEND_ACCEPTED'), {
-      useCloud: true
+
+    // 2. Layer 1 Multi-Path Dispatch: Send FRIEND_ACCEPTED over existing conn, fresh outbound PeerJS conn, Backend, Cloud, and BroadcastChannel
+    const acceptPacket = this.buildPresencePayload('FRIEND_ACCEPTED', {
+      targetFriendCode: cleanCode,
+      isConfirmedFriend: true
     })
-    this.sendSocialPacket(cleanCode, this.buildPresencePayload('PRESENCE_PING'), {
-      useCloud: true
+    this.sendSocialPacket(cleanCode, acceptPacket, {
+      useCloud: true,
+      forceOutboundPeer: true
     })
+    this.sendSocialPacket(
+      cleanCode,
+      this.buildPresencePayload('PRESENCE_PING', {
+        targetFriendCode: cleanCode,
+        isConfirmedFriend: true
+      }),
+      { useCloud: true }
+    )
+
+    // 3. Follow-up confirmation waves so if Sender was briefly switching apps/tabs, they still receive instant promotion
+    ;[350, 1200, 2800].forEach((delayMs) => {
+      setTimeout(() => {
+        if ((this.state.friends || []).some((f) => f.friendCode === cleanCode)) {
+          this.sendSocialPacket(
+            cleanCode,
+            this.buildPresencePayload('FRIEND_SYNC_ACK', {
+              targetFriendCode: cleanCode,
+              isConfirmedFriend: true
+            }),
+            { useCloud: delayMs === 1200 }
+          )
+        }
+      }, delayMs)
+    })
+
     this.triggerRapidSocialSync()
     if (this.eventHandlers.onNotify) {
       this.eventHandlers.onNotify(`Added ${req.name} to Friends`, 'success')

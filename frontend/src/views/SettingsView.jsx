@@ -67,43 +67,58 @@ export default function SettingsView({
   }
 
   return (
-    <div className="pb-12 w-full">
+    <div className="pb-12 w-full max-w-full overflow-x-hidden box-border">
       {!isDesktop && <PageHeader title="Settings" onBack={onBack} />}
-      <div className="px-5 lg:px-8 max-w-2xl">
+      <div className="px-4 sm:px-5 lg:px-8 max-w-2xl w-full box-border overflow-x-hidden">
         {isDesktop && <h1 className="text-[34px] font-extrabold tracking-[-0.025em] mt-2">Settings</h1>}
         <Section title="Account">
-          <Row>
-            <button
-              type="button"
-              onClick={onOpenProfileEdit}
-              title="Click to edit profile picture or name"
-              className="relative group cursor-pointer rounded-full shrink-0"
-            >
-              <Avatar name={googleUser?.name || 'You'} picture={googleUser?.picture} size={48} />
-              <span className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold text-white transition-opacity">
-                Edit
-              </span>
-            </button>
-            <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-bold truncate">{googleUser?.name || 'UpBeat Listener'}</div>
-              <div className="text-[13px] text-t2 truncate">{googleUser?.email || 'Local Studio Profile'}</div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 py-3.5 w-full min-w-0 box-border">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={onOpenProfileEdit}
+                title="Click to edit profile picture or name"
+                className="relative group cursor-pointer rounded-full shrink-0"
+              >
+                <Avatar name={googleUser?.name || 'You'} picture={googleUser?.picture} size={48} />
+                <span className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold text-white transition-opacity">
+                  Edit
+                </span>
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-bold truncate">{googleUser?.name || 'UpBeat Listener'}</div>
+                <div className="text-[13px] text-t2 truncate">{googleUser?.email || 'Local Studio Profile'}</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Chip variant="ghost" onClick={onOpenProfileEdit}>
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto box-border">
+              <Chip
+                variant="ghost"
+                onClick={onOpenProfileEdit}
+                className="w-full sm:w-auto justify-center h-10 sm:h-9 px-4 box-border"
+              >
                 Edit profile
               </Chip>
               {googleUser?.accessToken ? (
-                <Chip variant="ghost" onClick={onLogout}>
+                <Chip
+                  variant="ghost"
+                  onClick={onLogout}
+                  className="w-full sm:w-auto justify-center h-10 sm:h-9 px-4 box-border"
+                >
                   Disconnect
                 </Chip>
               ) : (
-                <Chip onClick={onOpenGoogle}>Connect Google</Chip>
+                <Chip
+                  onClick={onOpenGoogle}
+                  className="w-full sm:w-auto justify-center h-10 sm:h-9 px-4 box-border"
+                >
+                  Connect Google
+                </Chip>
               )}
             </div>
-          </Row>
+          </div>
           {onRedoSetup && (
             <Row className="border-t border-white/[0.08]">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="text-[15px] font-bold">Your music picks</div>
                 <div className="text-[13px] text-t2">Choose genres and artists again to retune Home.</div>
               </div>
@@ -138,9 +153,9 @@ export default function SettingsView({
         </Section>
 
         <Section title="AI mixes" id="settings-ai">
-          <div className="py-3.5">
+          <div className="py-3.5 w-full min-w-0 box-border">
             <label htmlFor="gemini-key" className="text-[15px] font-bold flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-t1" />
+              <KeyRound className="w-4 h-4 text-t1 shrink-0" />
               Gemini API key
             </label>
             <p className="text-[13px] text-t2 mt-1 leading-relaxed">
@@ -150,8 +165,8 @@ export default function SettingsView({
               </a>
               . It stays on this device.
             </p>
-            <div className="flex gap-2 mt-3">
-              <div className="flex-1 h-11 rounded-xl bg-s2 flex items-center pl-3.5 pr-1 focus-within:ring-1 focus-within:ring-white/20">
+            <div className="flex flex-col sm:flex-row gap-2.5 mt-3 w-full min-w-0 box-border">
+              <div className="flex-1 min-w-0 w-full h-11 rounded-xl bg-s2 flex items-center pl-3.5 pr-1 box-border focus-within:ring-1 focus-within:ring-white/20">
                 <input
                   id="gemini-key"
                   type={showKey ? 'text' : 'password'}
@@ -160,13 +175,13 @@ export default function SettingsView({
                   placeholder="AIza…"
                   autoComplete="off"
                   spellCheck={false}
-                  className="flex-1 min-w-0 bg-transparent text-[15px] font-medium focus:outline-none placeholder:text-t3"
+                  className="flex-1 min-w-0 w-full bg-transparent text-[15px] font-medium focus:outline-none placeholder:text-t3"
                 />
                 <button
                   type="button"
                   aria-label={showKey ? 'Hide key' : 'Show key'}
                   onClick={() => setShowKey((s) => !s)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-t2 hover:text-t1 cursor-pointer"
+                  className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-t2 hover:text-t1 cursor-pointer"
                 >
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -215,14 +230,14 @@ export default function SettingsView({
 
         <Section title="Downloads">
           <Row>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="text-[15px] font-bold">Stored on this device</div>
               <div className="text-[13px] text-t2">
                 {offlineStats?.count || 0} songs · {offlineStats?.formattedSize || '0 B'}
               </div>
             </div>
             {confirmClear ? (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 shrink-0">
                 <Chip variant="ghost" onClick={() => setConfirmClear(false)}>
                   Cancel
                 </Chip>
@@ -245,12 +260,12 @@ export default function SettingsView({
         </Section>
 
         <Section title="Mac companion">
-          <div className="py-3.5">
+          <div className="py-3.5 w-full min-w-0 box-border">
             <label htmlFor="server-url" className="text-[15px] font-bold">
               Companion address
             </label>
             <p className="text-[13px] text-t2 mt-1">Optional. Lets this device use UpBeat running on your Mac (same Wi-Fi).</p>
-            <div className="flex gap-2 mt-3">
+            <div className="flex flex-col sm:flex-row gap-2.5 mt-3 w-full min-w-0 box-border">
               <input
                 id="server-url"
                 type="text"
@@ -259,7 +274,7 @@ export default function SettingsView({
                 placeholder="http://192.168.1.4:8000"
                 autoComplete="off"
                 spellCheck={false}
-                className="flex-1 min-w-0 h-11 rounded-xl bg-s2 px-3.5 text-[15px] font-medium focus:outline-none focus:ring-1 focus:ring-white/20 placeholder:text-t3"
+                className="flex-1 min-w-0 w-full h-11 rounded-xl bg-s2 px-3.5 text-[15px] font-medium box-border focus:outline-none focus:ring-1 focus:ring-white/20 placeholder:text-t3"
               />
               <SaveButton
                 saved={savedField === 'server'}
@@ -272,7 +287,7 @@ export default function SettingsView({
           </div>
           {setPlaybackMode && (
             <Row className="border-t border-white/[0.08]">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <div className="text-[15px] font-bold">Play through Safari on the Mac</div>
                 <div className="text-[13px] text-t2">Sends songs to YouTube Music in Safari instead of playing here.</div>
               </div>
@@ -283,7 +298,7 @@ export default function SettingsView({
 
         <Section title="About">
           <Row>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="text-[15px] font-bold">UpBeat {version}</div>
               {otaMsg && <div className="text-[13px] text-t2 mt-0.5">{otaMsg}</div>}
             </div>
@@ -309,15 +324,15 @@ export default function SettingsView({
 
 function Section({ title, children, id }) {
   return (
-    <section id={id} className="mt-7 scroll-mt-16">
+    <section id={id} className="mt-7 scroll-mt-16 w-full min-w-0 box-border">
       <h2 className="text-[13px] font-bold uppercase tracking-[0.08em] text-t2 mb-2 px-1">{title}</h2>
-      <div className="rounded-[20px] bg-s1 px-4">{children}</div>
+      <div className="rounded-[20px] bg-s1 px-4 w-full min-w-0 box-border overflow-hidden">{children}</div>
     </section>
   )
 }
 
 function Row({ children, className = '' }) {
-  return <div className={`flex items-center gap-3 py-3.5 ${className}`}>{children}</div>
+  return <div className={`flex flex-wrap items-center justify-between gap-3 py-3.5 w-full min-w-0 box-border ${className}`}>{children}</div>
 }
 
 function SaveButton({ onClick, saved }) {
@@ -325,7 +340,7 @@ function SaveButton({ onClick, saved }) {
     <button
       type="button"
       onClick={onClick}
-      className="h-11 px-4 rounded-xl bg-t1 text-[#0A0A0B] text-sm font-bold inline-flex items-center gap-1.5 cursor-pointer hover:bg-white/90 shrink-0"
+      className="w-full sm:w-auto h-11 px-4 rounded-xl bg-t1 text-[#0A0A0B] text-sm font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer hover:bg-white/90 shrink-0 whitespace-nowrap box-border"
     >
       {saved && <Check className="w-4 h-4" strokeWidth={3} />}
       {saved ? 'Saved' : 'Save'}

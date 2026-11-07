@@ -56,6 +56,9 @@ const IOS_PLAYER_CLIENT = {
 
 const streamCache = new Map()
 const CACHE_TTL_MS = 45 * 60 * 1000
+const socialMailbox = new Map()
+const socialPresence = new Map()
+const jamRooms = new Map()
 
 async function resolveStreamUrl(videoId) {
   if (!videoId || videoId.length !== 11) return null
@@ -351,6 +354,111 @@ function startServer(options = {}) {
         })
         return
       }
+    }
+
+    // 6b. /api/jam/social/send & /api/jam/social/poll & /api/jam/room/send & /api/jam/room/poll
+    if (pathname === '/api/jam/social/send' && req.method === 'POST') {
+      let b = ''
+      req.on('data', (c) => { b += c })
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(b || '{}')
+          const nowMs = Date.now()
+          const target = String(payload.targetFriendCode || '').trim().toUpperCase()
+          if (target) {
+            const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
+            if (pkt.from && pkt.from.friendCode) {
+              const sCode = String(pkt.from.friendCode).trim().toUpperCase()
+              socialPresence.set(sCode, { ...pkt.from, lastSeen: nowMs })
+            }
+            const box = socialMailbox.get(target) || []
+            const cutoff = nowMs - 12 * 3600 * 1000
+            const filtered = box.filter((m) => (m._serverTs || 0) > cutoff)
+            if (!pkt._packetId || !filtered.some((m) => m._packetId === pkt._packetId)) {
+              filtered.push(pkt)
+              if (filtered.length > 150) filtered.splice(0, filtered.length - 150)
+            }
+            socialMailbox.set(target, filtered)
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, serverTs: nowMs }))
+        } catch (e) {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false }))
+        }
+      })
+      return
+    }
+
+    if (pathname === '/api/jam/social/poll' && req.method === 'POST') {
+      let b = ''
+      req.on('data', (c) => { b += c })
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(b || '{}')
+          const nowMs = Date.now()
+          const myCode = String(payload.friendCode || '').trim().toUpperCase()
+          if (myCode && payload.summary && typeof payload.summary === 'object') {
+            socialPresence.set(myCode, { ...payload.summary, friendCode: myCode, lastSeen: nowMs })
+          }
+          const sinceTs = Number(payload.since || 0)
+          const box = socialMailbox.get(myCode) || []
+          const packets = box.filter((m) => (m._serverTs || 0) > sinceTs)
+          const presenceList = []
+          for (const fc of payload.friendCodes || []) {
+            const cleanFc = String(fc || '').trim().toUpperCase()
+            const pres = socialPresence.get(cleanFc)
+            if (pres && nowMs - (pres.lastSeen || 0) < 45000) {
+              presenceList.push({ ...pres, online: true })
+            }
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, serverTs: nowMs, packets, presence: presenceList }))
+        } catch (e) {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, packets: [], presence: [] }))
+        }
+      })
+      return
+    }
+
+    if (pathname === '/api/jam/room/send' && req.method === 'POST') {
+      let b = ''
+      req.on('data', (c) => { b += c })
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(b || '{}')
+          const nowMs = Date.now()
+          const room = String(payload.roomCode || '').trim().toUpperCase()
+          if (room) {
+            const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
+            const events = jamRooms.get(room) || []
+            const cutoff = nowMs - 2 * 3600 * 1000
+            const filtered = events.filter((e) => (e._serverTs || 0) > cutoff)
+            if (!pkt._packetId || !filtered.some((e) => e._packetId === pkt._packetId)) {
+              filtered.push(pkt)
+              if (filtered.length > 200) filtered.splice(0, filtered.length - 200)
+            }
+            jamRooms.set(room, filtered)
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, serverTs: nowMs }))
+        } catch {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false }))
+        }
+      })
+      return
+    }
+
+    if (pathname === '/api/jam/room/poll' && req.method === 'GET') {
+      const nowMs = Date.now()
+      const room = String(parsedUrl.searchParams.get('roomCode') || '').trim().toUpperCase()
+      const sinceTs = Number(parsedUrl.searchParams.get('since') || 0)
+      const events = (jamRooms.get(room) || []).filter((e) => (e._serverTs || 0) > sinceTs)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, serverTs: nowMs, events }))
+      return
     }
 
     // 7. Static File Serving from staticDir (frontend/dist)

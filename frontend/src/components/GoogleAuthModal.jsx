@@ -288,24 +288,24 @@ export default function GoogleAuthModal({
 
   const displayName = googleUser?.name || (googleUser?.email ? googleUser.email.split('@')[0] : 'You')
   const inputCls =
-    'w-full h-12 rounded-xl bg-s2 px-4 text-[15px] font-medium placeholder:text-t3 focus:outline-none focus:ring-1 focus:ring-white/25'
+    'w-full min-w-0 h-12 rounded-xl bg-s2 px-4 text-[15px] font-medium box-border placeholder:text-t3 focus:outline-none focus:ring-1 focus:ring-white/25'
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center select-none" role="dialog" aria-modal="true" aria-labelledby="google-title">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 select-none" role="dialog" aria-modal="true" aria-labelledby="google-title">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/60 cursor-default" onClick={onClose} />
-      <div className="relative w-full sm:w-[460px] max-h-[90dvh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-s1 ring-1 ring-white/10 shadow-2xl text-t1 pb-safe overflow-hidden">
+      <div className="relative w-full max-w-full sm:w-[460px] max-h-[90dvh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-s1 ring-1 ring-white/10 shadow-2xl text-t1 pb-safe overflow-x-hidden overflow-y-hidden box-border">
         <div className="sm:hidden w-10 h-1.5 rounded-full bg-white/25 mx-auto mt-2.5 shrink-0" />
-        <div className="flex items-center justify-between px-5 pt-3 sm:pt-5 shrink-0">
-          <h2 id="google-title" className="text-xl font-extrabold tracking-[-0.015em] flex items-center gap-2.5">
-            <GoogleIcon className="w-5 h-5" />
-            {googleUser ? 'Your account' : 'Bring your music in'}
+        <div className="flex items-center justify-between px-4 sm:px-5 pt-3 sm:pt-5 shrink-0">
+          <h2 id="google-title" className="text-xl font-extrabold tracking-[-0.015em] flex items-center gap-2.5 min-w-0 truncate">
+            <GoogleIcon className="w-5 h-5 shrink-0" />
+            <span className="truncate">{googleUser ? 'Your account' : 'Bring your music in'}</span>
           </h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 rounded-full flex items-center justify-center text-t2 hover:text-t1 hover:bg-white/[0.06] cursor-pointer">
+          <button type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-t2 hover:text-t1 hover:bg-white/[0.06] cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="px-5 pb-6 pt-3 overflow-y-auto flex flex-col gap-4">
+        <div className="px-4 sm:px-5 pb-6 pt-3 overflow-y-auto overflow-x-hidden flex flex-col gap-4 w-full box-border">
           {errorMsg && (
             <div className="p-3.5 rounded-2xl bg-[#2A1512] text-[#FFB4A6] text-[13px] flex items-start gap-2" role="alert">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -354,13 +354,13 @@ export default function GoogleAuthModal({
               </div>
 
               {showEditPic && (
-                <div className="flex flex-col gap-2.5">
-                  <form onSubmit={handleSaveCustomPic} className="flex gap-2">
+                <div className="flex flex-col gap-2.5 w-full min-w-0">
+                  <form onSubmit={handleSaveCustomPic} className="flex flex-col sm:flex-row gap-2 w-full min-w-0">
                     <label htmlFor="pic-url" className="sr-only">
                       Image link
                     </label>
-                    <input id="pic-url" type="url" value={customPicUrl} onChange={(e) => setCustomPicUrl(e.target.value)} placeholder="Paste an image link" className={inputCls} />
-                    <button type="submit" disabled={!customPicUrl.trim()} className="h-12 px-4 rounded-xl bg-t1 text-[#0A0A0B] font-bold cursor-pointer disabled:opacity-40">
+                    <input id="pic-url" type="url" value={customPicUrl} onChange={(e) => setCustomPicUrl(e.target.value)} placeholder="Paste an image link" className={`${inputCls} flex-1`} />
+                    <button type="submit" disabled={!customPicUrl.trim()} className="w-full sm:w-auto h-12 px-4 rounded-xl bg-t1 text-[#0A0A0B] font-bold cursor-pointer disabled:opacity-40 shrink-0">
                       Use
                     </button>
                   </form>
@@ -480,18 +480,18 @@ export default function GoogleAuthModal({
                     {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleIcon className="w-5 h-5" />}
                     Continue with Google
                   </button>
-                  <details className="text-[13px] text-t2">
+                  <details className="text-[13px] text-t2 w-full min-w-0">
                     <summary className="cursor-pointer font-semibold hover:text-t1">Have an access token instead?</summary>
-                    <div className="flex gap-2 mt-2.5">
+                    <div className="flex flex-col sm:flex-row gap-2 mt-2.5 w-full min-w-0">
                       <label htmlFor="g-token" className="sr-only">
                         Access token
                       </label>
-                      <input id="g-token" type="password" value={customAccessToken} onChange={(e) => setCustomAccessToken(e.target.value)} placeholder="ya29…" className={inputCls} />
+                      <input id="g-token" type="password" value={customAccessToken} onChange={(e) => setCustomAccessToken(e.target.value)} placeholder="ya29…" className={`${inputCls} flex-1`} />
                       <button
                         type="button"
                         onClick={handleDirectAccessTokenLogin}
                         disabled={!customAccessToken.trim() || isLoggingIn}
-                        className="h-12 px-4 rounded-xl bg-s3 text-t1 font-bold cursor-pointer disabled:opacity-40 shrink-0"
+                        className="w-full sm:w-auto h-12 px-4 rounded-xl bg-s3 text-t1 font-bold cursor-pointer disabled:opacity-40 shrink-0"
                       >
                         Sign in
                       </button>

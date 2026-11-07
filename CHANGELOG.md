@@ -4,6 +4,20 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.4.0] - 2026-11-07
+
+### 📱 Android Settings Layout Fix + 🤝 3-Layer Two-Way Friend Acceptance Sync + 🎙️ Voice Dictation & Windows Desktop
+- **Android Settings & Modal Zero-Clipping Fix (`SettingsView.jsx`, `GoogleAuthModal.jsx`, `ProfileEditModal.jsx`, `index.css`)**:
+  - Fixed horizontal overflow in the **Account** section on narrow Android screens (`360px–412px`) by separating the user Avatar/Name row from the action buttons and making `Edit profile` and `Connect Google` full-width (`w-full sm:w-auto justify-center`) on mobile viewports (`< 640px`).
+  - Fixed right-edge clipping of the **Save** button in **Gemini API key** and **Mac companion** rows by applying `min-w-0 w-full box-border` to the input containers and stacking a full-width `Save` button (`w-full sm:w-auto`) cleanly below the input on mobile (`flex-col sm:flex-row`).
+- **3-Layer Two-Way Friend Request & Acceptance Synchronization (`jamEngine.js`, `JamModal.jsx`, `electron/server.cjs`)**:
+  - **Layer 1 (Multi-Path + Outbound PeerJS Dispatch)**: `acceptFriendRequest` promotes the friend locally first (updating `confirmedFriendCodes`), then dispatches `FRIEND_ACCEPTED` over existing WebRTC connections, a fresh outbound PeerJS connection (`forceOutboundPeer: true`), Backend social relay, Cloud Pub/Sub (`ntfy.sh`), and `BroadcastChannel`, followed by multi-wave `FRIEND_SYNC_ACK` confirmations.
+  - **Layer 2 (`FRIEND_ACCEPTED` & `FRIEND_SYNC_ACK` Handshake)**: Receiving `FRIEND_ACCEPTED` removes the user from `outgoingRequests` and `incomingRequests`, upserts into `friends` with `online: true`, and replies with `FRIEND_SYNC_ACK` so both sides show online immediately.
+  - **Layer 3 (Self-Healing Presence & Pending Request Reconciliation)**: Added `confirmedFriendCodes` to `getMyPublicSummary()` and `FRIEND_STATUS_PROBE` to `retryOutgoingRequests()` so if Sender ever missed a live `FRIEND_ACCEPTED` packet, the next presence ping/pong or probe automatically promotes the pending outgoing request to a confirmed friend.
+  - Persisted `seenPacketIds` (`upbeat_seen_social_packets_v1`) across reloads and added `FRIEND_REMOVED` & `FRIEND_SYNC_ACK` deduplication plus timestamp guards so historical cloud relay messages never overwrite newer friend state.
+
+---
+
 ## [v7.3.1] - 2026-11-05
 
 ### ⏱️ 30-Minute Calm Refresh Cycle + Native Swift NSOpenPanel Photo Picker + Restored Mobile Settings

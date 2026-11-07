@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.3.1)
+# 🎵 UpBeat (v7.4.0)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,14 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ##  Features & Highlights
+
+###  Android Settings Layout Fix, 3-Layer Bidirectional Friend Sync & Voice Dictation (v7.4.0)
+- **Android Settings & Modal Zero-Clipping Layout**: Responsive mobile layout (`< 640px`) in `SettingsView`, `GoogleAuthModal`, and `ProfileEditModal` so the **Account (`Edit profile` + `Connect Google`)** buttons and **Gemini API Key / Mac Companion `Save`** buttons never overflow or clip at narrow Android screen edges (`360px–412px`).
+- **3-Layer Two-Way Friend Request & Acceptance Synchronization**:
+  - **Layer 1 (Multi-Path Instant + Fresh Outbound P2P Dispatch)**: Accepting a friend request dispatches `FRIEND_ACCEPTED` simultaneously across active PeerJS connections, fresh outbound PeerJS connections (`forceOutboundPeer`), Local Backend Relay, Cloud Pub/Sub (`ntfy.sh`), and `BroadcastChannel`, plus follow-up confirmation waves.
+  - **Layer 2 (`FRIEND_ACCEPTED` & `FRIEND_SYNC_ACK` Handshake)**: Sender immediately promotes Receiver from `outgoingRequests` to confirmed `friends` (`online: true`) and replies with `FRIEND_SYNC_ACK` so both devices lock in online status and profile details in real time.
+  - **Layer 3 (Self-Healing Presence & Pending Reconciliation)**: Public presence summaries include `confirmedFriendCodes`, and `retryOutgoingRequests` probes pending friends with `FRIEND_STATUS_PROBE` so any missed acceptance self-heals automatically on the next presence tick.
+- **Cross-Platform Voice Dictation & Windows Desktop App**: Native macOS `SFSpeechRecognizer` + Web Speech API + WAV fallback for voice prompts in Create View, plus official Windows Desktop (`UpBeat-Windows-Setup.exe` & `UpBeat-Windows.zip`) builds.
 
 ###  30-Minute Calm Refresh, Native macOS Photo Picker & Mobile Settings (v7.3.1)
 - **30-Minute Calm Refresh & Rotation Cycle**: Replaced fast 18s/75s shifts with a balanced, pleasant 30-minute interval so homepage mixes and artwork feel constantly refreshed and updated without rapid, distracting shifts while browsing.

@@ -60,7 +60,11 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
 
   useEffect(() => {
     setProfile(googleUser ? jamManager.refreshProfile(googleUser) : loadJamUserProfile())
-  }, [googleUser, isOpen])
+    if (isOpen) {
+      jamManager.triggerRapidSocialSync()
+      jamManager.retryOutgoingRequests()
+    }
+  }, [googleUser, isOpen, tab])
 
   useEffect(() => {
     if (!isOpen) return
@@ -445,7 +449,7 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                   spellCheck={false}
                   className="flex-1 min-w-0 h-12 rounded-xl bg-s2 px-4 text-[15px] font-semibold placeholder:text-t3 focus:outline-none focus:ring-1 focus:ring-white/25"
                 />
-                <button type="submit" disabled={!friendCode.trim()} className="h-12 px-4 rounded-xl bg-t1 text-[#0A0A0B] font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-40">
+                <button type="submit" disabled={!friendCode.trim()} className="h-12 px-4 rounded-xl bg-t1 text-[#0A0A0B] font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shrink-0">
                   <UserPlus className="w-4 h-4" />
                   Add
                 </button>
@@ -455,18 +459,20 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                 <section>
                   <h3 className="text-sm font-bold text-t2 mb-1.5">Friend requests</h3>
                   {incoming.map((r) => (
-                    <div key={r.friendCode} className="flex items-center gap-3 h-14">
-                      <Avatar name={r.name} size={38} />
+                    <div key={r.friendCode} className="flex flex-wrap items-center gap-2.5 min-h-[56px] py-1.5">
+                      <Avatar name={r.name} picture={r.picture} size={38} />
                       <div className="flex-1 min-w-0">
                         <div className="text-[15px] font-bold truncate">{r.name || r.friendCode}</div>
                         <div className="text-xs text-t2">{r.friendCode}</div>
                       </div>
-                      <Chip variant="ghost" onClick={() => jamManager.declineFriendRequest(r.friendCode)}>
-                        Decline
-                      </Chip>
-                      <Chip active onClick={() => jamManager.acceptFriendRequest(r.friendCode)}>
-                        Accept
-                      </Chip>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Chip variant="ghost" onClick={() => jamManager.declineFriendRequest(r.friendCode)}>
+                          Decline
+                        </Chip>
+                        <Chip active onClick={() => jamManager.acceptFriendRequest(r.friendCode)}>
+                          Accept
+                        </Chip>
+                      </div>
                     </div>
                   ))}
                 </section>
@@ -476,8 +482,8 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                 <section>
                   <h3 className="text-sm font-bold text-t2 mb-1.5">Sent requests ({outgoing.length})</h3>
                   {outgoing.map((r) => (
-                    <div key={r.friendCode} className="flex items-center gap-3 min-h-[56px] py-1.5">
-                      <Avatar name={r.name || r.friendCode} size={38} live={r.online} />
+                    <div key={r.friendCode} className="flex flex-wrap items-center gap-2.5 min-h-[56px] py-1.5">
+                      <Avatar name={r.name || r.friendCode} picture={r.picture} size={38} live={r.online} />
                       <div className="flex-1 min-w-0">
                         <div className="text-[15px] font-bold truncate tabular-nums">
                           {r.name && r.name !== r.friendCode ? `${r.name} · ${r.friendCode}` : r.friendCode}
@@ -486,18 +492,20 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                           {r.online ? 'Online · Request delivered, awaiting accept' : 'Request sent · Waiting for friend to accept'}
                         </div>
                       </div>
-                      <Chip
-                        variant="ghost"
-                        onClick={() => {
-                          jamManager.sendFriendRequest(r.friendCode)
-                          onNotify?.(`Resent request to ${r.friendCode}`, 'info')
-                        }}
-                      >
-                        Resend
-                      </Chip>
-                      <Chip variant="ghost" onClick={() => jamManager.cancelOutgoingRequest(r.friendCode)}>
-                        Cancel
-                      </Chip>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Chip
+                          variant="ghost"
+                          onClick={() => {
+                            jamManager.sendFriendRequest(r.friendCode)
+                            onNotify?.(`Resent request to ${r.friendCode}`, 'info')
+                          }}
+                        >
+                          Resend
+                        </Chip>
+                        <Chip variant="ghost" onClick={() => jamManager.cancelOutgoingRequest(r.friendCode)}>
+                          Cancel
+                        </Chip>
+                      </div>
                     </div>
                   ))}
                 </section>
