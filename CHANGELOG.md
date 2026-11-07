@@ -4,6 +4,25 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.4.3] - 2026-11-07
+
+### 🛡️ Bulletproof Bidirectional Inter-Device Friend Requests + 📬 Serverless Edge Signaling Mailbox + 🔄 ACK-Verified Handshake
+- **Pillar 1 — STUN + TURN Relay Servers & Persistent Presence Peer (`jamEngine.js`)**:
+  - Configured all `new Peer(...)` instances with `PEER_OPTIONS` combining redundant STUN servers (`stun.l.google.com`, `stun.cloudflare.com`, `global.stun.twilio.com`) and TCP/UDP TURN relays (`turn:eu-0.turn.peerjs.com:3478`, `turn:us-0.turn.peerjs.com:3478`, and `turn:openrelay.metered.ca:80/443/tcp`), `sdpSemantics: 'unified-plan'`, and `pingInterval: 5000`.
+  - Added `ensurePresencePeerAlive()` (running every 5s and on `online`/`visibilitychange`) to keep `presencePeer` (`upbeat-user-UP-XXXXXX`) 100% independent of Jam room peers and automatically reclaim `upbeat-user-UP-XXXXXX` if `unavailable-id` temporarily occurs.
+- **Pillar 2 — ACK-Verified Retry Handshake (`sendWithAck`) & Bidirectional Pipe Reuse (`jamEngine.js`)**:
+  - Assigned unique `msgId`s to outgoing `FRIEND_REQUEST`, `FRIEND_ACCEPTED`, `FRIEND_SYNC_ACK`, `FRIEND_REMOVED`, and `JAM_INVITE` packets with automatic retransmission at `0ms`, `+350ms`, `+900ms`, `+2000ms`, and `+3800ms` until the receiver replies with `{ type: 'PACKET_ACK', msgId, from: receiverSummary }`.
+  - Maintained persistent bidirectional `DataConnection`s in `activeFriendConnections` (`Map<friendCode, DataConnection>`), inferring sender friend codes directly from inbound `conn.peer` (`upbeat-user-UP-XXXXXX`) and immediately flushing queued packets over reverse-path connections (`flushPendingForFriend`).
+  - Added `outgoingRequestCodes` to `getMyPublicSummary()` so reverse-path presence packets automatically materialize incoming friend requests even if one-way P2P initiation is blocked.
+- **Pillar 3 — Serverless Edge Signaling Mailbox (`api/social.js`, `backend/main.py`, `electron/server.cjs`, `jamEngine.js`)**:
+  - Created `api/social.js` (Vercel Edge Function) and matching `/api/social` endpoints in `backend/main.py` and `electron/server.cjs` backed by a 15-minute TTL mailbox (`globalThis.__UPBEAT_SOCIAL_BOX__`).
+  - Added `https://ntfy.hostux.net` as primary Cloud SSE/HTTP relay alongside `https://ntfy.envs.net` and `https://ntfy.sh`, restricted cloud relay publishing to discrete social actions, and throttled HTTP fallback polling to eliminate HTTP 429 rate-limiting.
+  - Polls `/api/social` every 3 seconds while `JamModal` is open (`jamManager.setModalOpen(true)`) and every 9 seconds in the background.
+- **Pillar 4 — Case-Insensitive ID Normalization & Cross-Request Auto-Match (`jamEngine.js`, `JamModal.jsx`)**:
+  - Exported `normalizeFriendId` / `normalizeFriendCode` to normalize raw 6-character codes (`a1b2c3` -> `UP-A1B2C3`), lowercase IDs, and deep links across `JamModal.jsx` and `jamEngine.js`, with automatic mutual promotion when two users send requests to each other simultaneously.
+
+---
+
 ## [v7.4.2] - 2026-11-07
 
 ### 🌐 Cross-Device Friend/Jam Connectivity + 🔗 Native Deep-Link Redirection & Accept/Reject + 🎙️ Removed Mic Options

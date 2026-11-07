@@ -956,7 +956,96 @@ def jam_social_poll_endpoint(req: SocialPollRequest):
     return {
         "ok": True,
         "serverTs": now_ms,
+        "inbox": packets,
         "packets": packets,
+        "friends": presence_list,
+        "presence": presence_list
+    }
+
+
+@app.get("/api/social")
+def edge_social_get_endpoint(id: str = "", friendCode: str = "", friends: str = "", since: int = 0):
+    now_ms = int(time.time() * 1000)
+    my_code = (id or friendCode or "").strip().upper()
+    if my_code and not my_code.startswith("UP-") and len(my_code) == 6:
+        my_code = f"UP-{my_code}"
+
+    if my_code and my_code in _SOCIAL_PRESENCE:
+        _SOCIAL_PRESENCE[my_code]["lastSeen"] = now_ms
+
+    box = _SOCIAL_MAILBOX.get(my_code, [])
+    cutoff = now_ms - (15 * 60 * 1000)
+    box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
+    packets = [m for m in box if m.get("_serverTs", 0) > int(since or 0)]
+
+    friend_codes = [f.strip().upper() for f in (friends or "").split(",") if f.strip()]
+    presence_list = []
+    for fc in friend_codes:
+        clean_fc = f"UP-{fc}" if not fc.startswith("UP-") and len(fc) == 6 else fc
+        pres = _SOCIAL_PRESENCE.get(clean_fc)
+        if pres and (now_ms - pres.get("lastSeen", 0) < 45000):
+            presence_list.append({**pres, "friendCode": clean_fc, "online": True})
+
+    return {
+        "ok": True,
+        "serverTs": now_ms,
+        "inbox": packets,
+        "packets": packets,
+        "friends": presence_list,
+        "presence": presence_list
+    }
+
+
+@app.post("/api/social")
+def edge_social_post_endpoint(body: Dict[str, Any]):
+    now_ms = int(time.time() * 1000)
+    action = body.get("action") or ("push" if (body.get("toId") or body.get("targetFriendCode")) else "poll")
+
+    if action == "push":
+        target = str(body.get("toId") or body.get("targetFriendCode") or "").strip().upper()
+        if target and not target.startswith("UP-") and len(target) == 6:
+            target = f"UP-{target}"
+        pkt = dict(body.get("packet") or {})
+        pkt["_serverTs"] = now_ms
+        sender = pkt.get("from") or body.get("summary") or body.get("profile")
+        if isinstance(sender, dict) and sender.get("friendCode"):
+            s_code = str(sender["friendCode"]).strip().upper()
+            _SOCIAL_PRESENCE[s_code] = {**sender, "friendCode": s_code, "lastSeen": now_ms}
+
+        if target and pkt:
+            box = _SOCIAL_MAILBOX.setdefault(target, [])
+            cutoff = now_ms - (15 * 60 * 1000)
+            box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
+            dedup_id = pkt.get("msgId") or pkt.get("_packetId")
+            if not dedup_id or not any((m.get("msgId") or m.get("_packetId")) == dedup_id for m in box):
+                box.append(pkt)
+                if len(box) > 150:
+                    del box[:-150]
+        return {"ok": True, "serverTs": now_ms}
+
+    my_code = str(body.get("id") or body.get("friendCode") or "").strip().upper()
+    summary = body.get("summary") or body.get("profile")
+    if my_code and isinstance(summary, dict):
+        _SOCIAL_PRESENCE[my_code] = {**summary, "friendCode": my_code, "lastSeen": now_ms}
+
+    box = _SOCIAL_MAILBOX.get(my_code, [])
+    since_ts = int(body.get("since") or 0)
+    packets = [m for m in box if m.get("_serverTs", 0) > since_ts]
+
+    raw_friends = body.get("friends") or body.get("friendCodes") or []
+    presence_list = []
+    for fc in raw_friends:
+        clean_fc = str(fc).strip().upper()
+        pres = _SOCIAL_PRESENCE.get(clean_fc)
+        if pres and (now_ms - pres.get("lastSeen", 0) < 45000):
+            presence_list.append({**pres, "friendCode": clean_fc, "online": True})
+
+    return {
+        "ok": True,
+        "serverTs": now_ms,
+        "inbox": packets,
+        "packets": packets,
+        "friends": presence_list,
         "presence": presence_list
     }
 

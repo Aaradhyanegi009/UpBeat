@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { X, Copy, Check, Share2, QrCode, UserPlus, Trash2, LogOut, Radio, Users, Crown, Play } from 'lucide-react'
-import { jamManager, loadJamUserProfile, normalizeFriendCode, normalizeRoomCode, buildJamInviteUrl, buildFriendInviteUrl, sortFriendsDeterministically } from '../jamEngine'
+import { jamManager, loadJamUserProfile, normalizeFriendCode, normalizeFriendId, normalizeRoomCode, buildJamInviteUrl, buildFriendInviteUrl, sortFriendsDeterministically } from '../jamEngine'
 import { Avatar, Art, Chip, IconButton, ActionMenu, Spinner } from '../ui/primitives'
 
 function lastSeen(ts) {
@@ -53,18 +53,23 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
 
   useEffect(() => {
     if (initialFriendCode) {
+      const cleanFriend = normalizeFriendId(initialFriendCode) || initialFriendCode
       setTab('friends')
-      setFriendCode(initialFriendCode)
-      setPendingInviteCode(initialFriendCode)
+      setFriendCode(cleanFriend)
+      setPendingInviteCode(cleanFriend)
     } else if (initialSection === 'friends') setTab('friends')
     else if (initialSection === '') setTab('jam')
   }, [initialFriendCode, initialSection, isOpen])
 
   useEffect(() => {
+    jamManager.setModalOpen(Boolean(isOpen))
     setProfile(googleUser ? jamManager.refreshProfile(googleUser) : loadJamUserProfile())
     if (isOpen) {
       jamManager.triggerRapidSocialSync()
       jamManager.retryOutgoingRequests()
+    }
+    return () => {
+      jamManager.setModalOpen(false)
     }
   }, [googleUser, isOpen, tab])
 
@@ -127,7 +132,8 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
     e?.preventDefault()
     const raw = friendCode.trim()
     if (!raw) return
-    const res = jamManager.sendFriendRequest(normalizeFriendCode(raw) || raw)
+    const normalized = normalizeFriendId(raw) || raw
+    const res = jamManager.sendFriendRequest(normalized)
     if (res?.ok) {
       setFriendCode('')
       onNotify?.(res.status === 'already_friends' ? 'You are already friends' : res.status === 'accepted' ? 'Friend added' : 'Request sent', 'success')

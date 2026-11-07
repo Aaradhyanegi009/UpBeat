@@ -413,10 +413,94 @@ function startServer(options = {}) {
             }
           }
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: true, serverTs: nowMs, packets, presence: presenceList }))
+          res.end(JSON.stringify({ ok: true, serverTs: nowMs, inbox: packets, packets, friends: presenceList, presence: presenceList }))
         } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: false, packets: [], presence: [] }))
+          res.end(JSON.stringify({ ok: false, inbox: [], packets: [], friends: [], presence: [] }))
+        }
+      })
+      return
+    }
+
+    if (pathname === '/api/social' && req.method === 'GET') {
+      const nowMs = Date.now()
+      const myCode = String(parsedUrl.searchParams.get('id') || parsedUrl.searchParams.get('friendCode') || '').trim().toUpperCase()
+      const sinceTs = Number(parsedUrl.searchParams.get('since') || 0)
+      if (myCode && socialPresence.has(myCode)) {
+        const cur = socialPresence.get(myCode)
+        socialPresence.set(myCode, { ...cur, lastSeen: nowMs })
+      }
+      const box = socialMailbox.get(myCode) || []
+      const cutoff = nowMs - 15 * 60 * 1000
+      const validBox = box.filter((m) => (m._serverTs || 0) > cutoff)
+      socialMailbox.set(myCode, validBox)
+      const packets = validBox.filter((m) => (m._serverTs || 0) > sinceTs)
+
+      const friendsParam = String(parsedUrl.searchParams.get('friends') || '')
+      const friendCodes = friendsParam.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+      const presenceList = []
+      for (const fc of friendCodes) {
+        const pres = socialPresence.get(fc)
+        if (pres && nowMs - (pres.lastSeen || 0) < 45000) {
+          presenceList.push({ ...pres, friendCode: fc, online: true })
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, serverTs: nowMs, inbox: packets, packets, friends: presenceList, presence: presenceList }))
+      return
+    }
+
+    if (pathname === '/api/social' && req.method === 'POST') {
+      let b = ''
+      req.on('data', (c) => { b += c })
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(b || '{}')
+          const nowMs = Date.now()
+          const action = payload.action || (payload.toId || payload.targetFriendCode ? 'push' : 'poll')
+          if (action === 'push') {
+            const target = String(payload.toId || payload.targetFriendCode || '').trim().toUpperCase()
+            const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
+            if (pkt.from && pkt.from.friendCode) {
+              const sCode = String(pkt.from.friendCode).trim().toUpperCase()
+              socialPresence.set(sCode, { ...pkt.from, friendCode: sCode, lastSeen: nowMs })
+            }
+            if (target) {
+              const box = socialMailbox.get(target) || []
+              const cutoff = nowMs - 15 * 60 * 1000
+              const filtered = box.filter((m) => (m._serverTs || 0) > cutoff)
+              const dedupId = pkt.msgId || pkt._packetId
+              if (!dedupId || !filtered.some((m) => (m.msgId || m._packetId) === dedupId)) {
+                filtered.push(pkt)
+                if (filtered.length > 150) filtered.splice(0, filtered.length - 150)
+              }
+              socialMailbox.set(target, filtered)
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ ok: true, serverTs: nowMs }))
+            return
+          }
+          const myCode = String(payload.id || payload.friendCode || '').trim().toUpperCase()
+          const summary = payload.summary || payload.profile
+          if (myCode && summary && typeof summary === 'object') {
+            socialPresence.set(myCode, { ...summary, friendCode: myCode, lastSeen: nowMs })
+          }
+          const sinceTs = Number(payload.since || 0)
+          const box = socialMailbox.get(myCode) || []
+          const packets = box.filter((m) => (m._serverTs || 0) > sinceTs)
+          const presenceList = []
+          for (const fc of payload.friends || payload.friendCodes || []) {
+            const cleanFc = String(fc || '').trim().toUpperCase()
+            const pres = socialPresence.get(cleanFc)
+            if (pres && nowMs - (pres.lastSeen || 0) < 45000) {
+              presenceList.push({ ...pres, friendCode: cleanFc, online: true })
+            }
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, serverTs: nowMs, inbox: packets, packets, friends: presenceList, presence: presenceList }))
+        } catch (e) {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false }))
         }
       })
       return

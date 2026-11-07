@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.4.2)
+# 🎵 UpBeat (v7.4.3)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,11 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ##  Features & Highlights
+
+###  Bulletproof Bidirectional Inter-Device Friend Requests & Edge Mailbox Relay (v7.4.3)
+- **WebRTC STUN + TCP/UDP TURN Relay & Persistent Presence Peer (`jamEngine.js`)**: All PeerJS instances configure Google/Cloudflare/Twilio STUN servers plus TCP/UDP TURN relay servers (`turn:eu-0.turn.peerjs.com:3478`, `turn:us-0.turn.peerjs.com:3478`, and `openrelay.metered.ca` on ports 80/443/TCP) with `sdpSemantics: 'unified-plan'` and `pingInterval: 5000`, while `ensurePresencePeerAlive()` keeps `upbeat-user-UP-XXXXXX` 100% independent of active Jam room peers and automatically reclaims its ID if disconnected.
+- **ACK-Verified Retry Handshake (`sendWithAck`) & Bidirectional Pipe Reuse (`jamEngine.js`)**: Outgoing `FRIEND_REQUEST`, `FRIEND_ACCEPTED`, `FRIEND_SYNC_ACK`, `FRIEND_REMOVED`, and `JAM_INVITE` packets carry unique `msgId`s and retransmit at `0ms`, `+350ms`, `+900ms`, `+2000ms`, and `+3800ms` until the receiver replies with `PACKET_ACK`, while caching inbound and outbound pipes in `activeFriendConnections` (`Map<friendCode, DataConnection>`) for instant reverse-path piggybacking.
+- **Serverless Edge Signaling Mailbox (`api/social.js`, `backend/main.py`, `electron/server.cjs`) & Multi-Cloud Relay (`ntfy.hostux.net`)**: Added `/api/social` (`GET` & `POST`) with a 15-minute TTL in-memory mailbox (`globalThis.__UPBEAT_SOCIAL_BOX__`) paired with rate-limit-safe multi-cloud SSE/HTTP relays (`ntfy.hostux.net`, `ntfy.envs.net`, `ntfy.sh`), guaranteeing 100% delivery in both directions (`Device A -> Device B` and `Device B -> Device A`) even under strict mobile CGNAT.
 
 ###  Cross-Device Jam/Friend Connectivity & Native Deep-Link Redirection (v7.4.2)
 - **Ultra-Resilient Cross-Device & Cross-Network Connectivity (`jamEngine.js`)**: Replaced blocked/stalled cloud relays with high-speed primary Cloud Pub/Sub relay (`https://ntfy.envs.net`) and automatic fallback (`https://ntfy.sh`), bounded all network fetches with 2.5–3.0s abort timeouts to prevent HTTP connection pool stalls on restricted cellular/mobile networks (e.g. Android 16), and cleaned up WebRTC ICE STUN servers (Google STUN + Cloudflare STUN) to eliminate candidate gathering timeouts.
