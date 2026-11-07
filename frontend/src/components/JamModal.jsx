@@ -272,7 +272,7 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                   <h3 className="text-sm font-bold text-t2 mb-1.5">In the room</h3>
                   {(participants.length ? participants : [{ id: 'me', name: profile?.name || 'You', isHost }]).map((p) => (
                     <div key={p.peerId || p.id} className="flex items-center gap-3 h-12">
-                      <Avatar name={p.name} size={34} />
+                      <Avatar name={p.name} picture={p.picture} size={34} />
                       <span className="flex-1 text-[15px] font-semibold truncate">{p.name}</span>
                       {p.isHost && (
                         <span className="inline-flex items-center gap-1 text-xs font-bold text-t2">
@@ -435,7 +435,7 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
               {/* You */}
               <div className="rounded-2xl bg-s2 p-4">
                 <div className="flex items-center gap-3">
-                  <Avatar name={profile?.name || 'You'} picture={googleUser?.picture} size={44} />
+                  <Avatar name={profile?.name || 'You'} picture={googleUser?.picture || profile?.picture} size={44} />
                   <div className="flex-1 min-w-0">
                     <label htmlFor="my-name" className="sr-only">
                       Your name

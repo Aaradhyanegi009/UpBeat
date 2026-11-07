@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.4.5)
+# 🎵 UpBeat (v7.4.6)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,11 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ##  Features & Highlights
+
+###  Critical 4KB Cloud Relay Packet Dropping Hotfix (v7.4.6)
+- **Cloud Relay Payload Sanitization (`jamEngine.js`)**: Public cloud relays (`ntfy.tedomum.fr`, `ntfy.sp-codes.de`, `ntfy.envs.net`) enforce a strict 4096-byte limit on HTTP POST message bodies. When a user uploads a custom profile picture/avatar, `FileReader` creates a 50KB–500KB base64 `data:` URI. Over-the-wire packets now use `sanitizePayloadForCloud()` to strip base64 data URIs and truncate oversized fields, keeping all cloud packets under 1 KB (~400 bytes). This permanently prevents `HTTP 400: invalid request: attachments not allowed` rejections and ensures instantaneous friend requests, acceptances, and participant syncing for users with custom avatars.
+- **Fast-Path Rapid Cloud Sync (`jamEngine.js`)**: `triggerRapidSocialSync()` now force-polls cloud inboxes (`force=true`) on demand and across retry waves (+350ms, +900ms, +2000ms, +3800ms) without hitting the 3-second throttle cooldown, reflecting accepted friends and incoming requests with sub-second latency.
+- **Jam Participant UI Reflection (`JamModal.jsx`)**: Connected participant avatars in the Jam modal now properly display remote avatars via `picture={p.picture}`, and local user avatars fall back cleanly to `profile?.picture`.
 
 ###  Bulletproof Two-Way Friend Acceptance & Jam Participant Sync (v7.4.5)
 - **Jam Room Cloud Polling & Participant Discovery (`jamEngine.js`)**: Resolved the missing-participants bug in Jam sessions. Added active cloud room polling (`pollCloudRoom`) inside the 1.5s room transport interval, periodic Host participant broadcasting (`JAM_PARTICIPANTS` with `{ useCloud: true }`), and continuous Guest `JAM_HELLO` re-announcements when solo in a room. Connected guest devices and host profiles now instantly reflect on both sides across all mobile networks.

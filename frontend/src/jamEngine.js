@@ -32,6 +32,31 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
   }
 }
 
+export function sanitizePayloadForCloud(obj) {
+  if (obj === null || obj === undefined) return obj
+  if (typeof obj === 'string') {
+    if (obj.startsWith('data:')) return ''
+    return obj.length > 500 ? obj.slice(0, 500) : obj
+  }
+  if (typeof obj !== 'object') return obj
+  if (Array.isArray(obj)) {
+    return obj.slice(0, 35).map(sanitizePayloadForCloud)
+  }
+  const clean = {}
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === 'picture' || key === 'avatar') {
+      if (typeof value === 'string' && value.startsWith('http') && value.length < 500) {
+        clean[key] = value
+      } else {
+        clean[key] = ''
+      }
+    } else {
+      clean[key] = sanitizePayloadForCloud(value)
+    }
+  }
+  return clean
+}
+
 export const renderEmoji = (val, fallback = '') => {
   if (!val) return fallback
   if (typeof val === 'string') return val
@@ -638,13 +663,20 @@ class JamSessionManager {
   }
 
   buildSelfParticipant(isHost = false) {
+    const cleanPicture =
+      typeof this.userProfile?.picture === 'string' &&
+      this.userProfile.picture.startsWith('http') &&
+      this.userProfile.picture.length < 500
+        ? this.userProfile.picture
+        : ''
+
     return {
       id: this.getSelfParticipantId(),
       peerId: this.getSelfParticipantId(),
-      friendCode: this.userProfile.friendCode,
-      name: this.userProfile.name,
+      friendCode: this.userProfile?.friendCode || '',
+      name: (this.userProfile?.name || 'Participant').slice(0, 40),
       avatar: '',
-      picture: this.userProfile.picture || '',
+      picture: cleanPicture,
       isHost: Boolean(isHost),
       rttMs: isHost ? 0 : 18,
       inSync: true,
@@ -692,12 +724,17 @@ class JamSessionManager {
     this.ensurePresencePeerAlive()
     this.pollEdgeSocialMailbox()
     this.pollBackendSocial()
-    this.pollSocialCloudInbox(code, false)
+    if (code) {
+      this.pollSocialCloudInbox(code, true)
+    }
     this.pingAllFriends()
-    ;[400, 1200, 2600].forEach((ms) => {
+    ;[350, 900, 2000, 3800].forEach((ms) => {
       setTimeout(() => {
         this.pollEdgeSocialMailbox()
         this.pollBackendSocial()
+        if (code) {
+          this.pollSocialCloudInbox(code, true)
+        }
         this.pingAllFriends()
       }, ms)
     })
@@ -1106,7 +1143,8 @@ class JamSessionManager {
   async sendSocialCloudPacket(targetFriendCode, fullPacket) {
     const topic = getSocialCloudTopic(targetFriendCode)
     if (!topic || typeof fetch === 'undefined') return
-    const body = JSON.stringify(fullPacket)
+    const cleaned = sanitizePayloadForCloud(fullPacket)
+    const body = JSON.stringify(cleaned)
     // Broadcast to ALL healthy cloud relays in parallel so the receiver catches it on ANY relay
     try {
       await Promise.allSettled(
@@ -1142,11 +1180,12 @@ class JamSessionManager {
   async sendEdgeSocialPacket(targetFriendCode, fullPacket) {
     const urls = this.getEdgeSocialUrls()
     if (!urls.length || typeof fetch === 'undefined') return
+    const cleaned = sanitizePayloadForCloud(fullPacket)
     const body = JSON.stringify({
       action: 'push',
       toId: normalizeFriendCode(targetFriendCode),
       fromId: this.userProfile?.friendCode,
-      packet: fullPacket,
+      packet: cleaned,
       summary: this.getMyPublicSummary()
     })
     for (const url of urls) {
@@ -1347,24 +1386,37 @@ class JamSessionManager {
     const confirmedFriendCodes = (this.state?.friends || [])
       .map((f) => normalizeFriendCode(f.friendCode))
       .filter(Boolean)
+      .slice(0, 30)
     const outgoingRequestCodes = (this.state?.outgoingRequests || [])
       .map((r) => normalizeFriendCode(r.friendCode))
       .filter(Boolean)
+      .slice(0, 30)
+
+    const cleanPicture =
+      typeof this.userProfile?.picture === 'string' &&
+      this.userProfile.picture.startsWith('http') &&
+      this.userProfile.picture.length < 500
+        ? this.userProfile.picture
+        : ''
+
     return {
-      id: this.userProfile.id,
-      friendCode: this.userProfile.friendCode,
-      name: this.userProfile.name,
+      id: this.userProfile?.id || 'usr',
+      friendCode: this.userProfile?.friendCode || '',
+      name: (this.userProfile?.name || 'Friend').slice(0, 40),
       avatar: '',
-      picture: this.userProfile.picture || '',
+      picture: cleanPicture,
       confirmedFriendCodes,
       outgoingRequestCodes,
       currentTrack: snap?.track
         ? {
             video_id: snap.track.video_id,
-            title: snap.track.title,
-            artist: snap.track.artist,
-            thumbnail: snap.track.thumbnail,
-            duration_text: snap.track.duration_text
+            title: (snap.track.title || '').slice(0, 80),
+            artist: (snap.track.artist || '').slice(0, 80),
+            thumbnail:
+              typeof snap.track.thumbnail === 'string' && snap.track.thumbnail.length < 300
+                ? snap.track.thumbnail
+                : '',
+            duration_text: snap.track.duration_text || ''
           }
         : null,
       isPlaying: Boolean(snap?.isPlaying),
@@ -1695,12 +1747,16 @@ class JamSessionManager {
       return
     }
 
+    const cleanSenderPic =
+      typeof sender.picture === 'string' && sender.picture.startsWith('http') && sender.picture.length < 500
+        ? sender.picture
+        : ''
     const existsIn = this.state.incomingRequests.some((r) => r.friendCode === sender.friendCode)
     const reqEntry = {
       friendCode: sender.friendCode,
       name: sender.name || `Friend ${sender.friendCode.slice(-4)}`,
       avatar: '',
-      picture: sender.picture || '',
+      picture: cleanSenderPic,
       currentTrack: sender.currentTrack || null,
       requestedAt: Date.now()
     }
@@ -2089,11 +2145,15 @@ class JamSessionManager {
     saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
 
     const existing = this.state.friends.find((f) => f.friendCode === cleanCode)
+    const cleanPic =
+      typeof sender.picture === 'string' && sender.picture.startsWith('http') && sender.picture.length < 500
+        ? sender.picture
+        : (existing?.picture && existing.picture.startsWith('http') && existing.picture.length < 500 ? existing.picture : '')
     const friendEntry = {
       friendCode: cleanCode,
       name: sender.name || existing?.name || `Friend ${cleanCode.slice(-4)}`,
       avatar: '',
-      picture: sender.picture || existing?.picture || '',
+      picture: cleanPic,
       online: true,
       lastSeen: Date.now(),
       acceptedAt: existing?.acceptedAt || Date.now(),
@@ -2443,7 +2503,8 @@ class JamSessionManager {
   async sendCloudRoomPacket(roomCode, payload) {
     const topic = getRoomCloudTopic(roomCode)
     if (!topic || typeof fetch === 'undefined') return
-    const body = JSON.stringify(payload)
+    const cleaned = sanitizePayloadForCloud(payload)
+    const body = JSON.stringify(cleaned)
     try {
       await Promise.allSettled(
         CLOUD_RELAYS.map((base) =>
@@ -2947,14 +3008,19 @@ class JamSessionManager {
     const sanitizedParticipants = (this.state.participants || []).map((p) => ({
       ...p,
       peerId: p.peerId || p.id,
-      avatar: ''
+      name: (p.name || 'Participant').slice(0, 40),
+      avatar: '',
+      picture:
+        typeof p.picture === 'string' && p.picture.startsWith('http') && p.picture.length < 500
+          ? p.picture
+          : ''
     }))
     this.broadcastFromHost(
       {
         type: 'JAM_PARTICIPANTS',
         participants: sanitizedParticipants,
         djMode: this.state.djMode,
-        hostName: this.userProfile?.name || 'Host'
+        hostName: (this.userProfile?.name || 'Host').slice(0, 40)
       },
       { useCloud: true }
     )
@@ -2994,7 +3060,14 @@ class JamSessionManager {
             ...data.profile,
             id: guestId,
             peerId: guestId,
+            name: (data.profile.name || 'Participant').slice(0, 40),
             avatar: '',
+            picture:
+              typeof data.profile.picture === 'string' &&
+              data.profile.picture.startsWith('http') &&
+              data.profile.picture.length < 500
+                ? data.profile.picture
+                : '',
             isHost: false,
             inSync: true
           }
@@ -3032,7 +3105,14 @@ class JamSessionManager {
           const cleanList = data.participants.map((p) => ({
             ...p,
             peerId: p.peerId || p.id,
-            avatar: ''
+            name: (p.name || 'Participant').slice(0, 40),
+            avatar: '',
+            picture:
+              typeof p.picture === 'string' &&
+              p.picture.startsWith('http') &&
+              p.picture.length < 500
+                ? p.picture
+                : ''
           }))
           this.updateState({
             status: 'CONNECTED',
