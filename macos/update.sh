@@ -36,7 +36,7 @@ fi
 
 # Recompile native macOS Swift binary
 echo "Recompiling native macOS app..."
-swiftc -O -target arm64-apple-macos12.0 "$DIR/macos/UpBeatApp.swift" -o "$DIR/UpBeat.app/Contents/MacOS/UpBeat"
+swiftc -O -target arm64-apple-macos12.0 "$DIR/macos/UpBeatApp.swift" -o "$DIR/UpBeat.app/Contents/MacOS/UpBeat" -framework Cocoa -framework WebKit -framework Speech -framework AVFoundation
 cp "$DIR/macos/UpBeat.icns" "$DIR/UpBeat.app/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 cp "$DIR/macos/Info.plist" "$DIR/UpBeat.app/Contents/Info.plist" 2>/dev/null || true
 

@@ -2,11 +2,17 @@ import Cocoa
 import WebKit
 import MediaPlayer
 import UniformTypeIdentifiers
+import Speech
+import AVFoundation
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate {
     var window: NSWindow!
     var webView: WKWebView!
     var backendProcess: Process?
+    var speechRecognizer: SFSpeechRecognizer?
+    var speechAudioEngine: AVAudioEngine?
+    var speechRecognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    var speechRecognitionTask: SFSpeechRecognitionTask?
     let serverURL = URL(string: "http://127.0.0.1:8000")!
     let workspacePath: String = {
         let defaultPath = "/Users/aaradhya/Documents/Programming/random"
@@ -222,6 +228,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             } else if action == "pickProfilePhoto" {
                 DispatchQueue.main.async { [weak self] in
                     self?.presentNativeProfilePhotoPicker()
+                }
+                return
+            } else if action == "startSpeechRecognition" {
+                let lang = (body["lang"] as? String) ?? "en-US"
+                DispatchQueue.main.async { [weak self] in
+                    self?.startNativeSpeechRecognition(lang: lang)
+                }
+                return
+            } else if action == "stopSpeechRecognition" {
+                DispatchQueue.main.async { [weak self] in
+                    self?.stopNativeSpeechRecognition()
                 }
                 return
             }
@@ -902,6 +919,105 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                 }
             }
         }
+    }
+
+    @available(macOS 12.0, *)
+    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        decisionHandler(.grant)
+    }
+
+    func startNativeSpeechRecognition(lang: String = "en-US") {
+        stopNativeSpeechRecognition()
+
+        SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                guard authStatus == .authorized else {
+                    let errStr = authStatus == .denied ? "Speech recognition permission denied" : "Speech recognition unavailable"
+                    let js = "window.onUpBeatSpeechError && window.onUpBeatSpeechError('\(errStr)');"
+                    self.webView.evaluateJavaScript(js, completionHandler: nil)
+                    return
+                }
+
+                if #available(macOS 10.14, *) {
+                    AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                        DispatchQueue.main.async {
+                            guard let self = self else { return }
+                            guard granted else {
+                                let js = "window.onUpBeatSpeechError && window.onUpBeatSpeechError('Microphone permission denied');"
+                                self.webView.evaluateJavaScript(js, completionHandler: nil)
+                                return
+                            }
+                            self.beginAudioEngineRecognition(lang: lang)
+                        }
+                    }
+                } else {
+                    self.beginAudioEngineRecognition(lang: lang)
+                }
+            }
+        }
+    }
+
+    private func beginAudioEngineRecognition(lang: String) {
+        let recognizer = SFSpeechRecognizer(locale: Locale(identifier: lang)) ?? SFSpeechRecognizer()
+        self.speechRecognizer = recognizer
+
+        let audioEngine = AVAudioEngine()
+        self.speechAudioEngine = audioEngine
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        self.speechRecognitionRequest = request
+
+        let inputNode = audioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+            request.append(buffer)
+        }
+
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+            let js = "window.onUpBeatSpeechStart && window.onUpBeatSpeechStart();"
+            self.webView.evaluateJavaScript(js, completionHandler: nil)
+        } catch {
+            let js = "window.onUpBeatSpeechError && window.onUpBeatSpeechError('Audio recording failed to start');"
+            self.webView.evaluateJavaScript(js, completionHandler: nil)
+            stopNativeSpeechRecognition()
+            return
+        }
+
+        self.speechRecognitionTask = recognizer?.recognitionTask(with: request) { [weak self] result, error in
+            guard let self = self else { return }
+            if let r = result {
+                let text = r.bestTranscription.formattedString.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'").replacingOccurrences(of: "\n", with: " ")
+                let isFinal = r.isFinal
+                let js = "window.onUpBeatSpeechResult && window.onUpBeatSpeechResult('\(text)', \(isFinal));"
+                DispatchQueue.main.async {
+                    self.webView.evaluateJavaScript(js, completionHandler: nil)
+                }
+            }
+            if error != nil || (result?.isFinal ?? false) {
+                DispatchQueue.main.async {
+                    self.stopNativeSpeechRecognition()
+                }
+            }
+        }
+    }
+
+    func stopNativeSpeechRecognition() {
+        speechAudioEngine?.stop()
+        speechAudioEngine?.inputNode.removeTap(onBus: 0)
+        speechRecognitionRequest?.endAudio()
+        speechRecognitionTask?.cancel()
+        speechRecognitionTask = nil
+        speechRecognitionRequest = nil
+        speechAudioEngine = nil
+        speechRecognizer = nil
+
+        let js = "window.onUpBeatSpeechEnd && window.onUpBeatSpeechEnd();"
+        self.webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {

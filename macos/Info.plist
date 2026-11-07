@@ -29,6 +29,10 @@
     </dict>
     <key>NSSupportsAppNap</key>
     <false/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>UpBeat uses your microphone to transcribe spoken vibes and voice prompts for AI music curation.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>UpBeat uses speech recognition to convert your spoken words into curated AI playlists.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>

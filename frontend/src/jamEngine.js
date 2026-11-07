@@ -555,22 +555,89 @@ class JamSessionManager {
     this.initPresenceNetwork()
   }
 
+  broadcastLocalSocialState() {
+    if (this.socialBc) {
+      try {
+        this.socialBc.postMessage({
+          type: 'LOCAL_SOCIAL_STATE_SYNC',
+          _senderInstanceId: this.instanceId,
+          friends: this.state.friends,
+          incomingRequests: this.state.incomingRequests,
+          outgoingRequests: this.state.outgoingRequests,
+          userProfile: this.userProfile
+        })
+      } catch {}
+    }
+  }
+
+  triggerRapidSocialSync() {
+    const code = this.userProfile?.friendCode
+    this.pollBackendSocial()
+    this.pollSocialCloudInbox(code)
+    this.pingAllFriends()
+    ;[250, 700, 1600, 3200].forEach((ms) => {
+      setTimeout(() => {
+        this.pollBackendSocial()
+        this.pollSocialCloudInbox(code)
+        this.pingAllFriends()
+      }, ms)
+    })
+  }
+
   initPresenceNetwork() {
     this.userProfile = loadJamUserProfile()
     const myFriendCode = this.userProfile.friendCode
 
-    // 1. Same-browser BroadcastChannel
+    // 1. Same-browser BroadcastChannel for local zero-latency sync across all open tabs/windows
     if (typeof BroadcastChannel !== 'undefined' && !this.socialBc) {
       try {
         this.socialBc = new BroadcastChannel('upbeat_social_v7')
         this.socialBc.onmessage = (ev) => {
           const data = ev?.data
           if (!data || data._senderInstanceId === this.instanceId) return
+
+          // Instant cross-tab sync of friends, incoming and outgoing requests
+          if (data.type === 'LOCAL_SOCIAL_STATE_SYNC') {
+            this.updateState({
+              friends: data.friends || [],
+              incomingRequests: data.incomingRequests || [],
+              outgoingRequests: data.outgoingRequests || []
+            })
+            return
+          }
+
           if (!data.targetFriendCode || data.targetFriendCode === myFriendCode) {
             this.handleSocialPacket(data, null)
           }
         }
       } catch {}
+    }
+
+    // Multi-window storage synchronization & window focus auto-refresh
+    if (typeof window !== 'undefined' && !this._storageListenerAdded) {
+      this._storageListenerAdded = true
+      window.addEventListener('storage', (ev) => {
+        if (
+          ev.key === FRIENDS_LIST_STORAGE_KEY ||
+          ev.key === FRIEND_REQ_IN_STORAGE_KEY ||
+          ev.key === FRIEND_REQ_OUT_STORAGE_KEY
+        ) {
+          const nextFriends = loadJsonArray(FRIENDS_LIST_STORAGE_KEY)
+          const nextIn = loadJsonArray(FRIEND_REQ_IN_STORAGE_KEY)
+          const nextOut = loadJsonArray(FRIEND_REQ_OUT_STORAGE_KEY)
+          this.updateState({
+            friends: nextFriends,
+            incomingRequests: nextIn,
+            outgoingRequests: nextOut
+          })
+        }
+      })
+
+      window.addEventListener('focus', () => {
+        this.pingAllFriends()
+        this.pollSocialCloudInbox(myFriendCode)
+        this.pollBackendSocial()
+      })
     }
 
     // 2. Cloud SSE + HTTP Relay (ntfy.sh) for 100% cross-network & offline-queued delivery
@@ -613,26 +680,26 @@ class JamSessionManager {
       } catch {}
     }
 
-    // 4. Periodic Presence & Backend Polling
+    // 4. Periodic Presence & Backend Polling (rapid 2.5s and 1.2s intervals for snappy real-time responsiveness)
     if (this.presenceTimer) clearInterval(this.presenceTimer)
     this.presenceTimer = setInterval(() => {
       this.pingAllFriends()
       this.retryOutgoingRequests()
       this.pruneStaleFriendPresence()
       this.pollSocialCloudInbox(myFriendCode)
-    }, 10000)
+    }, 2500)
 
     if (this.backendPollTimer) clearInterval(this.backendPollTimer)
     this.backendPollTimer = setInterval(() => {
       this.pollBackendSocial()
-    }, 3000)
+    }, 1200)
 
     setTimeout(() => {
       this.pollBackendSocial()
       this.pollSocialCloudInbox(myFriendCode)
       this.pingAllFriends()
       this.retryOutgoingRequests()
-    }, 300)
+    }, 200)
   }
 
   ensureAuxClientPeer() {
@@ -885,6 +952,7 @@ class JamSessionManager {
     const isHighPriority =
       fullPacket.type === 'FRIEND_REQUEST' ||
       fullPacket.type === 'FRIEND_ACCEPTED' ||
+      fullPacket.type === 'FRIEND_REMOVED' ||
       fullPacket.type === 'JAM_INVITE' ||
       options?.useCloud === true
     if (isHighPriority) {
@@ -1087,6 +1155,33 @@ class JamSessionManager {
         break
       }
 
+      case 'FRIEND_REMOVED': {
+        const cleanSender = sender.friendCode
+        const activeConn = this.presenceConns.get(cleanSender)
+        if (activeConn) {
+          try { activeConn.close() } catch {}
+          this.presenceConns.delete(cleanSender)
+        }
+        this.pendingPeerConns.delete(cleanSender)
+        this.pendingPeerPackets.delete(cleanSender)
+
+        const nextFriends = (this.state.friends || []).filter((f) => f.friendCode !== cleanSender)
+        const nextOut = (this.state.outgoingRequests || []).filter((r) => r.friendCode !== cleanSender)
+        const nextIn = (this.state.incomingRequests || []).filter((r) => r.friendCode !== cleanSender)
+
+        saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
+        saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
+        saveJsonArray(FRIEND_REQ_IN_STORAGE_KEY, nextIn)
+
+        this.updateState({
+          friends: nextFriends,
+          outgoingRequests: nextOut,
+          incomingRequests: nextIn
+        })
+        this.broadcastLocalSocialState()
+        break
+      }
+
       case 'JAM_INVITE': {
         const invite = {
           id: `inv_${Date.now()}`,
@@ -1187,6 +1282,7 @@ class JamSessionManager {
           ? null
           : this.state.latestFriendRequestToast
     })
+    this.broadcastLocalSocialState()
   }
 
   sendFriendRequest(rawCode) {
@@ -1239,6 +1335,7 @@ class JamSessionManager {
     ]
     saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
     this.updateState({ outgoingRequests: nextOut })
+    this.broadcastLocalSocialState()
 
     this.sendSocialPacket(targetCode, this.buildPresencePayload('FRIEND_REQUEST'), {
       useCloud: true
@@ -1246,6 +1343,7 @@ class JamSessionManager {
     this.sendSocialPacket(targetCode, this.buildPresencePayload('PRESENCE_PING'), {
       useCloud: true
     })
+    this.triggerRapidSocialSync()
 
     if (this.eventHandlers.onNotify) {
       this.eventHandlers.onNotify(`Friend request sent to ${targetCode}`, 'success')
@@ -1267,6 +1365,7 @@ class JamSessionManager {
     this.sendSocialPacket(cleanCode, this.buildPresencePayload('PRESENCE_PING'), {
       useCloud: true
     })
+    this.triggerRapidSocialSync()
     if (this.eventHandlers.onNotify) {
       this.eventHandlers.onNotify(`Added ${req.name} to Friends`, 'success')
     }
@@ -1283,6 +1382,7 @@ class JamSessionManager {
           ? null
           : this.state.latestFriendRequestToast
     })
+    this.broadcastLocalSocialState()
   }
 
   dismissFriendRequestToast() {
@@ -1294,13 +1394,34 @@ class JamSessionManager {
     const nextOut = this.state.outgoingRequests.filter((r) => r.friendCode !== cleanCode)
     saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
     this.updateState({ outgoingRequests: nextOut })
+    this.broadcastLocalSocialState()
   }
 
   removeFriend(friendCode) {
     const cleanCode = normalizeFriendCode(friendCode)
+    if (!cleanCode) return
+
+    // Notify the other user across all channels so they update their friends list in real time
+    this.sendSocialPacket(
+      cleanCode,
+      this.buildPresencePayload('FRIEND_REMOVED', { targetFriendCode: cleanCode }),
+      { useCloud: true }
+    )
+
+    // Terminate any active direct WebRTC data connection
+    const activeConn = this.presenceConns.get(cleanCode)
+    if (activeConn) {
+      try { activeConn.close() } catch {}
+      this.presenceConns.delete(cleanCode)
+    }
+    this.pendingPeerConns.delete(cleanCode)
+    this.pendingPeerPackets.delete(cleanCode)
+
     const nextFriends = this.state.friends.filter((f) => f.friendCode !== cleanCode)
     saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
     this.updateState({ friends: nextFriends })
+    this.broadcastLocalSocialState()
+
     if (this.eventHandlers.onNotify) {
       this.eventHandlers.onNotify('Friend removed', 'info')
     }

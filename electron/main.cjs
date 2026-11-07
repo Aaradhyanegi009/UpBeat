@@ -4,7 +4,7 @@
  * hardware media controls, single-instance lock, and embedded audio microserver.
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, session } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { startServer } = require('./server.cjs')
@@ -226,6 +226,13 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
+  if (session?.defaultSession) {
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      if (permission === 'media') return callback(true)
+      callback(true)
+    })
+  }
+
   await createWindow()
   setupTray()
   registerMediaShortcuts()
