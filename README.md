@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.4.0)
+# 🎵 UpBeat (v7.4.1)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,11 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ##  Features & Highlights
+
+###  Multi-Node (3+ Peers) Jam Stability, Authoritative Pause Sync & Stable Friends Ordering (v7.4.1)
+- **Strict Hub-and-Spoke (Star Topology) Multi-Node Jam Engine (`jamEngine.js`)**: Eliminates N-squared broadcast echo loops when 3 or more nodes connect to a Jam room. Guests strictly apply canonical state broadcasts originating from the Host (`_fromRole: 'host'`), while the Host routes guest connections in `hostConnections` (`Map<peerKey, DataConnection>`) with automatic stale-socket pruning and monotonic packet sequence numbers (`seq`).
+- **Authoritative Double-Tap Pause Synchronization (`jamEngine.js`, `PlayerBar.jsx`, `App.jsx`)**: Toggling Play/Pause dispatches high-priority `JAM_PLAY_STATE` packets at `0ms` and `120ms` with timestamp protection against in-flight heartbeats, while `window.UpBeatControls.forcePause()` synchronously halts both dual-deck `<audio>` elements (`audioRefA` & `audioRefB`) and suppresses delayed `onPlay` seek-buffer events when paused.
+- **Deterministic Friends List Sorting & 35s Presence Hysteresis (`jamEngine.js`, `JamModal.jsx`)**: Online friends are sorted deterministically (**Online status → Alphabetical by Name → Permanent Friend Code**) and never by `lastSeen` ping arrival timestamps, with quiet in-place `lastSeen` heartbeats so 2+ online friends never jump or swap positions.
 
 ###  Android Settings Layout Fix, 3-Layer Bidirectional Friend Sync & Voice Dictation (v7.4.0)
 - **Android Settings & Modal Zero-Clipping Layout**: Responsive mobile layout (`< 640px`) in `SettingsView`, `GoogleAuthModal`, and `ProfileEditModal` so the **Account (`Edit profile` + `Connect Google`)** buttons and **Gemini API Key / Mac Companion `Save`** buttons never overflow or clip at narrow Android screen edges (`360px–412px`).

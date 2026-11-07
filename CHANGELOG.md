@@ -4,6 +4,23 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.4.1] - 2026-11-07
+
+### 🔗 3+ Node Jam Star-Topology Stability + ⏸️ Authoritative Host Pause Sync + 📌 Stable Friends List Ordering
+- **Multi-Node (3+ Peers) Jam Connection Stability & Echo Storm Prevention (`jamEngine.js`, `App.jsx`)**:
+  - Enforced strict **Hub-and-Spoke (Star Topology)** routing across `BroadcastChannel`, Cloud SSE (`ntfy.sh`), Local Backend (`/api/jam/room/poll`), and PeerJS WebRTC DataChannels: Guests strictly ignore raw peer-to-peer packets originating from other Guests (`_fromRole: 'guest'`) and only apply canonical state/control broadcasts sequenced by the Host (`_fromRole: 'host'`).
+  - Added monotonically increasing sequence numbers (`stateSeq` / `lastAppliedSeq`), `excludeClientId` sender filtering on Host re-broadcasts, and a `350ms` `activateRemoteJamGuard` cooldown window in `App.jsx` so applying remote sync state never triggers local `<audio>` feedback loops.
+  - Fixed `pollBackendRoom` to read `data.events` from `/api/jam/room/poll` and added automatic stale-connection pruning per `_guestProfileId` in `hostConnections`.
+- **Authoritative Host Pause Enforcement (`jamEngine.js`, `PlayerBar.jsx`, `App.jsx`)**:
+  - Added dedicated `broadcastPlayState()` (`JAM_PLAY_STATE`) that dispatches immediately at `0ms` and confirms at `120ms`, stamping `lastPlayStateTimestamp` so in-flight periodic `JAM_SYNC` heartbeats can never unpause a Guest.
+  - Added `window.UpBeatControls.forcePause()` and `forcePlay()` in `PlayerBar.jsx` to synchronously pause both dual-deck `<audio>` elements (`audioRefA` & `audioRefB`), reset `playbackRate = 1.0`, and block asynchronous browser `onPlay` buffer events from firing while `isPlayingRef.current === false`.
+  - Updated `onRemoteSync` in `App.jsx` to evaluate `data.isPlaying === false` before drift calculation, immediately calling `forcePause()` and returning early.
+- **Deterministic Friends List Ordering & Quiet Presence Heartbeats (`jamEngine.js`, `JamModal.jsx`)**:
+  - Replaced `(b.lastSeen || 0) - (a.lastSeen || 0)` sorting in `JamModal.jsx` and `jamEngine.js` with `sortFriendsDeterministically()` (**Online status → Case-insensitive Alphabetical Name → Friend Code tie-breaker**), completely eliminating card jumping/swapping when 2+ friends are online.
+  - Updated `updateFriendPresence()` to refresh `lastSeen` in-place and skip React state updates when no UI-visible friend property (`online`, `name`, `picture`, `currentTrack`, `isPlaying`, `activeJamCode`) has changed, paired with a 35-second online hysteresis window (`ONLINE_TTL_MS = 35000`).
+
+---
+
 ## [v7.4.0] - 2026-11-07
 
 ### 📱 Android Settings Layout Fix + 🤝 3-Layer Two-Way Friend Acceptance Sync + 🎙️ Voice Dictation & Windows Desktop

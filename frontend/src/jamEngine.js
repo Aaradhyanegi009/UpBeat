@@ -318,13 +318,38 @@ function saveJsonArray(key, arr) {
   } catch {}
 }
 
+export function sortFriendsDeterministically(friendsList = []) {
+  if (!Array.isArray(friendsList)) return []
+  return [...friendsList].sort((a, b) => {
+    // 1. Primary Sort: Online status (online = 1, offline = 0)
+    const aOnline = a?.online ? 1 : 0
+    const bOnline = b?.online ? 1 : 0
+    if (aOnline !== bOnline) return bOnline - aOnline
+
+    // 2. Secondary Sort: Alphabetical by display name (case-insensitive)
+    // NEVER sort by lastSeen — that causes online friends to swap positions on every ping!
+    const nameA = String(a?.name || '').trim()
+    const nameB = String(b?.name || '').trim()
+    const nameCmp = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' })
+    if (nameCmp !== 0) return nameCmp
+
+    // 3. Tertiary Tie-Breaker: Permanent Friend Code / ID
+    const idA = String(a?.friendCode || a?.id || '')
+    const idB = String(b?.friendCode || b?.id || '')
+    return idA.localeCompare(idB)
+  })
+}
+
 export function evaluateAudioDrift(localCurrentTime, hostCurrentTime, hostTimestamp, clockOffsetMs, isPlaying) {
   const now = Date.now()
   const estimatedHostNow = now + (clockOffsetMs || 0)
+  // When paused (isPlaying === false), NEVER extrapolate elapsed time
   const elapsedSec =
     isPlaying && hostTimestamp ? Math.max(0, Math.min(15, (estimatedHostNow - hostTimestamp) / 1000)) : 0
 
-  const targetTime = Math.max(0, (Number(hostCurrentTime) || 0) + elapsedSec)
+  const targetTime = isPlaying
+    ? Math.max(0, (Number(hostCurrentTime) || 0) + elapsedSec)
+    : Math.max(0, Number(hostCurrentTime) || 0)
   const driftSec = targetTime - (Number(localCurrentTime) || 0)
   const absDriftMs = Math.round(Math.abs(driftSec) * 1000)
 
@@ -372,8 +397,14 @@ class JamSessionManager {
     this.cloudRetryTick = 0
     this.initialCloudPollDone = false
 
+    // Monotonic sequence counters & timestamps for Star-Topology multi-node state deduplication
+    this.stateSeq = 0
+    this.lastAppliedSeq = 0
+    this.lastPlayStateTimestamp = 0
+
     this.peer = null
-    this.connections = new Map() // peerId -> DataConnection (used by Host)
+    this.hostConnections = new Map() // clientId/peerId -> DataConnection (Star topology router on Host)
+    this.connections = this.hostConnections // Alias for backward compatibility
     this.hostConn = null // DataConnection to Host (used by Guest)
     this.bc = null // Same-browser BroadcastChannel for Jam room
     this.roomEventSource = null // Cloud SSE stream for Jam room
@@ -1085,18 +1116,20 @@ class JamSessionManager {
   }
 
   pruneStaleFriendPresence() {
+    const ONLINE_TTL_MS = 35000
     const now = Date.now()
     let changed = false
     const nextFriends = (this.state.friends || []).map((f) => {
-      if (f.online && f.lastSeen && now - f.lastSeen > 45000) {
+      if (f.online && f.lastSeen && now - f.lastSeen > ONLINE_TTL_MS) {
         changed = true
         return { ...f, online: false }
       }
       return f
     })
     if (changed) {
-      this.updateState({ friends: nextFriends })
-      saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
+      const sorted = sortFriendsDeterministically(nextFriends)
+      this.updateState({ friends: sorted })
+      saveJsonArray(FRIENDS_LIST_STORAGE_KEY, sorted)
     }
   }
 
@@ -1409,34 +1442,66 @@ class JamSessionManager {
         }
         return
       }
-      const nextOut = [...this.state.outgoingRequests]
-      nextOut[outIdx] = {
-        ...nextOut[outIdx],
-        name: sender.name || nextOut[outIdx].name,
-        picture: sender.picture || nextOut[outIdx].picture || '',
-        online: true
+      const prevOut = this.state.outgoingRequests[outIdx]
+      const nextOutName = sender.name || prevOut.name
+      const nextOutPic = sender.picture || prevOut.picture || ''
+      if (!prevOut.online || prevOut.name !== nextOutName || (prevOut.picture || '') !== nextOutPic) {
+        const nextOut = [...this.state.outgoingRequests]
+        nextOut[outIdx] = {
+          ...prevOut,
+          name: nextOutName,
+          picture: nextOutPic,
+          online: true
+        }
+        saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
+        this.updateState({ outgoingRequests: nextOut })
       }
-      saveJsonArray(FRIEND_REQ_OUT_STORAGE_KEY, nextOut)
-      this.updateState({ outgoingRequests: nextOut })
     }
 
     const idx = this.state.friends.findIndex((f) => f.friendCode === cleanCode)
     if (idx === -1) return
+
+    const existing = this.state.friends[idx]
+    const now = Date.now()
+    // Always refresh lastSeen in-place so the 35s online hysteresis window stays fresh
+    existing.lastSeen = now
+
+    const nextName = sender.name || existing.name
+    const nextPic = sender.picture || existing.picture || ''
+    const nextTrack = sender.currentTrack || null
+    const nextIsPlaying = Boolean(sender.isPlaying)
+    const nextJamCode = sender.activeJamCode || ''
+
+    const uiChanged =
+      !existing.online ||
+      existing.name !== nextName ||
+      (existing.picture || '') !== nextPic ||
+      (existing.currentTrack?.video_id || '') !== (nextTrack?.video_id || '') ||
+      (existing.currentTrack?.title || '') !== (nextTrack?.title || '') ||
+      Boolean(existing.isPlaying) !== nextIsPlaying ||
+      (existing.activeJamCode || '') !== nextJamCode
+
+    if (!uiChanged) {
+      // Quiet heartbeat: only lastSeen updated — skip React state churn & re-sorting!
+      return
+    }
+
     const updatedFriend = {
-      ...this.state.friends[idx],
-      name: sender.name || this.state.friends[idx].name,
+      ...existing,
+      name: nextName,
       avatar: '',
-      picture: sender.picture || this.state.friends[idx].picture || '',
+      picture: nextPic,
       online: true,
-      lastSeen: Date.now(),
-      currentTrack: sender.currentTrack || null,
-      isPlaying: Boolean(sender.isPlaying),
-      activeJamCode: sender.activeJamCode || ''
+      lastSeen: now,
+      currentTrack: nextTrack,
+      isPlaying: nextIsPlaying,
+      activeJamCode: nextJamCode
     }
     const nextFriends = [...this.state.friends]
     nextFriends[idx] = updatedFriend
-    saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
-    this.updateState({ friends: nextFriends })
+    const sorted = sortFriendsDeterministically(nextFriends)
+    saveJsonArray(FRIENDS_LIST_STORAGE_KEY, sorted)
+    this.updateState({ friends: sorted })
   }
 
   promoteToConfirmedFriend(sender) {
@@ -1462,9 +1527,10 @@ class JamSessionManager {
       activeJamCode: sender.activeJamCode ?? existing?.activeJamCode ?? ''
     }
 
-    const nextFriends = existing
+    const rawFriends = existing
       ? this.state.friends.map((f) => (f.friendCode === cleanCode ? { ...f, ...friendEntry } : f))
       : [friendEntry, ...this.state.friends]
+    const nextFriends = sortFriendsDeterministically(rawFriends)
 
     saveJsonArray(FRIENDS_LIST_STORAGE_KEY, nextFriends)
     this.updateState({
@@ -1809,11 +1875,15 @@ class JamSessionManager {
       if (data?.serverTs) {
         this.lastRoomServerTs = data.serverTs
       }
-      if (Array.isArray(data?.packets)) {
-        for (const pkt of data.packets) {
-          if (pkt && pkt._senderInstanceId !== this.instanceId) {
-            this.handleIncomingPacket(pkt, null)
-          }
+      const items = Array.isArray(data?.events)
+        ? data.events
+        : Array.isArray(data?.packets)
+          ? data.packets
+          : []
+      for (const item of items) {
+        const pkt = item?.packet && typeof item.packet === 'object' ? item.packet : item
+        if (pkt && pkt._senderInstanceId !== this.instanceId) {
+          this.handleIncomingPacket(pkt, null)
         }
       }
     } catch {}
@@ -1839,6 +1909,10 @@ class JamSessionManager {
     const roomCode = generateShortPin()
     const peerId = getPeerIdFromCode(roomCode)
     const normDj = initialDjMode === 'host_only' ? 'host_only' : 'open_party'
+
+    this.stateSeq = 0
+    this.lastAppliedSeq = 0
+    this.lastPlayStateTimestamp = 0
 
     const hostParticipant = this.buildSelfParticipant(true)
 
@@ -1902,25 +1976,42 @@ class JamSessionManager {
   }
 
   setupHostPeerConnection(conn) {
+    if (!conn) return
+    const connKey = conn.peer || `peer_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    conn._connKey = connKey
+
     conn.on('open', () => {
-      this.connections.set(conn.peer, conn)
+      this.hostConnections.set(connKey, conn)
       this.broadcastParticipants()
       this.broadcastSyncNow()
     })
 
     conn.on('data', (data) => {
+      if (!this.hostConnections.has(connKey) && conn.open) {
+        this.hostConnections.set(connKey, conn)
+      }
       this.handleIncomingPacket(data, conn)
     })
 
     const cleanup = () => {
-      this.connections.delete(conn.peer)
+      this.hostConnections.delete(connKey)
       if (conn._guestProfileId) {
-        const gone = this.state.participants.find((p) => p.id === conn._guestProfileId)
-        const nextList = this.state.participants.filter((p) => p.id !== conn._guestProfileId)
-        this.updateState({ participants: nextList })
-        this.broadcastParticipants()
-        if (gone && this.eventHandlers.onNotify) {
-          this.eventHandlers.onNotify(`${gone.name} left the Jam`, 'info')
+        // Only remove participant if they don't have another active connection in hostConnections
+        let hasOtherOpenConn = false
+        for (const other of this.hostConnections.values()) {
+          if (other && other !== conn && other.open && other._guestProfileId === conn._guestProfileId) {
+            hasOtherOpenConn = true
+            break
+          }
+        }
+        if (!hasOtherOpenConn) {
+          const gone = this.state.participants.find((p) => p.id === conn._guestProfileId)
+          const nextList = this.state.participants.filter((p) => p.id !== conn._guestProfileId)
+          this.updateState({ participants: nextList })
+          this.broadcastParticipants()
+          if (gone && this.eventHandlers.onNotify) {
+            this.eventHandlers.onNotify(`${gone.name} left the Jam`, 'info')
+          }
         }
       }
     }
@@ -1939,6 +2030,10 @@ class JamSessionManager {
     this.leaveJam(true)
     this.userProfile = loadJamUserProfile(googleUser)
     const hostPeerId = getPeerIdFromCode(roomCode)
+
+    this.stateSeq = 0
+    this.lastAppliedSeq = 0
+    this.lastPlayStateTimestamp = 0
 
     const selfParticipant = this.buildSelfParticipant(false)
 
@@ -2097,18 +2192,35 @@ class JamSessionManager {
     }
   }
 
-  broadcastFromHost(packet, options = { useCloud: true }) {
+  broadcastFromHost(packet, options = { useCloud: true }, excludeClientId = null) {
     if (!this.state.active || this.state.role !== 'host') return
+    const nextSeq = ++this.stateSeq
     const payload = {
       ...packet,
-      _packetId: packet._packetId || makePacketId(),
+      seq: nextSeq,
+      timestamp: packet.timestamp || Date.now(),
+      _fromRole: 'host',
+      _isFromHost: true,
+      _packetId: makePacketId(),
       _senderProfileId: this.getSelfParticipantId(),
       _senderInstanceId: this.instanceId
     }
-    for (const conn of this.connections.values()) {
+    for (const [peerKey, conn] of this.hostConnections.entries()) {
+      if (!conn || conn.open === false) {
+        this.hostConnections.delete(peerKey)
+        continue
+      }
+      if (
+        excludeClientId &&
+        (peerKey === excludeClientId || conn._guestProfileId === excludeClientId)
+      ) {
+        continue
+      }
       try {
-        if (conn.open) conn.send(payload)
-      } catch {}
+        conn.send(payload)
+      } catch {
+        this.hostConnections.delete(peerKey)
+      }
     }
     if (this.bc) {
       try {
@@ -2125,6 +2237,8 @@ class JamSessionManager {
     if (!this.state.active) return
     const payload = {
       ...packet,
+      _fromRole: 'guest',
+      _isFromHost: false,
       _packetId: packet._packetId || makePacketId(),
       _senderProfileId: this.getSelfParticipantId(),
       _senderInstanceId: this.instanceId
@@ -2142,6 +2256,47 @@ class JamSessionManager {
     this.sendBackendRoomPacket(this.state.roomCode, payload)
     if (options?.useCloud !== false) {
       this.sendCloudRoomPacket(this.state.roomCode, payload)
+    }
+  }
+
+  broadcastPlayState(isPlaying, currentTime = 0, track = null) {
+    if (!this.state.active) return
+    const cleanPlaying = Boolean(isPlaying)
+    const cleanTime = Number(currentTime) || 0
+
+    if (this.state.role === 'host') {
+      const nowTs = Date.now()
+      this.lastPlayStateTimestamp = nowTs
+      const snap = this.eventHandlers.getHostPlaybackSnapshot
+        ? this.eventHandlers.getHostPlaybackSnapshot()
+        : null
+      const activeTrack = track || snap?.track || null
+
+      const buildPacket = () => ({
+        type: 'JAM_PLAY_STATE',
+        roomCode: this.state.roomCode,
+        isPlaying: cleanPlaying,
+        currentTime: cleanTime,
+        track: activeTrack,
+        hostTimestamp: Date.now(),
+        djMode: this.state.djMode,
+        hostName: this.userProfile?.name || 'Host'
+      })
+
+      // Immediate 0ms dispatch + 120ms confirmation double-tap so no guest ever misses Pause/Play
+      this.broadcastFromHost(buildPacket(), { useCloud: true })
+      setTimeout(() => {
+        if (this.state.active && this.state.role === 'host') {
+          this.broadcastFromHost(buildPacket(), { useCloud: true })
+        }
+      }, 120)
+      this.broadcastPresenceStatus()
+    } else if (this.state.role === 'guest') {
+      this.emitControl(cleanPlaying ? 'PLAY' : 'PAUSE', {
+        isPlaying: cleanPlaying,
+        currentTime: cleanTime,
+        track: track || undefined
+      })
     }
   }
 
@@ -2195,10 +2350,22 @@ class JamSessionManager {
     if (!data || typeof data !== 'object') return
     if (data._senderInstanceId && data._senderInstanceId === this.instanceId) return
 
+    // STRICT STAR-TOPOLOGY ROUTING GUARD:
+    // Guests MUST ignore packets sent directly by other Guests over shared broadcast relays
+    // (BroadcastChannel, Cloud SSE, Backend room poll). Only the Host's canonical broadcasts
+    // (_fromRole === 'host') are applied by Guests, preventing 3+ node echo storms!
+    if (this.state.role === 'guest' && data._fromRole === 'guest') {
+      return
+    }
+    if (this.state.role === 'host' && data._fromRole === 'host') {
+      return
+    }
+
     // Deduplicate discrete room events across multiple transports
     if (
       data._packetId &&
       data.type !== 'JAM_SYNC' &&
+      data.type !== 'JAM_PLAY_STATE' &&
       data.type !== 'JAM_PING' &&
       data.type !== 'JAM_PONG'
     ) {
@@ -2217,7 +2384,18 @@ class JamSessionManager {
             isHost: false,
             inSync: true
           }
-          if (conn) conn._guestProfileId = cleanProfile.id
+          if (conn) {
+            conn._guestProfileId = cleanProfile.id
+            // Prune any older stale PeerJS connections from this same guest ID
+            for (const [peerKey, existingConn] of this.hostConnections.entries()) {
+              if (existingConn !== conn && existingConn?._guestProfileId === cleanProfile.id) {
+                try {
+                  existingConn.close()
+                } catch {}
+                this.hostConnections.delete(peerKey)
+              }
+            }
+          }
           const exists = this.state.participants.some((p) => p.id === cleanProfile.id)
           const updated = exists
             ? this.state.participants.map((p) =>
@@ -2264,6 +2442,8 @@ class JamSessionManager {
             t2: Date.now(),
             t3: Date.now(),
             targetId: data.senderId,
+            _fromRole: 'host',
+            _isFromHost: true,
             _senderProfileId: this.getSelfParticipantId(),
             _senderInstanceId: this.instanceId
           }
@@ -2298,15 +2478,52 @@ class JamSessionManager {
         break
       }
 
-      case 'JAM_SYNC': {
+      case 'JAM_PLAY_STATE': {
         if (this.state.role === 'guest') {
+          const pktTs = Number(data.hostTimestamp || data.timestamp) || Date.now()
+          if (this.lastPlayStateTimestamp && pktTs < this.lastPlayStateTimestamp - 50) {
+            return
+          }
+          this.lastPlayStateTimestamp = pktTs
+          if (typeof data.seq === 'number' && data.seq > this.lastAppliedSeq) {
+            this.lastAppliedSeq = data.seq
+          }
           this.updateState({
             status: 'CONNECTED',
             error: null,
             djMode: data.djMode || this.state.djMode,
             hostName: data.hostName || this.state.hostName
           })
-          if (data.track && this.eventHandlers.onRemoteSync) {
+          if (this.eventHandlers.onRemoteSync) {
+            this.eventHandlers.onRemoteSync(
+              { ...data, forcePlayState: true },
+              this.state.clockOffsetMs
+            )
+          }
+        }
+        break
+      }
+
+      case 'JAM_SYNC': {
+        if (this.state.role === 'guest') {
+          if (typeof data.seq === 'number') {
+            if (this.lastAppliedSeq > 0 && data.seq < this.lastAppliedSeq) {
+              return
+            }
+            this.lastAppliedSeq = data.seq
+          }
+          const pktTs = Number(data.hostTimestamp || data.timestamp) || 0
+          // Prevent an older in-flight periodic JAM_SYNC heartbeat from overriding a newer JAM_PLAY_STATE
+          if (this.lastPlayStateTimestamp > 0 && pktTs > 0 && pktTs < this.lastPlayStateTimestamp) {
+            return
+          }
+          this.updateState({
+            status: 'CONNECTED',
+            error: null,
+            djMode: data.djMode || this.state.djMode,
+            hostName: data.hostName || this.state.hostName
+          })
+          if ((data.track || typeof data.isPlaying === 'boolean') && this.eventHandlers.onRemoteSync) {
             this.eventHandlers.onRemoteSync(data, this.state.clockOffsetMs)
           }
         }
@@ -2319,9 +2536,21 @@ class JamSessionManager {
             if (this.eventHandlers.onRemoteControl) {
               this.eventHandlers.onRemoteControl(data)
             }
-            this.broadcastFromHost(data, { useCloud: true })
+            // Re-broadcast canonical control from Host to all other guests (excluding sender on PeerJS)
+            this.broadcastFromHost(data, { useCloud: true }, data.senderId || data._senderProfileId)
+            if (data.action === 'PAUSE' || data.action === 'PLAY') {
+              this.broadcastPlayState(
+                data.action === 'PLAY',
+                data.currentTime,
+                data.track || null
+              )
+            }
           }
         } else if (this.state.role === 'guest') {
+          // Ignore if this control echoed back to the guest who originally sent it
+          if (data.senderId && data.senderId === this.getSelfParticipantId()) {
+            return
+          }
           if (this.eventHandlers.onRemoteControl) {
             this.eventHandlers.onRemoteControl(data)
           }
@@ -2339,9 +2568,16 @@ class JamSessionManager {
           if (this.eventHandlers.onRemoteQueueAdd) {
             this.eventHandlers.onRemoteQueueAdd(data.track, cleanAddedBy)
           }
-          this.broadcastFromHost({ ...data, addedBy: cleanAddedBy }, { useCloud: true })
+          this.broadcastFromHost(
+            { ...data, addedBy: cleanAddedBy },
+            { useCloud: true },
+            cleanAddedBy.id
+          )
           setTimeout(() => this.broadcastSyncNow(null, { useCloud: true }), 150)
         } else if (this.state.role === 'guest') {
+          if (cleanAddedBy.id && cleanAddedBy.id === this.getSelfParticipantId()) {
+            return
+          }
           if (this.eventHandlers.onRemoteQueueAdd) {
             this.eventHandlers.onRemoteQueueAdd(data.track, cleanAddedBy)
           }
@@ -2351,7 +2587,10 @@ class JamSessionManager {
 
       case 'JAM_REACTION': {
         if (this.state.role === 'host') {
-          this.broadcastFromHost(data, { useCloud: true })
+          this.broadcastFromHost(data, { useCloud: true }, data.senderId)
+        }
+        if (data.senderId && data.senderId === this.getSelfParticipantId()) {
+          return
         }
         if (this.eventHandlers.onReaction) {
           this.eventHandlers.onReaction(data)
@@ -2376,6 +2615,14 @@ class JamSessionManager {
 
       case 'JAM_LEAVE': {
         if (this.state.role === 'host' && data.senderId) {
+          for (const [peerKey, existingConn] of this.hostConnections.entries()) {
+            if (existingConn?._guestProfileId === data.senderId) {
+              try {
+                existingConn.close()
+              } catch {}
+              this.hostConnections.delete(peerKey)
+            }
+          }
           const gone = this.state.participants.find((p) => p.id === data.senderId)
           const nextList = this.state.participants.filter((p) => p.id !== data.senderId)
           this.updateState({ participants: nextList })
@@ -2422,6 +2669,9 @@ class JamSessionManager {
     }
 
     if (this.state.role === 'host') {
+      if (action === 'PAUSE' || action === 'PLAY') {
+        this.broadcastPlayState(action === 'PLAY', payload.currentTime, payload.track)
+      }
       this.broadcastFromHost(packet, { useCloud: true })
       setTimeout(() => this.broadcastSyncNow(null, { useCloud: true }), 80)
     } else {

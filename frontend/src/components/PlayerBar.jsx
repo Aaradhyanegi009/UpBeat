@@ -659,6 +659,7 @@ export default function PlayerBar({
   }, [primeAudioEngines])
 
   const pendingSeekSecRef = useRef(null)
+  const commitSeekRef = useRef(null)
 
   const commitSeek = (targetSec, fromRemoteJam = false) => {
     finishCrossfadeNow()
@@ -695,16 +696,104 @@ export default function PlayerBar({
       } catch {}
     }
   }
+  commitSeekRef.current = commitSeek
+
+  const forcePauseDirect = (targetSec) => {
+    isPlayingRef.current = false
+    setIsPlaying(false)
+    finishCrossfadeNow()
+    ;[audioRefA.current, audioRefB.current].forEach((a) => {
+      if (a) {
+        try {
+          a.playbackRate = 1.0
+          a.pause()
+        } catch {}
+      }
+    })
+    if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
+      try {
+        playerRef.current.pauseVideo()
+      } catch {}
+    }
+    if (typeof targetSec === 'number' && !isNaN(targetSec) && targetSec >= 0) {
+      const sec = Math.max(0, Number(targetSec) || 0)
+      currentTimeRef.current = sec
+      setCurrentTime(sec)
+      lastCurPosRef.current = sec
+      const activeAudio = getActiveAudio()
+      if (!useIframeFallback && activeAudio) {
+        try {
+          if (activeAudio.readyState >= 1) {
+            if (Math.abs((activeAudio.currentTime || 0) - sec) > 0.15) {
+              activeAudio.currentTime = sec
+            }
+            pendingSeekSecRef.current = null
+          } else {
+            pendingSeekSecRef.current = sec
+          }
+        } catch {}
+      } else if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+        try {
+          playerRef.current.seekTo(sec, true)
+        } catch {}
+      }
+    }
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = 'paused'
+      } catch {}
+    }
+    notifyNativePlayback(false, currentTimeRef.current || 0, effectiveDuration)
+  }
+
+  const forcePlayDirect = (targetSec) => {
+    isPlayingRef.current = true
+    setIsPlaying(true)
+    if (typeof targetSec === 'number' && !isNaN(targetSec) && targetSec >= 0) {
+      if (Math.abs((currentTimeRef.current || 0) - targetSec) > 0.35) {
+        commitSeekRef.current?.(targetSec, true)
+      }
+    }
+    const activeAudio = getActiveAudio()
+    if (!useIframeFallback && activeAudio && activeAudio.getAttribute('src')) {
+      try {
+        activeAudio.play().catch(() => {})
+      } catch {}
+    } else if (useIframeFallback && playerRef.current && typeof playerRef.current.playVideo === 'function') {
+      try {
+        playerRef.current.playVideo()
+      } catch {}
+    }
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = 'playing'
+      } catch {}
+    }
+    notifyNativePlayback(true, currentTimeRef.current || 0, effectiveDuration)
+  }
+
+  const forcePauseRef = useRef(forcePauseDirect)
+  forcePauseRef.current = forcePauseDirect
+  const forcePlayRef = useRef(forcePlayDirect)
+  forcePlayRef.current = forcePlayDirect
 
   // Expose global controls for macOS menu bar, media keys, Jam sync engine, and external extensions
   useEffect(() => {
     window.UpBeatControls = {
-      togglePlay: () => setIsPlaying((p) => !p),
-      play: () => setIsPlaying(true),
-      pause: () => setIsPlaying(false),
+      togglePlay: () => {
+        if (isPlayingRef.current) {
+          forcePauseRef.current?.()
+        } else {
+          forcePlayRef.current?.()
+        }
+      },
+      play: (targetSec) => forcePlayRef.current?.(targetSec),
+      pause: (targetSec) => forcePauseRef.current?.(targetSec),
+      forcePlay: (targetSec) => forcePlayRef.current?.(targetSec),
+      forcePause: (targetSec) => forcePauseRef.current?.(targetSec),
       next: () => onNextRef.current(),
       prev: () => onPrev(),
-      seekTo: (sec, fromRemoteJam = false) => commitSeek(sec, fromRemoteJam),
+      seekTo: (sec, fromRemoteJam = false) => commitSeekRef.current?.(sec, fromRemoteJam),
       getCurrentTime: () => currentTimeRef.current || 0,
       getDuration: () => authoritativeDurationRef.current || 0,
       setPlaybackRate: (rate) => {
@@ -951,7 +1040,7 @@ export default function PlayerBar({
 
       const isDocumentHidden = typeof document !== 'undefined' && Boolean(document.hidden)
 
-      if (isDocumentHidden && currentActive && isPrevPlaying) {
+      if (isDocumentHidden && currentActive && isPrevPlaying && isPlayingRef.current) {
         // Continuous background playback (Safari/Chrome tab hidden or minimized):
         // Directly reuse the active, already-blessed audio element to eliminate browser background autoplay blocks.
         // The idle deck is NOT loaded here, so it can never start a duplicate copy in the background.
@@ -1565,6 +1654,14 @@ export default function PlayerBar({
           onPlay={(e) => {
             setIsLoadingStream(false)
             clearLoadWatchdog()
+            // If playback was explicitly paused (e.g. via Host Jam pause or forcePause),
+            // do not allow an asynchronous browser play/seek event to unpause the deck!
+            if (!isPlayingRef.current) {
+              try {
+                e.currentTarget.pause()
+              } catch {}
+              return
+            }
             if (activeDeckRef.current === deck || e.currentTarget.dataset.vid === resolvedVid) {
               setIsPlaying(true)
               isPlayingRef.current = true

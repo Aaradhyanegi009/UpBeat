@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { X, Copy, Check, Share2, QrCode, UserPlus, Trash2, LogOut, Radio, Users, Crown, Play } from 'lucide-react'
-import { jamManager, loadJamUserProfile, normalizeFriendCode, normalizeRoomCode, buildJamInviteUrl, buildFriendInviteUrl } from '../jamEngine'
+import { jamManager, loadJamUserProfile, normalizeFriendCode, normalizeRoomCode, buildJamInviteUrl, buildFriendInviteUrl, sortFriendsDeterministically } from '../jamEngine'
 import { Avatar, Art, Chip, IconButton, ActionMenu, Spinner } from '../ui/primitives'
 
 function lastSeen(ts) {
@@ -80,8 +80,8 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
   const friends = jamState?.friends || []
   const incoming = jamState?.incomingRequests || []
   const outgoing = jamState?.outgoingRequests || []
-  const online = friends.filter((f) => f.online)
-  const sortedFriends = [...friends].sort((a, b) => Number(b.online) - Number(a.online) || (b.lastSeen || 0) - (a.lastSeen || 0))
+  const sortedFriends = sortFriendsDeterministically(friends)
+  const online = sortedFriends.filter((f) => f.online)
   const myCode = profile?.friendCode || jamState?.userProfile?.friendCode || ''
   const roomUrl = jamState?.roomCode ? buildJamInviteUrl(jamState.roomCode) : ''
   const friendUrl = myCode ? buildFriendInviteUrl(myCode) : ''

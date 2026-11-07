@@ -388,8 +388,20 @@ export default function App() {
   const isPlayingRef = useRef(isPlaying)
   const queueRef = useRef(queue)
   const remoteJamGuardRef = useRef(false)
+  const remoteJamGuardTimerRef = useRef(null)
   const handleNextRef = useRef(null)
   const handlePrevRef = useRef(null)
+
+  const activateRemoteJamGuard = useCallback((durationMs = 350) => {
+    remoteJamGuardRef.current = true
+    if (remoteJamGuardTimerRef.current) {
+      clearTimeout(remoteJamGuardTimerRef.current)
+    }
+    remoteJamGuardTimerRef.current = setTimeout(() => {
+      remoteJamGuardRef.current = false
+      remoteJamGuardTimerRef.current = null
+    }, durationMs)
+  }, [])
 
   currentTrackRef.current = currentTrack
   isPlayingRef.current = isPlaying
@@ -477,19 +489,37 @@ export default function App() {
       }),
       onRemoteSync: (data, clockOffsetMs) => {
         if (!data) return
-        remoteJamGuardRef.current = true
+        activateRemoteJamGuard(350)
         try {
           if (data.track?.video_id && data.track.video_id !== currentTrackRef.current?.video_id) {
+            currentTrackRef.current = data.track
             setCurrentTrack(data.track)
           }
-          if (typeof data.isPlaying === 'boolean' && data.isPlaying !== isPlayingRef.current) {
-            setIsPlaying(data.isPlaying)
-          }
           if (Array.isArray(data.queue)) {
+            queueRef.current = data.queue
             setQueue(data.queue)
           }
 
-          if (data.track?.video_id) {
+          // Authoritative Pause Enforcement: immediately halt both audio decks & skip drift ramping
+          if (data.isPlaying === false) {
+            isPlayingRef.current = false
+            setIsPlaying(false)
+            window.UpBeatControls?.forcePause?.(
+              typeof data.currentTime === 'number' ? data.currentTime : undefined
+            )
+            jamManager.reportDriftStatus(0, 'LOCKED')
+            return
+          }
+
+          if (data.isPlaying === true) {
+            if (!isPlayingRef.current || data.forcePlayState) {
+              isPlayingRef.current = true
+              setIsPlaying(true)
+              window.UpBeatControls?.forcePlay?.()
+            }
+          }
+
+          if (data.track?.video_id || currentTrackRef.current?.video_id) {
             const localTime = window.UpBeatControls?.getCurrentTime?.() || 0
             const drift = evaluateAudioDrift(
               localTime,
@@ -508,30 +538,31 @@ export default function App() {
             }
             jamManager.reportDriftStatus(drift.driftMs, drift.syncTier)
           }
-        } finally {
-          setTimeout(() => {
-            remoteJamGuardRef.current = false
-          }, 80)
-        }
+        } catch {}
       },
       onRemoteControl: (data) => {
         if (!data || !data.action) return
-        remoteJamGuardRef.current = true
+        activateRemoteJamGuard(350)
         try {
           if (data.action === 'SELECT_TRACK' && data.track) {
+            currentTrackRef.current = data.track
             setCurrentTrack(data.track)
+            isPlayingRef.current = true
             setIsPlaying(true)
             window.UpBeatControls?.seekTo?.(0, true)
+            window.UpBeatControls?.forcePlay?.(0)
           } else if (data.action === 'PLAY') {
+            isPlayingRef.current = true
             setIsPlaying(true)
-            if (typeof data.currentTime === 'number') {
-              window.UpBeatControls?.seekTo?.(data.currentTime, true)
-            }
+            window.UpBeatControls?.forcePlay?.(
+              typeof data.currentTime === 'number' ? data.currentTime : undefined
+            )
           } else if (data.action === 'PAUSE') {
+            isPlayingRef.current = false
             setIsPlaying(false)
-            if (typeof data.currentTime === 'number') {
-              window.UpBeatControls?.seekTo?.(data.currentTime, true)
-            }
+            window.UpBeatControls?.forcePause?.(
+              typeof data.currentTime === 'number' ? data.currentTime : undefined
+            )
           } else if (data.action === 'SEEK' && typeof data.currentTime === 'number') {
             window.UpBeatControls?.seekTo?.(data.currentTime, true)
           } else if (data.action === 'NEXT') {
@@ -543,11 +574,7 @@ export default function App() {
           if (jamManager.state.active && jamManager.state.isHost) {
             setTimeout(() => jamManager.broadcastHostSync(), 60)
           }
-        } finally {
-          setTimeout(() => {
-            remoteJamGuardRef.current = false
-          }, 80)
-        }
+        } catch {}
       },
       onRemoteQueueAdd: (track, addedBy) => {
         if (!track) return
@@ -1701,15 +1728,22 @@ export default function App() {
       (currentTrack.title === track.title && currentTrack.artist === track.artist)
     )
     if (isSame) {
-      const nextPlay = !isPlaying
+      const nextPlay = !isPlayingRef.current
+      isPlayingRef.current = nextPlay
       setIsPlaying(nextPlay)
-      if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
-        jamManager.emitPlaybackControl(nextPlay ? 'PLAY' : 'PAUSE', {
-          currentTime: window.UpBeatControls?.getCurrentTime?.() || 0
-        })
+      const curTime = window.UpBeatControls?.getCurrentTime?.() || 0
+      if (!nextPlay) {
+        window.UpBeatControls?.forcePause?.(curTime)
+      } else {
+        window.UpBeatControls?.forcePlay?.()
+      }
+      if (jamManager.state.active && !remoteJamGuardRef.current) {
+        jamManager.broadcastPlayState(nextPlay, curTime, currentTrackRef.current || track)
       }
       return
     }
+    currentTrackRef.current = track
+    isPlayingRef.current = true
     setCurrentTrack(track)
     setCurrentTrackIdx(actualIdx)
     setIsPlaying(true)
@@ -1727,20 +1761,29 @@ export default function App() {
       return
     }
     if (!currentTrack && playlist?.tracks?.length > 0) {
-      setCurrentTrack(playlist.tracks[0])
+      const firstTrack = playlist.tracks[0]
+      currentTrackRef.current = firstTrack
+      isPlayingRef.current = true
+      setCurrentTrack(firstTrack)
       setCurrentTrackIdx(0)
       setIsPlaying(true)
+      if (jamManager.state.active && !remoteJamGuardRef.current) {
+        jamManager.broadcastPlayState(true, 0, firstTrack)
+      }
       return
     }
-    setIsPlaying((prev) => {
-      const next = !prev
-      if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
-        jamManager.emitPlaybackControl(next ? 'PLAY' : 'PAUSE', {
-          currentTime: window.UpBeatControls?.getCurrentTime?.() || 0
-        })
-      }
-      return next
-    })
+    const next = !isPlayingRef.current
+    isPlayingRef.current = next
+    setIsPlaying(next)
+    const curTime = window.UpBeatControls?.getCurrentTime?.() || 0
+    if (!next) {
+      window.UpBeatControls?.forcePause?.(curTime)
+    } else {
+      window.UpBeatControls?.forcePlay?.()
+    }
+    if (jamManager.state.active && !remoteJamGuardRef.current) {
+      jamManager.broadcastPlayState(next, curTime, currentTrackRef.current)
+    }
   }
 
   const getActiveTrackList = () => {
