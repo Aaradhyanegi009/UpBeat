@@ -4,6 +4,48 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.5.0] - 2026-11-11
+
+### 🎧 Curated Artist Mashup Playlists (Zero Gym & Lo-Fi Tracks)
+- **Expanded "Made for you" to 7 Playlists**:
+  - Replaced generic time-of-day, gym, workout, and lo-fi tracks with **6–7 curated artist mashups and high-energy cross-artist collaborations** across multiple dynamic rotation cycles.
+  - Curations feature top duets, crossovers, and harmonic collaborations:
+    - *The Weeknd x Daft Punk Mashup* (Starboy, I Feel It Coming & Synthpop Anthems)
+    - *Arijit Singh x Atif Aslam Mashup* (Tum Hi Ho, Dil Diyan Gallan & Soulful Harmonies)
+    - *Taylor Swift x Gracie Abrams Mashup* (Us, Cruel Summer & Pop Storytelling)
+    - *Post Malone x Swae Lee Mashup* (Sunflower, Circles & Melodic Hooks)
+    - *Billie Eilish x Finneas Acoustic Mix* (Birds of a Feather, Ocean Eyes & Vocal Harmonies)
+    - *Coldplay x Imagine Dragons Mashup* (Viva La Vida, Believer & Stadium Anthems)
+    - *Kendrick Lamar x SZA Crossover* (All The Stars, Doves in the Wind & Melodic Hip-Hop)
+    - *Dua Lipa x Elton John Mashup*, *Diljit Dosanjh x Karan Aujla Duets*, *Fujii Kaze x YOASOBI J-Pop Mix*, etc.
+  - Expanded Tier-2 personal mixes to **8 blocks total** (1 prominent Featured Card banner + 7 rich artist mashups in the "Made for you" row).
+
+### 📈 Multi-Chart Daily Expansion & Preference-Ranked Top Daily Charts
+- **Expanded Top Daily Charts to 7 Cards**:
+  - Replaced static 4-chart layout with dynamic ranking across 9 global and regional charts:
+    - *India Top Daily Chart* (Top Charting Hits Across India)
+    - *India Trendy Songs* (Viral Indian Reels, Indie & Bollywood Hits)
+    - *Global Top 50 Daily* (World’s Most Streamed Tracks)
+    - *US Top Daily Chart* (Billboard Hot 100 & US Top 50)
+    - *UK Official Top 40* (British Chart Hits & Trending Pop)
+    - *Japan Top Daily Chart* (J-Pop, Anime & Tokyo Hot 100)
+    - *Global Viral Daily Hits* (Breakout Hits & Trending Melodies)
+    - *K-Pop Top Daily* (Hallyu Hits & K-Pop Trends)
+    - *Latin Top Daily Chart* (Reggaeton, Latin Pop & Urbana Hits)
+  - `resolveRankedChartBlocks(cursor)` scores and prioritizes the top 7 daily charts based on explicit user preferences or genre taste.
+
+### 🌟 Prior Preferences Onboarding Flow
+- **4-Step Progressive Onboarding**:
+  - Automatically prompts new users and users retuning preferences prior to Home exploration:
+    - **Step 0**: 14 Genres & Musical Regions (Bollywood, Punjabi, Pop, Hip-Hop, Indie, Rock, J-Pop/Anime, K-Pop, R&B, EDM, Latin, Classical & Film, Metal, Country).
+    - **Step 1**: Dynamic Artist Selection with Genre Suggestions & Live Search.
+    - **Step 2**: Top Daily Charts Selection with quick-toggle interactive cards.
+    - **Step 3**: Optional YouTube Liked Songs Import & Summary.
+  - Selections are stored locally (`upbeat_taste_prefs_v1` and `upbeat_chart_prefs_v1`) to immediately tune Home feeds and top daily charts.
+  - Added "Your music picks & charts" retune button in Settings.
+
+---
+
 ## [v7.4.6] - 2026-11-07
 
 ### 🚀 Critical Fix: 4KB Cloud Relay Packet Dropping on Custom Profile Pictures

@@ -368,9 +368,10 @@ export default function App() {
   const searchInputRef = useRef(null)
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try {
-      if (localStorage.getItem('upbeat_onboarded_v1')) return false
-      const has = (k) => (loadStorage(k, []) || []).length > 0
-      return !has('argon_favs_v2') && !has('argon_seeds_v2') && !has('upbeat_history_v1')
+      if (localStorage.getItem('upbeat_onboarded_v1') && localStorage.getItem('upbeat_chart_prefs_v1')) return false
+      // If user hasn't set chart & taste preferences, show onboarding prior to anything
+      if (!localStorage.getItem('upbeat_chart_prefs_v1') && !localStorage.getItem('upbeat_taste_prefs_v1')) return true
+      return false
     } catch {
       return false
     }
@@ -2725,10 +2726,18 @@ export default function App() {
   const friends = jamState?.friends || []
 
   // ---- first-run setup -------------------------------------------------------
-  const finishOnboarding = async ({ genres = [], artists = [] } = {}, { connect = false } = {}) => {
+  const finishOnboarding = async ({ genres = [], artists = [], chartPrefs = [] } = {}, { connect = false } = {}) => {
     setOnboardingBusy(true)
     try {
       saveStorage('upbeat_taste_prefs_v1', { genres, artists, at: Date.now() })
+      if (Array.isArray(chartPrefs) && chartPrefs.length) {
+        saveStorage('upbeat_chart_prefs_v1', chartPrefs)
+      } else {
+        saveStorage('upbeat_chart_prefs_v1', ['india', 'india_trendy', 'global50', 'us_billboard'])
+      }
+      try {
+        sessionStorage.removeItem('upbeat_discovery_feed_cache_v7')
+      } catch {}
       const picks = artists.slice(0, 8)
       const results = await Promise.all(
         picks.map((a) =>
@@ -2744,7 +2753,7 @@ export default function App() {
           return [...seeds.filter((t) => t.video_id && !seen.has(t.video_id)), ...prev]
         })
       }
-      showNotify(seeds.length ? 'Home is tuned to your picks' : 'You’re all set', 'success')
+      showNotify(seeds.length ? 'Home & charts are tuned to your picks' : 'You’re all set', 'success')
     } finally {
       try {
         localStorage.setItem('upbeat_onboarded_v1', '1')
@@ -2759,6 +2768,9 @@ export default function App() {
   const skipOnboarding = () => {
     try {
       localStorage.setItem('upbeat_onboarded_v1', '1')
+      if (!localStorage.getItem('upbeat_chart_prefs_v1')) {
+        localStorage.setItem('upbeat_chart_prefs_v1', JSON.stringify(['india', 'india_trendy', 'global50', 'us_billboard']))
+      }
     } catch {}
     setShowOnboarding(false)
   }

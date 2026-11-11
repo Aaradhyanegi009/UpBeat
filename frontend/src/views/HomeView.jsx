@@ -533,9 +533,13 @@ function chartLabel(block) {
   if (t.includes('india') && t.includes('trend')) return 'Viral'
   if (t.includes('india')) return 'India'
   if (t.includes('japan')) return 'Japan'
-  if (t.includes('us ')) return 'US'
-  if (t.includes('global') || t.includes('international')) return 'Global'
-  return block.badge || ''
+  if (t.includes('us ') || t.includes('billboard') || t.includes('united states')) return 'US'
+  if (t.includes('uk ') || t.includes('british')) return 'UK'
+  if (t.includes('kpop') || t.includes('k-pop')) return 'K-Pop'
+  if (t.includes('latin')) return 'Latin'
+  if (t.includes('viral')) return 'Viral'
+  if (t.includes('global') || t.includes('international') || t.includes('worldwide')) return 'Global'
+  return block.badge || 'Chart'
 }
 
 function CardRow({ isDesktop, children }) {

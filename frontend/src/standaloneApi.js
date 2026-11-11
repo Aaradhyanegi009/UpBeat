@@ -1772,190 +1772,243 @@ const MOOD_VIBE_PRESETS = [
   { name: 'Moody Lo-Fi & Downtempo', desc: 'Relaxed chillhop textures and steady groove', query: 'lofi downtempo chill atmospheric study beats', color: 'from-indigo-600/40 to-black' }
 ]
 
-// Curated 4-cycle starter rotations for brand-new users
+// Curated starter artist mashup rotations (6-7 playlists of cross-artist duets & hit mashups, zero gym/lofi)
 const STARTER_ROTATION_CYCLES = [
   [
     {
       id: 'block_sonic_archetype',
       tier: 2,
       isNewUserSeed: true,
-      title: 'The Weeknd & Chart Pop Mix',
-      subtitle: 'Starboy, Blinding Lights & Synthpop Essentials',
-      badge: 'Artist Mix',
-      query: 'The Weeknd chart pop synthwave mix',
-      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/hqdefault.jpg',
+      title: 'The Weeknd x Daft Punk Mashup',
+      subtitle: 'Starboy, I Feel It Coming & Synthpop Anthems',
+      badge: 'Artist Mashup',
+      query: 'The Weeknd Daft Punk Starboy synthwave mashup playlist',
+      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
       color: 'from-rose-600/40 to-black'
     },
     {
-      id: 'block_deep_cut',
+      id: 'block_mashup_arijit_atif',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Maroon 5 & Pop Rock Mix',
-      subtitle: 'Sugar, Memories & Infectious Guitar Pop',
-      badge: 'Artist Mix',
-      query: 'Maroon 5 pop rock best hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/hqdefault.jpg',
-      color: 'from-indigo-600/40 to-black'
-    },
-    {
-      id: 'block_recent_vibe',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Billie Eilish & Atmospheric Pop',
-      subtitle: 'Birds of a Feather & Introspective Melodies',
-      badge: 'Vibe Mix',
-      query: 'Billie Eilish pop acoustic melody hits',
-      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/hqdefault.jpg',
-      color: 'from-cyan-600/40 to-black'
-    },
-    {
-      id: 'block_time_of_day',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Dua Lipa & Nu-Disco Flow',
-      subtitle: 'Levitating, Dance-Pop & Upbeat Energy',
-      badge: 'Time Flow',
-      query: 'Dua Lipa dance pop upbeat hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg',
-      color: 'from-amber-500/40 to-black'
-    }
-  ],
-  [
-    {
-      id: 'block_sonic_archetype',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Ariana Grande & Sweetener R&B',
-      subtitle: 'Positions, 7 rings & Smooth Pop Harmonies',
-      badge: 'Artist Mix',
-      query: 'Ariana Grande pop rnb hits mix playlist',
-      thumbnail: 'https://i.ytimg.com/vi/tcYodQoapMg/hqdefault.jpg',
-      color: 'from-pink-600/40 to-black'
-    },
-    {
-      id: 'block_deep_cut',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Coldplay & Cinematic Rock Mix',
-      subtitle: 'Yellow, Viva La Vida & Stadium Anthems',
-      badge: 'Artist Mix',
-      query: 'Coldplay greatest stadium rock hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/hqdefault.jpg',
-      color: 'from-blue-600/40 to-black'
-    },
-    {
-      id: 'block_recent_vibe',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Lana Del Rey & Dream Pop Noir',
-      subtitle: 'Summertime Sadness & Melancholic Ballads',
-      badge: 'Vibe Mix',
-      query: 'Lana Del Rey dream pop cinematic indie hits',
-      thumbnail: 'https://i.ytimg.com/vi/TdrL3QxjyVw/hqdefault.jpg',
-      color: 'from-purple-600/40 to-black'
-    },
-    {
-      id: 'block_time_of_day',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Bruno Mars & 24K Funk Flow',
-      subtitle: 'Uptown Funk, Silk Sonic & Golden Energy',
-      badge: 'Time Flow',
-      query: 'Bruno Mars Silk Sonic upbeat funk pop hits',
-      thumbnail: 'https://i.ytimg.com/vi/OPf0YbXqDm0/hqdefault.jpg',
+      title: 'Arijit Singh x Atif Aslam Mashup',
+      subtitle: 'Tum Hi Ho, Dil Diyan Gallan & Soulful Harmonies',
+      badge: 'Artist Mashup',
+      query: 'Arijit Singh Atif Aslam romantic acoustic mashup hit songs',
+      thumbnail: 'https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg',
       color: 'from-amber-600/40 to-black'
-    }
-  ],
-  [
-    {
-      id: 'block_sonic_archetype',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Kendrick Lamar & Modern Hip-Hop',
-      subtitle: 'Not Like Us, HUMBLE. & West Coast Anthems',
-      badge: 'Artist Mix',
-      query: 'Kendrick Lamar modern west coast hip hop mix',
-      thumbnail: 'https://i.ytimg.com/vi/T6eK-2OQtew/hqdefault.jpg',
-      color: 'from-emerald-600/40 to-black'
     },
     {
-      id: 'block_deep_cut',
+      id: 'block_mashup_taylor_gracie',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Olivia Rodrigo & Alt-Pop Anthem',
-      subtitle: 'Good 4 U, Vampire & Driving Guitars',
-      badge: 'Artist Mix',
-      query: 'Olivia Rodrigo alternative pop rock hits',
-      thumbnail: 'https://i.ytimg.com/vi/gNi_6U5Pm_o/hqdefault.jpg',
-      color: 'from-rose-600/40 to-black'
-    },
-    {
-      id: 'block_recent_vibe',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Daft Punk & French Electro Odyssey',
-      subtitle: 'Get Lucky, One More Time & Nu-Disco Waves',
-      badge: 'Vibe Mix',
-      query: 'Daft Punk french house electro nu disco hits',
-      thumbnail: 'https://i.ytimg.com/vi/5NV6Rdv1a3I/hqdefault.jpg',
-      color: 'from-cyan-600/40 to-black'
-    },
-    {
-      id: 'block_time_of_day',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Harry Styles & Sunset Indie Pop',
-      subtitle: 'As It Was, Watermelon Sugar & Summer Vibes',
-      badge: 'Time Flow',
-      query: 'Harry Styles indie pop sunny summer hits',
-      thumbnail: 'https://i.ytimg.com/vi/H5v3kku4y6Q/hqdefault.jpg',
-      color: 'from-orange-500/40 to-black'
-    }
-  ],
-  [
-    {
-      id: 'block_sonic_archetype',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Eminem & 2000s Rap Royalty',
-      subtitle: 'Without Me, Lose Yourself & Timeless Bars',
-      badge: 'Artist Mix',
-      query: 'Eminem 2000s classic hip hop rap hits',
-      thumbnail: 'https://i.ytimg.com/vi/_Yhyp-_hX2s/hqdefault.jpg',
-      color: 'from-red-600/40 to-black'
-    },
-    {
-      id: 'block_deep_cut',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Arctic Monkeys & Garage Indie',
-      subtitle: 'Do I Wanna Know, 505 & Brit-Rock Classics',
-      badge: 'Artist Mix',
-      query: 'Arctic Monkeys indie rock brit rock essential playlist',
-      thumbnail: 'https://i.ytimg.com/vi/bpOSxM0rNPM/hqdefault.jpg',
-      color: 'from-zinc-600/40 to-black'
-    },
-    {
-      id: 'block_recent_vibe',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Taylor Swift & Acoustic Pop Flow',
-      subtitle: 'Cruel Summer, Cardigan & Melodic Hooks',
-      badge: 'Vibe Mix',
-      query: 'Taylor Swift pop acoustic melodic hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/hqdefault.jpg',
+      title: 'Taylor Swift x Gracie Abrams Mashup',
+      subtitle: 'Us, Cruel Summer & Pop Storytelling',
+      badge: 'Acoustic Mashup',
+      query: 'Taylor Swift Gracie Abrams acoustic pop storytelling hits',
+      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg',
       color: 'from-teal-600/40 to-black'
     },
     {
-      id: 'block_time_of_day',
+      id: 'block_mashup_post_swae',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Post Malone & Melodic Trap Flow',
-      subtitle: 'Circles, Congratulations & Warm Acoustics',
-      badge: 'Time Flow',
-      query: 'Post Malone melodic pop trap acoustic hits',
-      thumbnail: 'https://i.ytimg.com/vi/UYwF-jdcVjY/hqdefault.jpg',
+      title: 'Post Malone x Swae Lee Mashup',
+      subtitle: 'Sunflower, Circles & Melodic Hooks',
+      badge: 'Melodic Mashup',
+      query: 'Post Malone Swae Lee Sunflower melodic pop hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
       color: 'from-purple-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_billie_finneas',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Billie Eilish x Finneas Acoustic Mix',
+      subtitle: 'Birds of a Feather, Ocean Eyes & Vocal Harmonies',
+      badge: 'Acoustic Mashup',
+      query: 'Billie Eilish Finneas acoustic unplugged vocal hits',
+      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
+      color: 'from-cyan-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_coldplay_dragons',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Coldplay x Imagine Dragons Mashup',
+      subtitle: 'Viva La Vida, Believer & Stadium Anthems',
+      badge: 'Anthem Mashup',
+      query: 'Coldplay Imagine Dragons stadium rock anthems playlist',
+      thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
+      color: 'from-blue-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_kendrick_sza',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Kendrick Lamar x SZA Crossover',
+      subtitle: 'All The Stars, Doves in the Wind & Melodic Hip-Hop',
+      badge: 'Crossover Mashup',
+      query: 'Kendrick Lamar SZA All The Stars hip hop rnb mashup',
+      thumbnail: 'https://i.ytimg.com/vi/T6eK-2OQtew/maxresdefault.jpg',
+      color: 'from-emerald-600/40 to-black'
+    }
+  ],
+  [
+    {
+      id: 'block_sonic_archetype',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Dua Lipa x Elton John Nu-Disco Mashup',
+      subtitle: 'Cold Heart, Levitating & Golden Dance Energy',
+      badge: 'Artist Mashup',
+      query: 'Dua Lipa Elton John Cold Heart nu disco dance hits',
+      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
+      color: 'from-pink-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_diljit_karan',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Diljit Dosanjh x Karan Aujla Mashup',
+      subtitle: 'Lover, Softly & Punjabi Chart Anthems',
+      badge: 'Artist Mashup',
+      query: 'Diljit Dosanjh Karan Aujla Punjabi hits mashup playlist',
+      thumbnail: 'https://i.ytimg.com/vi/RLzC55ai0eo/maxresdefault.jpg',
+      color: 'from-amber-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_ariana_bieber',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Ariana Grande x Justin Bieber Duets',
+      subtitle: 'Stuck with U, Positions & Vocal Harmonies',
+      badge: 'Vocal Duets',
+      query: 'Ariana Grande Justin Bieber pop rnb vocal duets playlist',
+      thumbnail: 'https://i.ytimg.com/vi/tcYodQoapMg/maxresdefault.jpg',
+      color: 'from-fuchsia-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_monkeys_neighbourhood',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Arctic Monkeys x The Neighbourhood Mashup',
+      subtitle: 'Do I Wanna Know, Sweater Weather & Alt-Rock Vibes',
+      badge: 'Alt-Rock Mashup',
+      query: 'Arctic Monkeys The Neighbourhood indie alt rock hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/bpOSxM0rNPM/maxresdefault.jpg',
+      color: 'from-zinc-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_prateek_jasleen',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Prateek Kuhad x Jasleen Royal Indie Mix',
+      subtitle: 'Kasoor, Kho Gaye Hum Kahan & Acoustic Warmth',
+      badge: 'Indie Mashup',
+      query: 'Prateek Kuhad Jasleen Royal acoustic indie hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg',
+      color: 'from-orange-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_bruno_paak',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Bruno Mars x Anderson .Paak Silk Sonic Flow',
+      subtitle: 'Leave the Door Open, 24K Magic & Golden Soul',
+      badge: 'Soul Mashup',
+      query: 'Bruno Mars Silk Sonic Anderson Paak funk soul hits',
+      thumbnail: 'https://i.ytimg.com/vi/OPf0YbXqDm0/maxresdefault.jpg',
+      color: 'from-amber-500/40 to-black'
+    },
+    {
+      id: 'block_mashup_fujii_yoasobi',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Fujii Kaze x YOASOBI Melodic Flow',
+      subtitle: 'Shinunoga E-Wa, Idol & Tokyo Crossover',
+      badge: 'Tokyo Crossover',
+      query: 'Fujii Kaze YOASOBI J-Pop anime melodic hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg',
+      color: 'from-indigo-600/40 to-black'
+    }
+  ],
+  [
+    {
+      id: 'block_sonic_archetype',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Drake x Travis Scott Hip-Hop Mashup',
+      subtitle: 'Meltdown, Sicko Mode & Heavy Anthems',
+      badge: 'Artist Mashup',
+      query: 'Drake Travis Scott hip hop anthems mashup playlist',
+      thumbnail: 'https://i.ytimg.com/vi/_Yhyp-_hX2s/maxresdefault.jpg',
+      color: 'from-red-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_sheeran_mendes',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Ed Sheeran x Shawn Mendes Acoustic Mashup',
+      subtitle: 'Shape of You, Senorita & Guitar Melodies',
+      badge: 'Acoustic Mashup',
+      query: 'Ed Sheeran Shawn Mendes acoustic pop hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/JGwWNGJdvx8/maxresdefault.jpg',
+      color: 'from-sky-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_lana_cas',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Lana Del Rey x Cigarettes After Sex Dream Mix',
+      subtitle: 'Video Games, Apocalypse & Cinematic Noir',
+      badge: 'Dream Pop Mashup',
+      query: 'Lana Del Rey Cigarettes After Sex dream pop noir hits',
+      thumbnail: 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg',
+      color: 'from-purple-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_1d_harry',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'One Direction x Harry Styles Mashup',
+      subtitle: 'Night Changes, As It Was & Pop Anthems',
+      badge: 'Pop Mashup',
+      query: 'One Direction Harry Styles greatest pop hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/H5v3kku4y6Q/maxresdefault.jpg',
+      color: 'from-rose-500/40 to-black'
+    },
+    {
+      id: 'block_mashup_shreya_sunidhi',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Shreya Ghoshal x Sunidhi Chauhan Mashup',
+      subtitle: 'Deewani Mastani, Kamli & Powerhouse Vocals',
+      badge: 'Vocal Powerhouse',
+      query: 'Shreya Ghoshal Sunidhi Chauhan Bollywood hit songs playlist',
+      thumbnail: 'https://i.ytimg.com/vi/VuG7ge_8I2Y/maxresdefault.jpg',
+      color: 'from-violet-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_eminem_rihanna',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Eminem x Rihanna Duets & Anthems',
+      subtitle: 'Love The Way You Lie, The Monster & Iconic Hooks',
+      badge: 'Legendary Duets',
+      query: 'Eminem Rihanna hits duet playlist',
+      thumbnail: 'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg',
+      color: 'from-stone-600/40 to-black'
+    },
+    {
+      id: 'block_mashup_maroon_puth',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Maroon 5 x Charlie Puth Pop Mashup',
+      subtitle: 'Sugar, Attention & Groovy Pop Hits',
+      badge: 'Groove Mashup',
+      query: 'Maroon 5 Charlie Puth pop hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
+      color: 'from-yellow-600/40 to-black'
     }
   ]
 ]
@@ -2175,6 +2228,117 @@ export async function buildHybridRediscoverBlock({
   }
 }
 
+export const AVAILABLE_CHARTS = [
+  {
+    id: 'block_india_top_daily',
+    tier: 1,
+    title: 'India Top Daily Chart',
+    subtitle: 'Top Charting Hits Across India Today',
+    badge: 'India Chart',
+    flag: '🇮🇳',
+    regionKey: 'india',
+    browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
+    query: 'Trending 20 India top daily chart hit songs playlist',
+    color: 'from-amber-600/40 to-black'
+  },
+  {
+    id: 'block_india_trendy',
+    tier: 1,
+    title: 'India Trendy Songs',
+    subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
+    badge: 'Trending Heat',
+    flag: '🇮🇳',
+    regionKey: 'india',
+    browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
+    query: 'viral trending songs reels Bollywood Punjabi indie hits playlist',
+    color: 'from-emerald-600/40 to-black'
+  },
+  {
+    id: 'block_global_top_daily',
+    tier: 1,
+    title: 'Global Top 50 Daily Chart',
+    subtitle: 'Most Played Songs Worldwide Today',
+    badge: 'Global Chart',
+    flag: '🌎',
+    regionKey: 'global',
+    browse_id: 'VLPL4fGSI40qSUHh345w2bH37X8Y5lQ2VzF4',
+    query: 'Global Top 50 daily chart hits playlist',
+    color: 'from-cyan-600/40 to-black'
+  },
+  {
+    id: 'block_us_top_daily',
+    tier: 1,
+    title: 'US Top Daily Chart',
+    subtitle: 'Billboard Hot 100 & US Top 50 Daily Hits',
+    badge: 'US Chart',
+    flag: '🇺🇸',
+    regionKey: 'us',
+    browse_id: 'VLPL4fGSI40qSUHnL3G30wzCvhLqLqBw8Fw_',
+    query: 'Billboard Hot 100 US top daily chart hits playlist',
+    color: 'from-blue-600/40 to-black'
+  },
+  {
+    id: 'block_uk_top_daily',
+    tier: 1,
+    title: 'UK Top Daily Chart',
+    subtitle: 'Official UK Top 40 & British Daily Chart',
+    badge: 'UK Chart',
+    flag: '🇬🇧',
+    regionKey: 'uk',
+    browse_id: 'VLPL4fGSI40qSUEq8sS2e293D6fR0PqHwKz',
+    query: 'Official UK Top 40 singles chart daily hits playlist',
+    color: 'from-violet-600/40 to-black'
+  },
+  {
+    id: 'block_japan_top_daily',
+    tier: 1,
+    title: 'Japan Top Daily Chart',
+    subtitle: 'J-Pop, Anime & Tokyo Hot 100 Daily Chart',
+    badge: 'Japan Chart',
+    flag: '🇯🇵',
+    regionKey: 'japan',
+    browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
+    query: 'Tokyo Hot 100 J-Pop anime daily top chart hits playlist',
+    color: 'from-rose-600/40 to-black'
+  },
+  {
+    id: 'block_viral_top_daily',
+    tier: 1,
+    title: 'Global Viral Daily Hits',
+    subtitle: 'Trending TikTok, Reels & Viral Daily Tracks',
+    badge: 'Viral Chart',
+    flag: '🔥',
+    regionKey: 'viral',
+    browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
+    query: 'viral trending songs reels TikTok hits playlist',
+    color: 'from-pink-600/40 to-black'
+  },
+  {
+    id: 'block_kpop_top_daily',
+    tier: 1,
+    title: 'K-Pop Top Daily Chart',
+    subtitle: 'Top K-Pop, Idol & Asian Hot 50 Daily',
+    badge: 'K-Pop Chart',
+    flag: '🇰🇷',
+    regionKey: 'kpop',
+    browse_id: 'VLPL4fGSI40qSUHfCj3c4sJ4Xj5g1B6KqV4F',
+    query: 'K-Pop top daily chart hits newjeans bts blackpink playlist',
+    color: 'from-fuchsia-600/40 to-black'
+  },
+  {
+    id: 'block_latin_top_daily',
+    tier: 1,
+    title: 'Latin Top Daily Chart',
+    subtitle: 'Reggaeton, Latin Pop & Hot Daily Rhythms',
+    badge: 'Latin Chart',
+    flag: '🌴',
+    regionKey: 'latin',
+    browse_id: 'VLPL4fGSI40qSUFa1B5mB3Fj8M4Z2vY5lX1K',
+    query: 'Latin top daily chart hits Bad Bunny Shakira reggaeton playlist',
+    color: 'from-orange-600/40 to-black'
+  }
+]
+
 const CHART_THUMB_POOLS = {
   us: [
     'https://i.ytimg.com/vi/eVli-tstM5E/maxresdefault.jpg',
@@ -2207,62 +2371,120 @@ const CHART_THUMB_POOLS = {
     'https://i.ytimg.com/vi/nCD2hj6zJEc/maxresdefault.jpg',
     'https://i.ytimg.com/vi/muds1gFUTN8/maxresdefault.jpg',
     'https://i.ytimg.com/vi/6d5SS0gS5bU/maxresdefault.jpg'
+  ],
+  global: [
+    'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/H5v3kku4y6Q/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'
+  ],
+  uk: [
+    'https://i.ytimg.com/vi/JGwWNGJdvx8/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/UNZqm3dxd2w/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/eVli-tstM5E/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg'
+  ],
+  kpop: [
+    'https://i.ytimg.com/vi/js1CtxSY38I/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/gdZLi9oWNZg/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/2S24h70Qi3o/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/armNy0vT12E/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/pG6iaOMV46I/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/TQTlCHxyuu8/maxresdefault.jpg'
+  ],
+  latin: [
+    'https://i.ytimg.com/vi/b8m9zhNA4Ao/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/kJQP7kiw5Fk/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/CocEMWdc7Ck/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/p38Hgze4k7E/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/qj3P_B8Z5dE/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/wXhTHyIgQ_U/maxresdefault.jpg'
   ]
+}
+
+export function resolveRankedChartBlocks(cursor = 0) {
+  let preferredChartIds = []
+  try {
+    const rawChartPrefs = localStorage.getItem('upbeat_chart_prefs_v1')
+    if (rawChartPrefs) preferredChartIds = JSON.parse(rawChartPrefs)
+  } catch {}
+
+  let genres = []
+  let artists = []
+  try {
+    const rawTaste = localStorage.getItem('upbeat_taste_prefs_v1')
+    if (rawTaste) {
+      const parsed = JSON.parse(rawTaste)
+      genres = parsed.genres || []
+      artists = parsed.artists || []
+    }
+  } catch {}
+
+  const scoreMap = new Map()
+  AVAILABLE_CHARTS.forEach((chart, idx) => {
+    let score = 100 - idx
+    if (preferredChartIds.length > 0) {
+      const prefIdx = preferredChartIds.indexOf(chart.id)
+      if (prefIdx !== -1) {
+        score += 500 - prefIdx * 25
+      }
+    } else {
+      // Inferred preferences from user genres and artists
+      const isDesi = genres.some((g) => ['bollywood', 'punjabi'].includes(g)) ||
+        artists.some((a) => /arijit|atif|diljit|karan|pritam|shreya|jubin|anuv|sidhu|badshah/i.test(a))
+      const isJapanese = genres.includes('jpop') ||
+        artists.some((a) => /yoasobi|kenshi|fujii|higuchi|lisa|radwimps|sawano/i.test(a))
+      const isKpop = genres.includes('kpop') ||
+        artists.some((a) => /bts|blackpink|newjeans|stray|twice|jungkook/i.test(a))
+      const isLatin = genres.includes('latin') ||
+        artists.some((a) => /bad bunny|shakira|karol|balvin|peso pluma/i.test(a))
+      const isWestern = genres.some((g) => ['pop', 'hiphop', 'rock', 'electronic'].includes(g))
+
+      if (isDesi && (chart.id === 'block_india_top_daily' || chart.id === 'block_india_trendy')) {
+        score += 300
+      }
+      if (isJapanese && chart.id === 'block_japan_top_daily') {
+        score += 350
+      }
+      if (isKpop && chart.id === 'block_kpop_top_daily') {
+        score += 350
+      }
+      if (isLatin && chart.id === 'block_latin_top_daily') {
+        score += 350
+      }
+      if (isWestern && (chart.id === 'block_global_top_daily' || chart.id === 'block_us_top_daily' || chart.id === 'block_uk_top_daily')) {
+        score += 150
+      }
+    }
+    scoreMap.set(chart.id, score)
+  })
+
+  const sorted = [...AVAILABLE_CHARTS].sort((a, b) => scoreMap.get(b.id) - scoreMap.get(a.id))
+  // Return top 7 daily charts (at least 6-7 charts)
+  const selectedCharts = sorted.slice(0, 7)
+
+  return selectedCharts.map((c) => {
+    const pool = CHART_THUMB_POOLS[c.regionKey] || CHART_THUMB_POOLS.global
+    const thumb = pool[cursor % pool.length]
+    return {
+      ...c,
+      thumbnail: thumb,
+      thumbnailPool: pool
+    }
+  })
 }
 
 export function getInitialDiscoveryBlocks() {
   const cursor = getRotationCursor()
   const starterCycle = STARTER_ROTATION_CYCLES[cursor % STARTER_ROTATION_CYCLES.length]
+  const rankedCharts = resolveRankedChartBlocks(cursor)
 
   return [
-    {
-      id: 'block_us_top_daily',
-      tier: 1,
-      title: 'US Top Daily Chart',
-      subtitle: 'Billboard Hot 100 & US Top 50 Daily Hits',
-      badge: 'US Chart',
-      browse_id: 'VLPL4fGSI40qSUHnL3G30wzCvhLqLqBw8Fw_',
-      query: 'Billboard Hot 100 US top daily chart hits playlist',
-      thumbnail: CHART_THUMB_POOLS.us[cursor % CHART_THUMB_POOLS.us.length],
-      thumbnailPool: CHART_THUMB_POOLS.us,
-      color: 'from-blue-600/40 to-black'
-    },
-    {
-      id: 'block_india_top_daily',
-      tier: 1,
-      title: 'India Top Daily Chart',
-      subtitle: 'Top Charting Hits Across India Today',
-      badge: 'India Chart',
-      browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
-      query: 'Trending 20 India top daily chart hit songs playlist',
-      thumbnail: CHART_THUMB_POOLS.india[cursor % CHART_THUMB_POOLS.india.length],
-      thumbnailPool: CHART_THUMB_POOLS.india,
-      color: 'from-amber-600/40 to-black'
-    },
-    {
-      id: 'block_japan_top_daily',
-      tier: 1,
-      title: 'Japan Top Daily Chart',
-      subtitle: 'J-Pop, Anime & Tokyo Hot 100 Daily Chart',
-      badge: 'Japan Chart',
-      browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
-      query: 'Tokyo Hot 100 J-Pop anime daily top chart hits playlist',
-      thumbnail: CHART_THUMB_POOLS.japan[cursor % CHART_THUMB_POOLS.japan.length],
-      thumbnailPool: CHART_THUMB_POOLS.japan,
-      color: 'from-rose-600/40 to-black'
-    },
-    {
-      id: 'block_india_trendy',
-      tier: 1,
-      title: 'India Trendy Songs',
-      subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
-      badge: 'Trending Heat',
-      browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
-      query: 'viral trending songs reels Bollywood Punjabi indie hits playlist',
-      thumbnail: CHART_THUMB_POOLS.viral[cursor % CHART_THUMB_POOLS.viral.length],
-      thumbnailPool: CHART_THUMB_POOLS.viral,
-      color: 'from-emerald-600/40 to-black'
-    },
+    ...rankedCharts,
     ...starterCycle,
     {
       id: 'block_rediscover',
@@ -2343,81 +2565,26 @@ export async function fetchListenTogetherFeed({
     }
   }
 
+  // Also include user's preferred artists from onboarding/settings if library has few items
+  try {
+    const rawTaste = localStorage.getItem('upbeat_taste_prefs_v1')
+    if (rawTaste) {
+      const parsed = JSON.parse(rawTaste)
+      for (const aName of parsed.artists || []) {
+        const cleanA = aName.trim()
+        const key = cleanA.toLowerCase()
+        if (cleanA && !artistMap.has(key)) {
+          artistMap.set(key, { name: cleanA, tracks: [], thumb: '', thumbs: [] })
+        }
+      }
+    }
+  } catch {}
+
   const artists = Array.from(artistMap.values())
   const isNewUser = artists.length < 2
 
-  const archetype = tasteDna?.archetype || 'Sonic Explorer'
-
-  // Calculate current time slot for Time Flow Block
-  const currentHour = new Date().getHours()
-  let timeSlotTitle = 'Late Night Downtempo'
-  let timeSlotSubtitle = 'Nocturnal Lo-Fi & Deep Ambient Beats'
-  let timeSlotQuery = 'nocturnal lofi ambient chill study beats'
-  let timeSlotColor = 'from-violet-600/40 to-black'
-  if (currentHour >= 4 && currentHour < 12) {
-    timeSlotTitle = 'Sunrise Energy Flow'
-    timeSlotSubtitle = 'Energetic Morning Electronic & Acoustic Spark'
-    timeSlotQuery = 'morning acoustic upbeat electronic sunrise music'
-    timeSlotColor = 'from-rose-600/40 to-black'
-  } else if (currentHour >= 12 && currentHour < 19) {
-    timeSlotTitle = 'Daylight Focus & Work'
-    timeSlotSubtitle = 'Minimal Synth, Intricate Rhythm & Work Flow'
-    timeSlotQuery = 'minimal synth focus electronic programming beats'
-    timeSlotColor = 'from-slate-700/40 to-black'
-  }
-
-  // Tier 1 — 4 Mandatory Regional & Viral Chart Blocks with rotating high-res thumbnail pools
-  const tier1Blocks = [
-    {
-      id: 'block_us_top_daily',
-      tier: 1,
-      title: 'US Top Daily Chart',
-      subtitle: 'Billboard Hot 100 & US Top 50 Daily Hits',
-      badge: 'US Chart',
-      browse_id: 'VLPL4fGSI40qSUHnL3G30wzCvhLqLqBw8Fw_',
-      query: 'Billboard Hot 100 US top daily chart hits playlist',
-      thumbnail: CHART_THUMB_POOLS.us[cursor % CHART_THUMB_POOLS.us.length],
-      thumbnailPool: CHART_THUMB_POOLS.us,
-      color: 'from-blue-600/40 to-black'
-    },
-    {
-      id: 'block_india_top_daily',
-      tier: 1,
-      title: 'India Top Daily Chart',
-      subtitle: 'Top Charting Hits Across India Today',
-      badge: 'India Chart',
-      browse_id: 'VLOLAK5uy_lSTp1DIuzZBUyee3kDsXwPgP25WdfwB40',
-      query: 'Trending 20 India top daily chart hit songs playlist',
-      thumbnail: CHART_THUMB_POOLS.india[cursor % CHART_THUMB_POOLS.india.length],
-      thumbnailPool: CHART_THUMB_POOLS.india,
-      color: 'from-amber-600/40 to-black'
-    },
-    {
-      id: 'block_japan_top_daily',
-      tier: 1,
-      title: 'Japan Top Daily Chart',
-      subtitle: 'J-Pop, Anime & Tokyo Hot 100 Daily Chart',
-      badge: 'Japan Chart',
-      browse_id: 'VLPL4fGSI1pDJn43_Z-8f0nJ0Fp_b5sT6',
-      query: 'Tokyo Hot 100 J-Pop anime daily top chart hits playlist',
-      thumbnail: CHART_THUMB_POOLS.japan[cursor % CHART_THUMB_POOLS.japan.length],
-      thumbnailPool: CHART_THUMB_POOLS.japan,
-      color: 'from-rose-600/40 to-black'
-    },
-    {
-      id: 'block_india_trendy',
-      tier: 1,
-      title: 'India Trendy Songs',
-      subtitle: 'Viral Indian Reels, Indie & Bollywood Heat',
-      badge: 'Trending Heat',
-      browse_id: 'VLPL4fGSI1pDJn5RgLW0Sb_zECecWdH_4zOX',
-      query: 'viral trending songs reels Bollywood Punjabi indie hits playlist',
-      thumbnail: CHART_THUMB_POOLS.viral[cursor % CHART_THUMB_POOLS.viral.length],
-      thumbnailPool: CHART_THUMB_POOLS.viral,
-      color: 'from-emerald-600/40 to-black'
-    }
-  ]
-
+  // Tier 1 — At least 6 to 7 Ranked Regional & Global Daily Chart Blocks based on User Preferences
+  const tier1Blocks = resolveRankedChartBlocks(cursor)
   const usedCoverUrls = new Set(tier1Blocks.map((b) => b.thumbnail))
 
   // Build the hybrid Rediscover Favorites Mix block
@@ -2428,7 +2595,7 @@ export async function fetchListenTogetherFeed({
     forceShuffle: forceRefresh
   })
 
-  // Tier 2 — 5 Personalized Blocks (Cyclic Rotation Engine)
+  // Tier 2 — 8 Personalized Blocks (1 Featured + 7 Artist Mashups in Made for you, zero gym/lo-fi)
   let tier2Blocks = []
   if (isNewUser) {
     const starterCycle = STARTER_ROTATION_CYCLES[cursor % STARTER_ROTATION_CYCLES.length]
@@ -2441,8 +2608,8 @@ export async function fetchListenTogetherFeed({
     const a2 = artists[(cursor + 2) % n] || a0
     const a3 = artists[(cursor + 3) % n] || a1
     const a4 = artists[(cursor + 4) % n] || a2
-
-    const currentMood = MOOD_VIBE_PRESETS[cursor % MOOD_VIBE_PRESETS.length]
+    const a5 = artists[(cursor + 5) % n] || a0
+    const a6 = artists[(cursor + 6) % n] || a1
 
     const allUserThumbs = validUserTracks
       .map((t) => (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg` : t.thumbnail || ''))
@@ -2486,52 +2653,88 @@ export async function fetchListenTogetherFeed({
     const pool0 = buildPoolForArtists(a0, a1)
     const pool1 = buildPoolForArtists(a2, a3)
     const pool2 = buildPoolForArtists(a4, a0)
-    const pool3 = buildPoolForArtists(a1, a3, a4)
+    const pool3 = buildPoolForArtists(a1, a3)
+    const pool4 = buildPoolForArtists(a2, a5)
+    const pool5 = buildPoolForArtists(a0, a6)
+    const pool6 = buildPoolForArtists(a1, a4, a5)
 
     tier2Blocks = [
       {
         id: 'block_sonic_archetype',
         tier: 2,
-        title: `${a0.name} & ${a1.name} Mix`,
-        subtitle: `Featuring ${a0.name}, ${a1.name} & similar hits`,
-        badge: 'Artist Mix',
-        query: `${a0.name} ${a1.name} best hit songs playlist`,
+        title: `${a0.name} x ${a1.name} Mashup`,
+        subtitle: `Signature hits, vocal duets & iconic mashups from ${a0.name} and ${a1.name}`,
+        badge: 'Artist Mashup',
+        query: `${a0.name} ${a1.name} mashup acoustic duet hit songs playlist`,
         thumbnail: pickUniqueCover(pool0, a0),
         thumbnailPool: pool0,
         color: 'from-rose-600/40 to-black'
       },
       {
-        id: 'block_deep_cut',
+        id: 'block_mashup_crossover',
         tier: 2,
-        title: `${a2.name} & ${a3.name} Mix`,
-        subtitle: `Curated mix inspired by your listening library`,
-        badge: 'Artist Mix',
-        query: `${a2.name} ${a3.name} top hits playlist`,
+        title: `${a2.name} x ${a3.name} Crossover Mix`,
+        subtitle: `Curated crossover blending ${a2.name} and ${a3.name}`,
+        badge: 'Crossover Mashup',
+        query: `${a2.name} ${a3.name} mashup top hits playlist`,
         thumbnail: pickUniqueCover(pool1, a2),
         thumbnailPool: pool1,
         color: 'from-indigo-600/40 to-black'
       },
       {
-        id: 'block_recent_vibe',
+        id: 'block_mashup_acoustic',
         tier: 2,
-        title: `${a4.name} & ${currentMood.name}`,
-        subtitle: `${archetype} • ${currentMood.desc}`,
-        badge: 'Vibe Mix',
-        query: `${a4.name} ${currentMood.query}`,
+        title: `${a4.name} x ${a0.name} Unplugged Mashup`,
+        subtitle: `Acoustic duets, stripped-down vocals & soulful melodies`,
+        badge: 'Acoustic Mashup',
+        query: `${a4.name} ${a0.name} acoustic unplugged mashup songs`,
         thumbnail: pickUniqueCover(pool2, a4),
         thumbnailPool: pool2,
-        color: currentMood.color
+        color: 'from-amber-600/40 to-black'
       },
       {
-        id: 'block_time_of_day',
+        id: 'block_mashup_anthems',
         tier: 2,
-        title: `${timeSlotTitle} Mix`,
-        subtitle: `Synchronized with ${timeSlotSubtitle}`,
-        badge: 'Time Flow',
-        query: `${timeSlotQuery} ${a0.name}`,
-        thumbnail: pickUniqueCover(pool3, a0),
+        title: `${a1.name} x ${a3.name} High-Energy Mashup`,
+        subtitle: `Anthemic hooks & high-octane hits from ${a1.name} & ${a3.name}`,
+        badge: 'Anthem Mashup',
+        query: `${a1.name} ${a3.name} high energy anthem songs mashup`,
+        thumbnail: pickUniqueCover(pool3, a1),
         thumbnailPool: pool3,
-        color: timeSlotColor
+        color: 'from-emerald-600/40 to-black'
+      },
+      {
+        id: 'block_mashup_melodic',
+        tier: 2,
+        title: `${a2.name} x ${a4.name} Melodic Flow`,
+        subtitle: `Infectious hooks, timeless melodies & signature tracks`,
+        badge: 'Melodic Mashup',
+        query: `${a2.name} ${a4.name} melodic pop mashup hits playlist`,
+        thumbnail: pickUniqueCover(pool4, a2),
+        thumbnailPool: pool4,
+        color: 'from-teal-600/40 to-black'
+      },
+      {
+        id: 'block_mashup_collabs',
+        tier: 2,
+        title: `${a0.name} & Friends Mashup`,
+        subtitle: `Top collaborations, iconic features & special guest duets with ${a0.name}`,
+        badge: 'Collaborations',
+        query: `${a0.name} collaborations features duet hits playlist`,
+        thumbnail: pickUniqueCover(pool5, a0),
+        thumbnailPool: pool5,
+        color: 'from-purple-600/40 to-black'
+      },
+      {
+        id: 'block_mashup_blend',
+        tier: 2,
+        title: `${a1.name} x ${a5.name} Soundstage Mashup`,
+        subtitle: `Cross-artist blend of essential hits and viral favorites`,
+        badge: 'Soundstage Mix',
+        query: `${a1.name} ${a5.name} greatest hits mashup playlist`,
+        thumbnail: pickUniqueCover(pool6, a1),
+        thumbnailPool: pool6,
+        color: 'from-pink-600/40 to-black'
       },
       rediscoverBlock
     ]

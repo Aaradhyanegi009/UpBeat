@@ -119,8 +119,8 @@ export default function SettingsView({
           {onRedoSetup && (
             <Row className="border-t border-white/[0.08]">
               <div className="flex-1 min-w-0">
-                <div className="text-[15px] font-bold">Your music picks</div>
-                <div className="text-[13px] text-t2">Choose genres and artists again to retune Home.</div>
+                <div className="text-[15px] font-bold">Your music picks & charts</div>
+                <div className="text-[13px] text-t2">Choose genres, artists, and daily charts again to retune Home.</div>
               </div>
               <Chip variant="ghost" onClick={onRedoSetup}>
                 Pick again

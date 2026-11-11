@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.4.6)
+# 🎵 UpBeat (v7.5.0)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,17 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ##  Features & Highlights
+
+### 🎧 Artist Mashup Feeds, Multi-Chart Discovery & Taste Onboarding (v7.5.0)
+- **Expanded "Made for you" Playlists (7 Curated Mashups)**:
+  - Completely replaced generic workout, gym, and lo-fi loops with **6–7 curated artist mashups, cross-artist duets, and harmonic crossovers** (e.g., *The Weeknd x Daft Punk*, *Arijit Singh x Atif Aslam*, *Taylor Swift x Gracie Abrams*, *Post Malone x Swae Lee*, *Billie Eilish x Finneas*, *Coldplay x Imagine Dragons*, *Kendrick Lamar x SZA*, *Dua Lipa x Elton John*, *Diljit Dosanjh x Karan Aujla*, *Fujii Kaze x YOASOBI*).
+  - Expanded Tier-2 personal mixes to **8 blocks total** (1 prominent Featured Card banner + 7 rich artist mashup playlists in the "Made for you" row).
+- **Expanded Top Daily Charts (7 Ranked Daily Charts)**:
+  - Increased Top Charts selection to **7 verified regional & global daily charts**: *India Top Daily Chart*, *India Trendy & Reels Chart*, *Global Top 50 Daily*, *US Billboard Daily*, *UK Official Top 40*, *Japan Tokyo Hot 100*, *Global Viral Daily Hits*, *K-Pop Top Daily*, and *Latin Top Daily*.
+- **Prior User Preferences & Auto-Tuning Workflow**:
+  - Integrated 4-step interactive onboarding flow prior to browsing: **Step 0 (Genres & Musical Regions)** -> **Step 1 (Dynamic Artist Selection & Search)** -> **Step 2 (Top Daily Charts Selection)** -> **Step 3 (Optional YouTube Likes Import)**.
+  - User choices are saved locally (`upbeat_taste_prefs_v1` and `upbeat_chart_prefs_v1`) to automatically prioritize the user's top daily charts and dynamically construct artist mashup collections.
+  - Re-tune anytime from **Settings -> Account -> Your music picks & charts**.
 
 ###  Critical 4KB Cloud Relay Packet Dropping Hotfix (v7.4.6)
 - **Cloud Relay Payload Sanitization (`jamEngine.js`)**: Public cloud relays (`ntfy.tedomum.fr`, `ntfy.sp-codes.de`, `ntfy.envs.net`) enforce a strict 4096-byte limit on HTTP POST message bodies. When a user uploads a custom profile picture/avatar, `FileReader` creates a 50KB–500KB base64 `data:` URI. Over-the-wire packets now use `sanitizePayloadForCloud()` to strip base64 data URIs and truncate oversized fields, keeping all cloud packets under 1 KB (~400 bytes). This permanently prevents `HTTP 400: invalid request: attachments not allowed` rejections and ensures instantaneous friend requests, acceptances, and participant syncing for users with custom avatars.
