@@ -46,8 +46,13 @@ import {
   openExternalUrl,
   fisherYatesShuffle,
   loadBlockTracks,
-  isValidMusicTrack
+  isValidMusicTrack,
+  isStrictMusicTrack,
+  sanitizeLocalMusicLibrary
 } from './standaloneApi'
+
+// Immediately run library sanitizer to purge non-music, standup, and devotional pollution
+sanitizeLocalMusicLibrary()
 
 const DEFAULT_SEEDS = []
 
@@ -1264,7 +1269,8 @@ export default function App() {
       }
 
       const extractData = await extractRes.json()
-      const newTracks = extractData.tracks || []
+      const rawTracks = extractData.tracks || []
+      const newTracks = rawTracks.filter(isStrictMusicTrack)
 
       if (newTracks.length > 0) {
         setExtractedTracks(newTracks)
@@ -1628,18 +1634,13 @@ export default function App() {
     })
   }
 
-  // Initial boot: check Safari, auto-sync if YT tab is open, and ensure a playlist exists
+  // Initial boot: check Safari and now playing status without auto-pulling tabs into library
   useEffect(() => {
     if (initialBootRef.current) return
     initialBootRef.current = true
 
     ;(async () => {
-      const status = await checkSafari()
-      let seeds = extractedTracks
-      if (status?.has_yt) {
-        const synced = await handleSyncSafari(true)
-        if (synced.length > 0) seeds = synced
-      }
+      await checkSafari()
       if (playlist?.tracks?.length > 0 && !currentTrack) {
         setCurrentTrack(playlist.tracks[0])
         setCurrentTrackIdx(0)

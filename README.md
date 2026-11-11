@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.5.0)
+# 🎵 UpBeat (v7.5.1)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -8,7 +8,15 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 
 ---
 
-##  Features & Highlights
+## ⚡ Features & Highlights
+
+### 🛡️ Pure Music Sanitization & Horizontal Playlist Sliders (v7.5.1)
+- **Ironclad Music Filtering**: Rejects stand-up comedy (Aakash Gupta, Zakir Khan, Latent), devotional/bhajan tracks (Sampoorna Ganesh Aarti, Dawn of Serenity, Krishna), educational lectures, and kids music across backend and standalone client.
+- **Local Library Sanitizer**: Automatically purges polluted items from existing localStorage on boot.
+- **Safari Bridge Tab Lockdown**: Confines tab detection strictly to `music.youtube.com`, preventing background pollution from standard YouTube tabs.
+- **Single-Row Horizontal Sliders**: Upgrades "Made for you" and "Top charts" from stacked grids to sleek, swipeable horizontal tracks with glass desktop scroll chevrons.
+- **Flicker-Free 30-Minute Refresh**: Eliminates the 15-second thumbnail flicker by pinning high-res covers and enforcing a clean 30-minute refresh cycle.
+- **7 Canonical Mood & Library Mixes**: 4 mood/language blends + 3 personalized library/similar mixes for "Made for you".
 
 ### 🎧 Artist Mashup Feeds, Multi-Chart Discovery & Taste Onboarding (v7.5.0)
 - **Expanded "Made for you" Playlists (7 Curated Mashups)**:

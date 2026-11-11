@@ -129,6 +129,38 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* UpBeat v7.5.1 Horizontal Playlist Slider (Carousel) */
+.playlist-slider-track {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 4px 14px 4px;
+  scrollbar-width: none; /* Firefox */
+}
+.playlist-slider-track::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/WebKit */
+}
+
+.playlist-slider-item {
+  flex: 0 0 210px;
+  width: 210px;
+  scroll-snap-align: start;
+}
+
+@media (max-width: 768px) {
+  .playlist-slider-item {
+    flex: 0 0 165px;
+    width: 165px;
+    scroll-snap-align: start;
+  }
+}
 /* Mobile GPU Acceleration & Smooth 120fps Scrolling */
 .gpu-scroll {
   -webkit-overflow-scrolling: touch;

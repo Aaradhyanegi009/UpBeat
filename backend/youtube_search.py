@@ -736,6 +736,32 @@ def _duration_to_seconds(d: str) -> int:
     return secs
 
 
+COMEDY_PODCAST_REGEX = re.compile(
+    r"\b(stand\s*up|standup|comedy|comedian|aakash\s*gupta|ashish\s*solanki|gaurav\s*kapoor|ravi\s*gupta|"
+    r"prashasti\s*singh|shreeja\s*chaturvedi|comic|samay\s*raina|zakir\s*khan|abhishek\s*upmanyu|bassi|anubhav\s*singh|"
+    r"munawar|harsh\s*gujral|biswa|kanan|kenny\s*sebastian|latent|india's\s*got\s*latent|roast|crowd\s*work|"
+    r"open\s*mic|funny|joke|jokes|laugh|skit|parody|podcast|interview|episode|ep\s*\d+|talk\s*show|storytime|"
+    r"reaction|review|vlogs?|vlog|unboxing)\b",
+    re.IGNORECASE,
+)
+
+DEVOTIONAL_RELIGIOUS_REGEX = re.compile(
+    r"\b(bhajan|aarti|aartiyan|chalisa|mantra|stotra|stotram|shloka|sampoorna|serenity|devotion|hanuman|shiv|shiva|"
+    r"krishna|ram\s*bhajan|ganesh|durga|mata|kirtan|satsang|devotional|bhakti|gurbani|shabad|qawwali|naat|tilawat|"
+    r"t-series\s*bhakti|sanskar|aastha|spiritual|meditation\s*chant|om\s*namah|amritwani|sundarkand|bhagavad\s*gita|"
+    r"krishna\s*bhajan|shree\s*krishna|hare\s*rama|hare\s*krishna|radhe\s*radhe|radha\s*krishna|mahadev|"
+    r"har\s*har\s*mahadev|jaap|namokar|guru\s*granth\s*sahib|waheguru)\b",
+    re.IGNORECASE,
+)
+
+NON_MUSIC_GENERAL_REGEX = re.compile(
+    r"\b(minecraft|gameplay|walkthrough|let's\s*play|bgmi|pubg|valorant|stream|highlights|tutorial|lecture|"
+    r"course|gate|jee|neet|dsa|leetcode|codeforces|coding|programming|how\s*to|explained|documentary|news|"
+    r"breaking|shorts|#shorts|status|whatsapp\s*status|ringtone|teaser|trailer|making\s*of|behind\s*the\s*scenes|"
+    r"full\s*movie|scene|kids?\s*music|nursery\s*rhymes?|cocomelon|lullab(?:y|ies)|baby\s*songs?|children'?s?\s*(?:song|music|rhyme))\b",
+    re.IGNORECASE,
+)
+
 NON_MUSIC_REGEX = re.compile(
     r"\b("
     r"laplace|laplacian|fourier|calculus|derivative|derivatives|differentiation|integral|integrals|integration|"
@@ -768,7 +794,7 @@ NON_MUSIC_REGEX = re.compile(
 )
 
 
-def is_valid_music_track(track: Dict[str, Any]) -> bool:
+def is_strict_music_track(track: Dict[str, Any]) -> bool:
     if not isinstance(track, dict):
         return False
     title = (track.get("title") or "").strip()
@@ -776,13 +802,23 @@ def is_valid_music_track(track: Dict[str, Any]) -> bool:
     if not title or not artist:
         return False
 
+    vid = (track.get("video_id") or track.get("videoId") or "").strip()
+    if vid and not re.match(r"^[a-zA-Z0-9_-]{11}$", vid):
+        return False
+
     # Reject view counts, subscriber counts, or relative dates captured as artist
     if re.match(r"^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$", artist, re.IGNORECASE):
         return False
-    if re.match(r"^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube)$", artist, re.IGNORECASE):
+    if re.match(r"^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$", artist, re.IGNORECASE):
         return False
 
     text = f"{title} {artist}"
+    if COMEDY_PODCAST_REGEX.search(text):
+        return False
+    if DEVOTIONAL_RELIGIOUS_REGEX.search(text):
+        return False
+    if NON_MUSIC_GENERAL_REGEX.search(text):
+        return False
     if NON_MUSIC_REGEX.search(text):
         return False
 
@@ -793,10 +829,14 @@ def is_valid_music_track(track: Dict[str, Any]) -> bool:
     elif track.get("duration_text"):
         sec = _duration_to_seconds(str(track["duration_text"]))
 
-    if sec > 0 and (sec < 65 or sec > 720):
+    # Duration strictly between 75s (1:15) and 420s (7:00) when duration is known
+    if sec > 0 and (sec < 75 or sec > 420):
         return False
 
     return True
+
+
+is_valid_music_track = is_strict_music_track
 
 
 def _yt_web_search(query: str, pages: int = 2) -> Dict[str, Any]:

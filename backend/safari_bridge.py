@@ -78,12 +78,8 @@ def list_safari_tabs(use_cache: bool = False) -> List[Dict[str, Any]]:
                 t_idx = int(parts[1])
                 url = parts[2]
                 title = parts[3]
-                is_yt = ("music.youtube.com" in url) or ("youtube.com" in url)
-                yt_type = "none"
-                if "music.youtube.com" in url:
-                    yt_type = "music"
-                elif "youtube.com" in url:
-                    yt_type = "youtube"
+                is_yt = "music.youtube.com" in url
+                yt_type = "music" if is_yt else "none"
                 tabs.append({
                     "window": w_idx,
                     "tab": t_idx,
@@ -128,9 +124,18 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
     (function() {
         const url = window.location.href;
         const isMusic = url.includes('music.youtube.com');
+        if (!isMusic) {
+            // Strictly reject non-music tabs! Never import general youtube.com or search results!
+            return JSON.stringify({
+                url: url,
+                page_type: 'ignored_non_music',
+                count: 0,
+                tracks: []
+            });
+        }
         const seenIds = new Set();
         let results = [];
-        let pageType = isMusic ? 'yt_music' : 'yt_video';
+        let pageType = 'yt_music';
 
         function extractVid(href) {
             if (!href) return '';
@@ -147,15 +152,30 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
             if (cleanTitle.includes('Private video') || cleanTitle.includes('Deleted video')) return;
             if (/^\d+:\d+$/.test(cleanTitle)) return;
 
+            // Strict 11-char videoId check
+            if (videoId && !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return;
+
             // Reject non-music content and view counts as artist
             let cleanArtist = (artist || '').replace(/\s+/g, ' ').trim();
             if (/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(cleanArtist) ||
-                /^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube)$/i.test(cleanArtist)) {
+                /^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$/i.test(cleanArtist)) {
                 cleanArtist = '';
             }
 
             const nonMusicCheck = (cleanTitle + ' ' + cleanArtist).toLowerCase();
-            if (/\b(laplace|calculus|tutorial|lecture|vlog|vlogger|vlogging|mrbeast|pewdiepie|prank|challenge|mukbang|unboxing|tech review|pc build|gameplay|walkthrough|speedrun|minecraft|roblox|fortnite|gta|live stream|livestream|alien|puppet|comedy skit|storytime|podcast episode)\b/i.test(nonMusicCheck)) {
+
+            // Block Stand-Up Comedy, Podcasts, Skits & Talks
+            if (/\b(stand\s*up|standup|comedy|comedian|samay\s*raina|zakir\s*khan|abhishek\s*upmanyu|bassi|anubhav\s*singh|munawar|harsh\s*gujral|biswa|kanan|kenny\s*sebastian|latent|india's\s*got\s*latent|roast|crowd\s*work|open\s*mic|funny|joke|jokes|laugh|skit|parody|podcast|interview|episode|ep\s*\d+|talk\s*show|storytime|reaction|review|vlogs?|vlog|unboxing)\b/i.test(nonMusicCheck)) {
+                return;
+            }
+
+            // Block Devotional, Religious & Spiritual Audio
+            if (/\b(bhajan|aarti|chalisa|mantra|stotra|stotram|shloka|hanuman|shiv|shiva|krishna|ram\s*bhajan|ganesh|durga|mata|kirtan|satsang|devotional|bhakti|gurbani|shabad|qawwali|naat|tilawat|t-series\s*bhakti|sanskar|aastha|spiritual|meditation\s*chant|om\s*namah)\b/i.test(nonMusicCheck)) {
+                return;
+            }
+
+            // Block Gaming, Tutorials, Lectures & Shorts
+            if (/\b(minecraft|gameplay|walkthrough|let's\s*play|bgmi|pubg|valorant|stream|highlights|tutorial|lecture|course|gate|jee|neet|dsa|leetcode|codeforces|coding|programming|how\s*to|explained|documentary|news|breaking|shorts|#shorts|status|whatsapp\s*status|ringtone|teaser|trailer|making\s*of|behind\s*the\s*scenes|full\s*movie|scene|laplace|calculus)\b/i.test(nonMusicCheck)) {
                 return;
             }
 
@@ -168,8 +188,8 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
                 : (videoId ? 'https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg' : '');
 
             const finalUrl = href
-                ? (href.startsWith('http') ? href : (isMusic ? 'https://music.youtube.com/' + href.replace(/^\//, '') : 'https://www.youtube.com' + (href.startsWith('/') ? href : '/' + href)))
-                : (videoId ? 'https://www.youtube.com/watch?v=' + videoId : '');
+                ? (href.startsWith('http') ? href : 'https://music.youtube.com/' + href.replace(/^\//, ''))
+                : (videoId ? 'https://music.youtube.com/watch?v=' + videoId : '');
 
             results.push({
                 title: cleanTitle,
@@ -180,73 +200,30 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
             });
         }
 
-        if (isMusic) {
-            const items = Array.from(document.querySelectorAll('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer'));
-            items.slice(0, 60).forEach(item => {
-                const titleEl = item.querySelector('.title-column yt-formatted-string a, .title-column yt-formatted-string, .title a, .title');
-                const bylines = Array.from(item.querySelectorAll('.secondary-flex-columns yt-formatted-string a, .secondary-flex-columns yt-formatted-string, .subtitle yt-formatted-string'));
-                const imgEl = item.querySelector('img');
-                const href = titleEl?.getAttribute('href') || item.querySelector('a[href*="watch?v="]')?.getAttribute('href') || '';
-                const vid = extractVid(href);
-                addTrack(
-                    titleEl ? titleEl.textContent : '',
-                    bylines.length > 0 ? bylines[0].textContent : '',
-                    vid,
-                    imgEl ? imgEl.src : '',
-                    href
-                );
-            });
+        const items = Array.from(document.querySelectorAll('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer'));
+        items.slice(0, 60).forEach(item => {
+            const titleEl = item.querySelector('.title-column yt-formatted-string a, .title-column yt-formatted-string, .title a, .title');
+            const bylines = Array.from(item.querySelectorAll('.secondary-flex-columns yt-formatted-string a, .secondary-flex-columns yt-formatted-string, .subtitle yt-formatted-string'));
+            const imgEl = item.querySelector('img');
+            const href = titleEl?.getAttribute('href') || item.querySelector('a[href*="watch?v="]')?.getAttribute('href') || '';
+            const vid = extractVid(href);
+            addTrack(
+                titleEl ? titleEl.textContent : '',
+                bylines.length > 0 ? bylines[0].textContent : '',
+                vid,
+                imgEl ? imgEl.src : '',
+                href
+            );
+        });
 
-            if (results.length === 0) {
-                const playBar = document.querySelector('ytmusic-player-bar');
-                if (playBar) {
-                    const title = playBar.querySelector('.title')?.textContent;
-                    const artist = playBar.querySelector('.byline a, .byline')?.textContent;
-                    const img = playBar.querySelector('img.image')?.src;
-                    const vid = (new URLSearchParams(window.location.search)).get('v') || '';
-                    addTrack(title, artist, vid, img, window.location.href);
-                }
-            }
-        } else {
-            // For standard YouTube, specifically select the channel/author element (NEVER view count metadata!)
-            const cards = Array.from(document.querySelectorAll(
-                'yt-lockup-view-model, ytd-playlist-video-renderer, ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer'
-            ));
-            cards.slice(0, 60).forEach(el => {
-                const titleEl = el.querySelector(
-                    'a.ytLockupMetadataViewModelTitle, a#video-title, a#video-title-link, #video-title, h3 a'
-                );
-                // Strict channel element: avoid .ytContentMetadataViewModelMetadataText which contains views/dates
-                const channelEl = el.querySelector(
-                    '#channel-name a, #byline-container a, ytd-channel-name a, .ytd-channel-name a, a[href*="/@"], a[href*="/channel/"]'
-                );
-                const imgEl = el.querySelector('img');
-                const href = titleEl?.getAttribute('href') || el.querySelector('a[href*="watch?v="]')?.getAttribute('href') || '';
-                const vid = extractVid(href);
-                const title = titleEl ? (titleEl.textContent || titleEl.getAttribute('title') || '') : '';
-                const artist = channelEl ? (channelEl.textContent || '') : '';
-                addTrack(title, artist, vid, imgEl ? imgEl.src : '', href);
-            });
-
-            // 2. Fallback: scan any watch?v= anchors with titles
-            if (results.length === 0) {
-                const anchors = Array.from(document.querySelectorAll('a[href*="watch?v="]'));
-                anchors.forEach(a => {
-                    const text = (a.textContent || a.getAttribute('title') || '').trim();
-                    const href = a.getAttribute('href') || '';
-                    const vid = extractVid(href);
-                    if (vid && text.length > 3) {
-                        addTrack(text, '', vid, '', href);
-                    }
-                });
-            }
-
-            // 3. Watch page active video
-            if (url.includes('watch')) {
-                const title = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent || document.title.replace('- YouTube', '');
-                const channel = document.querySelector('#owner #channel-name a')?.textContent || '';
+        if (results.length === 0) {
+            const playBar = document.querySelector('ytmusic-player-bar');
+            if (playBar) {
+                const title = playBar.querySelector('.title')?.textContent;
+                const artist = playBar.querySelector('.byline a, .byline')?.textContent;
+                const img = playBar.querySelector('img.image')?.src;
                 const vid = (new URLSearchParams(window.location.search)).get('v') || '';
-                addTrack(title, channel, vid, '', window.location.href);
+                addTrack(title, artist, vid, img, window.location.href);
             }
         }
 

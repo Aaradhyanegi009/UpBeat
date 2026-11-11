@@ -1,11 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Play, Users, RefreshCw, Sparkles, Shuffle, Search, Music, Disc, Settings } from 'lucide-react'
+import { Play, Users, RefreshCw, Sparkles, Shuffle, Search, Music, Disc, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
 import { navigate } from '../ui/router'
 import { Art, Avatar, Chip, ChipRow, IconButton, LikedTile, SectionHeader, Collage, Spinner, artUrl, TrackRow } from '../ui/primitives'
 import { MediaCard } from '../ui/AppContext'
-import { getInitialDiscoveryBlocks, fetchListenTogetherFeed, advanceRotationCursor, directSearchStandalone, isValidMusicTrack } from '../standaloneApi'
-
-const THIRTY_MINUTES_MS = 30 * 60 * 1000 // 30 minutes stable refresh cycle
+import { getInitialDiscoveryBlocks, fetchListenTogetherFeed, advanceRotationCursor, directSearchStandalone, isValidMusicTrack, THIRTY_MINUTES_MS } from '../standaloneApi'
 
 export const MOODS = [
   { id: 'chill', label: 'Chill', query: 'Chill relaxing mellow acoustic songs playlist', color: 'from-teal-600/40 to-black' },
@@ -45,79 +43,32 @@ export default function HomeView({
   const [activeMood, setActiveMood] = useState('for_you')
   const [blocks, setBlocks] = useState(() => getInitialDiscoveryBlocks())
   const [refreshing, setRefreshing] = useState(false)
-  const [thumbTick, setThumbTick] = useState(0)
-  const [liveThumbPools, setLiveThumbPools] = useState({})
-  const enrichedBlockIdsRef = useRef(new Set())
+  const pinnedCoversRef = useRef({})
 
   // Mood-specific live data state
   const [moodData, setMoodData] = useState({})
   const [moodLoading, setMoodLoading] = useState(false)
   const autoRefreshTimerRef = useRef(null)
 
-  // Rotate card thumbnails dynamically every 30 minutes to fresh high-res track covers
-  useEffect(() => {
-    const t = setInterval(() => {
-      setThumbTick((prev) => prev + 1)
-    }, THIRTY_MINUTES_MS)
-    return () => clearInterval(t)
-  }, [])
-
-  // Background enrich discovery & chart blocks with live high-res track thumbnails from their query
-  useEffect(() => {
-    let cancelled = false
-    const toEnrich = blocks.filter((b) => b?.id && b?.query && !enrichedBlockIdsRef.current.has(`${b.id}:${b.query}`))
-    if (!toEnrich.length) return undefined
-
-    ;(async () => {
-      for (const b of toEnrich) {
-        if (cancelled) break
-        const key = `${b.id}:${b.query}`
-        enrichedBlockIdsRef.current.add(key)
-        try {
-          const res = await directSearchStandalone(b.query, 'songs')
-          if (cancelled) break
-          const valid = (res?.tracks || res?.song_results || []).filter(isValidMusicTrack)
-          const thumbs = []
-          for (const tr of valid) {
-            const hiUrl = artUrl(tr, true)
-            if (hiUrl && !thumbs.includes(hiUrl)) thumbs.push(hiUrl)
-            if (thumbs.length >= 10) break
-          }
-          if (thumbs.length > 0) {
-            setLiveThumbPools((prev) => ({
-              ...prev,
-              [b.id]: thumbs
-            }))
-          }
-        } catch {}
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [blocks])
-
-  // Load / update personalized discovery blocks
+  // Load / update personalized discovery blocks strictly ONCE ON MOUNT
   useEffect(() => {
     let alive = true
-    fetchListenTogetherFeed({ userTracks, tasteDna, timeInfo })
+    fetchListenTogetherFeed({ userTracks, tasteDna })
       .then((b) => alive && Array.isArray(b) && b.length && setBlocks(b))
       .catch(() => {})
     return () => {
       alive = false
     }
-  }, [userTracks, tasteDna, timeInfo])
+  }, [])
 
   // "For you" live refresh / rotation function
   const refreshForYou = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true)
-    setThumbTick((prev) => prev + 1)
+    pinnedCoversRef.current = {}
     try {
       const fresh = await fetchListenTogetherFeed({
         userTracks,
         tasteDna,
-        timeInfo,
         forceRefresh: true,
         rotationIndex: advanceRotationCursor(1)
       })
@@ -125,7 +76,7 @@ export default function HomeView({
     } catch {} finally {
       if (manual) setRefreshing(false)
     }
-  }, [userTracks, tasteDna, timeInfo])
+  }, [userTracks, tasteDna])
 
   // Fetch or refresh data for an active mood
   const refreshMood = useCallback(async (moodId, force = false) => {
@@ -194,45 +145,52 @@ export default function HomeView({
   const charts = useMemo(() => blocks.filter((b) => b.tier === 1), [blocks])
   const personal = useMemo(() => blocks.filter((b) => b.tier === 2), [blocks])
   const featured = personal[0]
-  const moreForYou = personal.slice(1)
+  const moreForYou = personal // Render all 7 structured Made for you playlists in the slider
   const listening = friends.filter((f) => f.online && f.currentTrack)
   const onlineCount = friends.filter((f) => f.online).length
 
-  // Resolve a high-res, dynamically rotating cover thumbnail for each block
+  // Resolve and permanently pin high-res cover thumbnails to prevent 15-second flicker
   const blockThumbMap = useMemo(() => {
     const used = new Set()
     const out = {}
     const all = [featured, ...moreForYou, ...charts].filter(Boolean)
     all.forEach((b, idx) => {
+      if (pinnedCoversRef.current[b.id]) {
+        out[b.id] = pinnedCoversRef.current[b.id]
+        used.add(pinnedCoversRef.current[b.id])
+        return
+      }
+
       const pool = []
       const addUrl = (u) => {
         const hi = artUrl(u, true)
         if (hi && !pool.includes(hi)) pool.push(hi)
       }
-      for (const u of liveThumbPools[b.id] || []) addUrl(u)
       for (const u of b.thumbnailPool || []) addUrl(u)
       for (const t of b.preloadedTracks || []) addUrl(t)
       if (b.thumbnail) addUrl(b.thumbnail)
 
       let chosen = ''
       if (pool.length > 0) {
-        const start = (thumbTick + idx) % pool.length
         for (let i = 0; i < pool.length; i++) {
-          const cand = pool[(start + i) % pool.length]
+          const cand = pool[(idx + i) % pool.length]
           if (!used.has(cand)) {
             chosen = cand
             break
           }
         }
-        if (!chosen) chosen = pool[start]
+        if (!chosen) chosen = pool[0]
       } else {
         chosen = artUrl({ thumbnail: b.thumbnail }, true)
       }
-      if (chosen) used.add(chosen)
+      if (chosen) {
+        used.add(chosen)
+        pinnedCoversRef.current[b.id] = chosen
+      }
       out[b.id] = chosen
     })
     return out
-  }, [featured, moreForYou, charts, liveThumbPools, thumbTick])
+  }, [featured, moreForYou, charts])
 
   const activeMoodObj = MOODS.find((m) => m.id === activeMood)
   const activeMoodContent = activeMood !== 'for_you' ? moodData[activeMood] : null
@@ -335,51 +293,45 @@ export default function HomeView({
           )}
 
           {moreForYou.length > 0 && (
-            <>
-              <div className="flex items-baseline justify-between mt-8 mb-3.5">
-                <h2 className="text-xl font-extrabold tracking-[-0.015em]">Made for you</h2>
-                <button
-                  type="button"
-                  onClick={() => refreshForYou(true)}
-                  disabled={refreshing}
-                  className="text-sm font-semibold text-t2 hover:text-t1 inline-flex items-center gap-1.5 cursor-pointer"
-                >
+            <PlaylistSlider
+              title="Made for you"
+              action={
+                <>
                   {refreshing ? <Spinner className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  New picks
-                </button>
-              </div>
-              <CardRow isDesktop={isDesktop}>
-                {moreForYou.map((b) => (
-                  <MediaCard
-                    key={b.id}
-                    title={b.title}
-                    subtitle={b.subtitle}
-                    src={blockThumbMap[b.id] || artUrl({ thumbnail: b.thumbnail }, true)}
-                    onOpen={() => onOpenBlock(b)}
-                    onPlay={() => onPlayBlock(b, false)}
-                  />
-                ))}
-              </CardRow>
-            </>
+                  <span>New picks</span>
+                </>
+              }
+              onAction={() => refreshForYou(true)}
+              actionDisabled={refreshing}
+            >
+              {moreForYou.map((b) => (
+                <MediaCard
+                  key={b.id}
+                  title={b.title}
+                  subtitle={b.subtitle}
+                  label={b.badge}
+                  src={blockThumbMap[b.id] || artUrl({ thumbnail: b.thumbnail }, true)}
+                  onOpen={() => onOpenBlock(b)}
+                  onPlay={() => onPlayBlock(b, false)}
+                />
+              ))}
+            </PlaylistSlider>
           )}
 
           {charts.length > 0 && (
-            <>
-              <SectionHeader title="Top charts" />
-              <CardRow isDesktop={isDesktop}>
-                {charts.map((b) => (
-                  <MediaCard
-                    key={b.id}
-                    title={b.title}
-                    subtitle={b.subtitle}
-                    label={chartLabel(b)}
-                    src={blockThumbMap[b.id] || artUrl({ thumbnail: b.thumbnail }, true)}
-                    onOpen={() => onOpenBlock(b)}
-                    onPlay={() => onPlayBlock(b, false)}
-                  />
-                ))}
-              </CardRow>
-            </>
+            <PlaylistSlider title="Daily Top Charts">
+              {charts.map((b) => (
+                <MediaCard
+                  key={b.id}
+                  title={b.title}
+                  subtitle={b.subtitle}
+                  label={chartLabel(b)}
+                  src={blockThumbMap[b.id] || artUrl({ thumbnail: b.thumbnail }, true)}
+                  onOpen={() => onOpenBlock(b)}
+                  onPlay={() => onPlayBlock(b, false)}
+                />
+              ))}
+            </PlaylistSlider>
           )}
         </>
       ) : (
@@ -540,6 +492,60 @@ function chartLabel(block) {
   if (t.includes('viral')) return 'Viral'
   if (t.includes('global') || t.includes('international') || t.includes('worldwide')) return 'Global'
   return block.badge || 'Chart'
+}
+
+function PlaylistSlider({ title, action, onAction, actionDisabled, children }) {
+  const sliderRef = useRef(null)
+  const scrollLeft = () => {
+    if (sliderRef.current) sliderRef.current.scrollBy({ left: -440, behavior: 'smooth' })
+  }
+  const scrollRight = () => {
+    if (sliderRef.current) sliderRef.current.scrollBy({ left: 440, behavior: 'smooth' })
+  }
+
+  return (
+    <div className="mt-8 mb-3">
+      <div className="flex items-center justify-between mb-3.5">
+        <h2 className="text-xl font-extrabold tracking-[-0.015em]">{title}</h2>
+        <div className="flex items-center gap-2">
+          {action && (
+            <button
+              type="button"
+              onClick={onAction}
+              disabled={actionDisabled}
+              className="text-sm font-semibold text-t2 hover:text-t1 inline-flex items-center gap-1.5 cursor-pointer mr-2 disabled:opacity-40"
+            >
+              {action}
+            </button>
+          )}
+          {/* Subtle translucent glass < and > scroll arrow buttons for Desktop */}
+          <button
+            type="button"
+            onClick={scrollLeft}
+            aria-label="Scroll left"
+            className="hidden sm:inline-flex w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-t1 items-center justify-center transition-all cursor-pointer backdrop-blur-md border border-white/[0.08]"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={scrollRight}
+            aria-label="Scroll right"
+            className="hidden sm:inline-flex w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-t1 items-center justify-center transition-all cursor-pointer backdrop-blur-md border border-white/[0.08]"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div ref={sliderRef} className="playlist-slider-track">
+        {React.Children.map(children, (child) => (
+          <div className="playlist-slider-item">
+            {child}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function CardRow({ isDesktop, children }) {

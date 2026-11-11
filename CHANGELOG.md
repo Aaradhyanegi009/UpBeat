@@ -4,6 +4,43 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.5.1] - 2026-11-11
+
+### 🛡️ Ironclad Pure Music Sanitization & Zero Trash Guarantee
+- **Impenetrable Music Filtering across Backend & Standalone Engine**:
+  - Upgraded `backend/youtube_search.py`, `backend/safari_bridge.py`, and `frontend/src/standaloneApi.js` with comprehensive rejection regexes:
+    - `COMEDY_PODCAST_REGEX`: Eliminates stand-up comedy (Aakash Gupta, Zakir Khan, Abhishek Upmanyu, Samay Raina, Latent, etc.), podcasts, interviews, and comedy sketches.
+    - `DEVOTIONAL_RELIGIOUS_REGEX`: Blocks devotional tracks, bhajans, aartis (Sampoorna Ganesh Aarti, Krishna bhajans, Dawn of Serenity, etc.), chalisa, and spiritual chants.
+    - `NON_MUSIC_GENERAL_REGEX` & `NON_MUSIC_REGEX`: Rejects educational lectures, math/calculus, coding tutorials, gaming clips, shorts, and kids/nursery content.
+  - Duration boundaries: Enforced strict 75s–420s duration filter and 11-character YouTube video ID verification.
+- **Automated Local Library Sanitization (`sanitizeLocalMusicLibrary`)**:
+  - Automatically sweeps and cleans `localStorage` on boot: purges polluted items from `argon_seeds_v2`, `argon_favs_v2`, `argon_dna_v2`, `upbeat_recents_v1`, `upbeat_mixes_v1`, and `upbeat_playback_queue`.
+  - Clears stale discovery feed caches so polluted mixes never resurface.
+- **Safari Background Scraping Lockdown**:
+  - Restricted Safari tab sniffing exclusively to `music.youtube.com` tabs (ignoring standard `youtube.com` tabs).
+  - Removed silent auto-scraping of Safari tabs on app startup.
+
+### 🎠 Single-Row Horizontal Playlist Sliders
+- Replaced the multi-row stacked card grid in both **"Made for you"** and **"Daily Top Charts"** with a sleek, swipeable single-row horizontal slider (`.playlist-slider-track`).
+- Added translucent glass `<` and `>` chevron buttons for effortless desktop scrolling, with native touch momentum swiping on mobile.
+
+### ⏱️ Elimination of the 15-Second Thumbnail Flicker
+- Removed unstable `useEffect` dependencies (`timeInfo` from `getThemeInfo()`) that caused continuous re-renders.
+- Pinned high-resolution card artwork via `pinnedCoversRef` to permanently eliminate thumbnail swapping.
+- Enforced a strict 30-minute refresh cycle (`THIRTY_MINUTES_MS = 1,800,000ms`) with cold-boot lifecycle tracking.
+
+### 🎵 7 Canonical Mood & Library Mixes for "Made for you"
+- Structured into 4 Mood/Language blends + 3 Library/Similar mixes:
+  - *Chill & Late Night Vibes*
+  - *J-Pop & Anime Essentials*
+  - *Hindi Indie & Bollywood Vibe*
+  - *English Pop & Alt Anthems*
+  - *Rediscover Favorites Mix*
+  - *On Repeat & Similar Vibes*
+  - *Sonic DNA Radar*
+
+---
+
 ## [v7.5.0] - 2026-11-11
 
 ### 🎧 Curated Artist Mashup Playlists (Zero Gym & Lo-Fi Tracks)

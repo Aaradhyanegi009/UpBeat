@@ -12,14 +12,33 @@ const MODEL_ALIASES = {
 const LOW_THINKING_MODELS = new Set(['gemini-3.8-flash', 'gemini-3.7-flash'])
 const ZERO_BUDGET_MODELS = new Set(['gemini-2.5-flash', 'gemini-robotics-er-2-preview'])
 
+export const COMEDY_PODCAST_REGEX = /\b(stand\s*up|standup|comedy|comedian|aakash\s*gupta|ashish\s*solanki|gaurav\s*kapoor|ravi\s*gupta|prashasti\s*singh|shreeja\s*chaturvedi|comic|samay\s*raina|zakir\s*khan|abhishek\s*upmanyu|bassi|anubhav\s*singh|munawar|harsh\s*gujral|biswa|kanan|kenny\s*sebastian|latent|india's\s*got\s*latent|roast|crowd\s*work|open\s*mic|funny|joke|jokes|laugh|skit|parody|podcast|interview|episode|ep\s*\d+|talk\s*show|storytime|reaction|review|vlogs?|vlog|unboxing)\b/i
+
+export const DEVOTIONAL_RELIGIOUS_REGEX = /\b(bhajan|aarti|aartiyan|chalisa|mantra|stotra|stotram|shloka|sampoorna|serenity|devotion|hanuman|shiv|shiva|krishna|ram\s*bhajan|ganesh|durga|mata|kirtan|satsang|devotional|bhakti|gurbani|shabad|qawwali|naat|tilawat|t-series\s*bhakti|sanskar|aastha|spiritual|meditation\s*chant|om\s*namah|amritwani|sundarkand|bhagavad\s*gita|krishna\s*bhajan|shree\s*krishna|hare\s*rama|hare\s*krishna|radhe\s*radhe|radha\s*krishna|mahadev|har\s*har\s*mahadev|jaap|namokar|guru\s*granth\s*sahib|waheguru)\b/i
+
+export const NON_MUSIC_GENERAL_REGEX = /\b(minecraft|gameplay|walkthrough|let's\s*play|bgmi|pubg|valorant|stream|highlights|tutorial|lecture|course|gate|jee|neet|dsa|leetcode|codeforces|coding|programming|how\s*to|explained|documentary|news|breaking|shorts|#shorts|status|whatsapp\s*status|ringtone|teaser|trailer|making\s*of|behind\s*the\s*scenes|full\s*movie|scene|kids?\s*music|nursery\s*rhymes?|cocomelon|lullab(?:y|ies)|baby\s*songs?|children'?s?\s*(?:song|music|rhyme))\b/i
+
+export const STRICT_VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/
+
 export const NON_MUSIC_REGEX = /\b(laplace|laplacian|fourier|calculus|derivative|derivatives|differentiation|integral|integrals|integration|differential equations?|ode|pde|linear algebra|matrices|matrix|eigenvalues?|eigenvectors?|trigonometry|geometry|theorems?|proofs?|derivations?|physics|quantum|thermodynamics|electromagnetism|kinematics|optics|chemistry|organic chemistry|biology|biochemistry|anatomy|genetics|engineering|mechanical|electrical|civil|electronics|aerospace|computer science|data structures|algorithms|dsa|leetcode|competitive programming|coding|programming|python|javascript|c\+\+|java programming|tutorials?|courses?|crash course|lectures?|class \d+|lesson \d+|chapter \d+|syllabus|semester|curriculum|solved problems?|numerical problems?|question paper|mcqs?|gate exam|jee mains?|jee advanced|neet exam|upsc|ncert|cbse|icse|khan academy|3blue1brown|mit opencourseware|nptel|stanford|harvard|coursera|udemy|edx|unacademy|physics wallah|geeksforgeeks|freecodecamp|gate smashers|neso academy|apna college|codewithharry|chai aur code|youtuber|youtubers|vlogs?|vlogger|vlogging|daily vlog|mrbeast|pewdiepie|carryminati|sidemen|dude perfect|logan paul|jake paul|markiplier|jacksepticeye|technoblade|dream|ssundee|dantdm|mark rober|veritasium|vsauce|kurzgesagt|pranks?|challenges?|24 hours in|last to leave|q&a|qna|ask me anything|ama|mukbang|eating show|try not to laugh|storytime|confessions?|exposed|drama|roast show|alien|puppet|comedy skit|skits?|podcasts?|interview|unboxing|tech review|phone review|setup tour|room tour|desk tour|pc build|what's in my bag|what's on my phone|day in the life|morning routine|night routine|grwm|get ready with me|tier list|tier ranking|funny moments|bloopers?|fails compilation|meme compilation|reaction|reacts|reacting to|first time hearing|first time watching|stand up comedy|standup comedy|improv comedy|open mic|ted talk|tedx|keynote|webinar|conference talk|official trailer|teaser trailer|movie trailer|trailer \d|movie scene|deleted scene|full movie|short film|documentary|docuseries|how to (?:make|cook|bake|code|build|draw|play|fix|install|use|do|start|solve|pass)|diy|life hacks?|tips (?:and|&) tricks|video essay|asmr|whispering|audiobooks?|read aloud|gym workout|yoga routine|cardio workout|abs workout|gameplay|walkthrough|playthrough|let's play|lets play|speedrun|speed run|no commentary|longplay|bedwars|skyblock|minecraft|roblox|fortnite|valorant|pubg|apex legends|gta v|gta 5|call of duty|warzone|counter strike|csgo|cs2|league of legends|genshin impact|live stream|livestream|twitch vod|stream highlights?)\b/i
 
 /**
- * Pillar 3 Strict Music Filter:
- * Rejects non-music titles/channels, educational lectures (e.g. Laplace/Calculus), YouTuber vlogs/pranks,
- * view counts/subscriber numbers mistakenly parsed as artists, and videos shorter than 65s or longer than 720s.
+ * Filter for valid pure music artist names (rejecting comedy, devotional, lectures, or channels).
  */
-export function isValidMusicTrack(track) {
+export function isStrictArtistName(name) {
+  if (!name || typeof name !== 'string') return false
+  const n = name.trim()
+  if (n.length < 2 || n.length > 50) return false
+  if (COMEDY_PODCAST_REGEX.test(n) || DEVOTIONAL_RELIGIOUS_REGEX.test(n) || NON_MUSIC_GENERAL_REGEX.test(n) || NON_MUSIC_REGEX.test(n)) return false
+  return true
+}
+
+/**
+ * UpBeat v7.5.1 Ironclad Music Filter:
+ * Rejects stand-up comedy, podcasts, devotional/bhajan videos, gaming clips, educational lectures,
+ * view counts/subscriber counts mistakenly parsed as artist, invalid video IDs, and clips <75s or >420s.
+ */
+export function isStrictMusicTrack(track) {
   if (!track || typeof track !== 'object') return false
   const title = (track.title || '').trim()
   const artist = (track.artist || '').trim()
@@ -29,7 +48,16 @@ export function isValidMusicTrack(track) {
   if (/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(artist)) return false
   if (/^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$/i.test(artist)) return false
 
+  // Strict 11-char videoId check
+  const vid = track.video_id || track.videoId
+  if (vid && !STRICT_VIDEO_ID_REGEX.test(vid)) {
+    return false
+  }
+
   const textToScan = `${title} ${artist}`
+  if (COMEDY_PODCAST_REGEX.test(textToScan)) return false
+  if (DEVOTIONAL_RELIGIOUS_REGEX.test(textToScan)) return false
+  if (NON_MUSIC_GENERAL_REGEX.test(textToScan)) return false
   if (NON_MUSIC_REGEX.test(textToScan)) return false
 
   let sec = 0
@@ -46,12 +74,101 @@ export function isValidMusicTrack(track) {
     }
   }
 
-  // Reject duration <65s or >720s (12m) when duration is known
-  if (sec > 0 && (sec < 65 || sec > 720)) {
+  // Reject duration <75s (1:15) or >420s (7:00) when duration is known
+  if (sec > 0 && (sec < 75 || sec > 420)) {
     return false
   }
 
   return true
+}
+
+// Full backward compatibility for callers of isValidMusicTrack
+export const isValidMusicTrack = isStrictMusicTrack
+
+/**
+ * One-time startup storage sanitizer:
+ * Strips out polluted non-music / comedy / devotional tracks from localStorage.
+ */
+export function sanitizeLocalMusicLibrary() {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  const listKeys = [
+    'argon_favs_v2',
+    'argon_seeds_v2',
+    'upbeat_liked_songs',
+    'upbeat_history',
+    'upbeat_history_v1',
+    'upbeat_taste_seeds',
+    'upbeat_favorites_v1',
+    'upbeat_extracted_tracks_v1',
+    'upbeat_playback_queue'
+  ]
+
+  for (const k of listKeys) {
+    try {
+      const raw = localStorage.getItem(k)
+      if (!raw) continue
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter((item) => isStrictMusicTrack(item))
+        localStorage.setItem(k, JSON.stringify(cleaned))
+      }
+    } catch {}
+  }
+
+  // Sanitize recents and recent mixes
+  try {
+    const rawRecents = localStorage.getItem('upbeat_recents_v1')
+    if (rawRecents) {
+      const recents = JSON.parse(rawRecents)
+      if (Array.isArray(recents)) {
+        const cleaned = recents.filter((r) => {
+          const t = `${r?.title || ''} ${r?.collection?.title || ''}`
+          if (COMEDY_PODCAST_REGEX.test(t) || DEVOTIONAL_RELIGIOUS_REGEX.test(t) || NON_MUSIC_GENERAL_REGEX.test(t)) return false
+          if (Array.isArray(r.tracks) && r.tracks.length > 0) {
+            r.tracks = r.tracks.filter(isStrictMusicTrack)
+          }
+          return true
+        })
+        localStorage.setItem('upbeat_recents_v1', JSON.stringify(cleaned))
+      }
+    }
+  } catch {}
+
+  try {
+    const rawMixes = localStorage.getItem('upbeat_mixes_v1')
+    if (rawMixes) {
+      const mixes = JSON.parse(rawMixes)
+      if (Array.isArray(mixes)) {
+        const cleaned = mixes.filter((m) => {
+          const t = m?.title || ''
+          if (COMEDY_PODCAST_REGEX.test(t) || DEVOTIONAL_RELIGIOUS_REGEX.test(t) || NON_MUSIC_GENERAL_REGEX.test(t)) return false
+          if (Array.isArray(m.tracks) && m.tracks.length > 0) {
+            m.tracks = m.tracks.filter(isStrictMusicTrack)
+          }
+          return true
+        })
+        localStorage.setItem('upbeat_mixes_v1', JSON.stringify(cleaned))
+      }
+    }
+  } catch {}
+
+  // Sanitize Taste DNA artists
+  try {
+    const rawDna = localStorage.getItem('argon_dna_v2')
+    if (rawDna) {
+      const dna = JSON.parse(rawDna)
+      if (dna && Array.isArray(dna.top_artists)) {
+        dna.top_artists = dna.top_artists.filter(isStrictArtistName)
+      }
+      localStorage.setItem('argon_dna_v2', JSON.stringify(dna))
+    }
+  } catch {}
+
+  try {
+    sessionStorage.removeItem('upbeat_discovery_feed_cache_v7')
+    sessionStorage.removeItem('upbeat_discovery_feed_cache_v6')
+    localStorage.removeItem('upbeat_discovery_cache')
+  } catch {}
 }
 
 // ---------------------------------------------------------------------------
@@ -1772,243 +1889,166 @@ const MOOD_VIBE_PRESETS = [
   { name: 'Moody Lo-Fi & Downtempo', desc: 'Relaxed chillhop textures and steady groove', query: 'lofi downtempo chill atmospheric study beats', color: 'from-indigo-600/40 to-black' }
 ]
 
-// Curated starter artist mashup rotations (6-7 playlists of cross-artist duets & hit mashups, zero gym/lofi)
+// UpBeat v7.5.1 Curated Starter Rotations (7 Structured Mood/Language & Library Mixes, zero gym/lofi/comedy)
 const STARTER_ROTATION_CYCLES = [
   [
     {
-      id: 'block_sonic_archetype',
+      id: 'block_chill_late_night',
       tier: 2,
       isNewUserSeed: true,
-      title: 'The Weeknd x Daft Punk Mashup',
-      subtitle: 'Starboy, I Feel It Coming & Synthpop Anthems',
-      badge: 'Artist Mashup',
-      query: 'The Weeknd Daft Punk Starboy synthwave mashup playlist',
+      title: 'Chill & Late Night Vibes',
+      subtitle: 'Atmospheric, melodic & lo-fi chill tailored for you',
+      badge: 'CHILL MIX',
+      query: 'Joji The Weeknd Keshi Cigarettes After Sex Billie Eilish chill late night vibes songs playlist -comedy -podcast',
       thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+      color: 'from-teal-600/40 to-black'
+    },
+    {
+      id: 'block_jpop_anime',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'J-Pop & Anime Essentials',
+      subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
+      badge: 'J-POP & ANIME',
+      query: 'YOASOBI Kenshi Yonezu Ado Eve King Gnu LiSA Fujii Kaze official anime jpop songs playlist -shorts',
+      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
       color: 'from-rose-600/40 to-black'
     },
     {
-      id: 'block_mashup_arijit_atif',
+      id: 'block_hindi_indie_bollywood',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Arijit Singh x Atif Aslam Mashup',
-      subtitle: 'Tum Hi Ho, Dil Diyan Gallan & Soulful Harmonies',
-      badge: 'Artist Mashup',
-      query: 'Arijit Singh Atif Aslam romantic acoustic mashup hit songs',
+      title: 'Hindi Indie & Bollywood Vibe',
+      subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
+      badge: 'HINDI MIX',
+      query: 'Arijit Singh Prateek Kuhad Anuv Jain The Local Train Mitraz Aditya Rikhari soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy',
       thumbnail: 'https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg',
       color: 'from-amber-600/40 to-black'
     },
     {
-      id: 'block_mashup_taylor_gracie',
+      id: 'block_english_pop_alt',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Taylor Swift x Gracie Abrams Mashup',
-      subtitle: 'Us, Cruel Summer & Pop Storytelling',
-      badge: 'Acoustic Mashup',
-      query: 'Taylor Swift Gracie Abrams acoustic pop storytelling hits',
-      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg',
-      color: 'from-teal-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_post_swae',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Post Malone x Swae Lee Mashup',
-      subtitle: 'Sunflower, Circles & Melodic Hooks',
-      badge: 'Melodic Mashup',
-      query: 'Post Malone Swae Lee Sunflower melodic pop hits playlist',
+      title: 'English Pop & Alt Anthems',
+      subtitle: 'Chart-topping Western pop, alt-rock & synth',
+      badge: 'ENGLISH MIX',
+      query: 'Post Malone The Weeknd Maroon 5 Coldplay Imagine Dragons Dua Lipa Arctic Monkeys top western pop rock songs playlist -podcast',
       thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
       color: 'from-purple-600/40 to-black'
     },
     {
-      id: 'block_mashup_billie_finneas',
+      id: 'block_rediscover_favorites',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Billie Eilish x Finneas Acoustic Mix',
-      subtitle: 'Birds of a Feather, Ocean Eyes & Vocal Harmonies',
-      badge: 'Acoustic Mashup',
-      query: 'Billie Eilish Finneas acoustic unplugged vocal hits',
-      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
-      color: 'from-cyan-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_coldplay_dragons',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Coldplay x Imagine Dragons Mashup',
-      subtitle: 'Viva La Vida, Believer & Stadium Anthems',
-      badge: 'Anthem Mashup',
-      query: 'Coldplay Imagine Dragons stadium rock anthems playlist',
+      title: 'Rediscover Favorites Mix',
+      subtitle: 'Shuffled liked songs + closely related tracks',
+      badge: 'REDISCOVER',
+      query: 'Coldplay Imagine Dragons The Weeknd Post Malone official songs radio playlist',
       thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
-      color: 'from-blue-600/40 to-black'
+      color: 'from-pink-600/40 to-black',
+      isHybridRediscover: true
     },
     {
-      id: 'block_mashup_kendrick_sza',
+      id: 'block_on_repeat_vibes',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Kendrick Lamar x SZA Crossover',
-      subtitle: 'All The Stars, Doves in the Wind & Melodic Hip-Hop',
-      badge: 'Crossover Mashup',
-      query: 'Kendrick Lamar SZA All The Stars hip hop rnb mashup',
-      thumbnail: 'https://i.ytimg.com/vi/T6eK-2OQtew/maxresdefault.jpg',
-      color: 'from-emerald-600/40 to-black'
+      title: 'On Repeat & Similar Vibes',
+      subtitle: "Inspired by what you've been playing lately",
+      badge: 'HEAVY ROTATION',
+      query: 'Dua Lipa Harry Styles The Weeknd Post Malone heavy rotation pop hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg',
+      color: 'from-indigo-600/40 to-black'
+    },
+    {
+      id: 'block_sonic_dna_radar',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Sonic DNA Radar',
+      subtitle: 'Fresh discoveries matching your core artists',
+      badge: 'TASTE RADAR',
+      query: 'Arctic Monkeys The Neighbourhood Kendrick Lamar deep cuts alternative songs playlist',
+      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
+      color: 'from-cyan-600/40 to-black'
     }
   ],
   [
     {
-      id: 'block_sonic_archetype',
+      id: 'block_chill_late_night',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Dua Lipa x Elton John Nu-Disco Mashup',
-      subtitle: 'Cold Heart, Levitating & Golden Dance Energy',
-      badge: 'Artist Mashup',
-      query: 'Dua Lipa Elton John Cold Heart nu disco dance hits',
-      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
-      color: 'from-pink-600/40 to-black'
+      title: 'Chill & Late Night Vibes',
+      subtitle: 'Atmospheric, melodic & lo-fi chill tailored for you',
+      badge: 'CHILL MIX',
+      query: 'Lana Del Rey Cigarettes After Sex Joji Keshi late night dream pop chill hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg',
+      color: 'from-teal-600/40 to-black'
     },
     {
-      id: 'block_mashup_diljit_karan',
+      id: 'block_jpop_anime',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Diljit Dosanjh x Karan Aujla Mashup',
-      subtitle: 'Lover, Softly & Punjabi Chart Anthems',
-      badge: 'Artist Mashup',
-      query: 'Diljit Dosanjh Karan Aujla Punjabi hits mashup playlist',
-      thumbnail: 'https://i.ytimg.com/vi/RLzC55ai0eo/maxresdefault.jpg',
+      title: 'J-Pop & Anime Essentials',
+      subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
+      badge: 'J-POP & ANIME',
+      query: 'Fujii Kaze Radwimps YOASOBI Kenshi Yonezu anime soundtrack hits playlist',
+      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg',
+      color: 'from-rose-600/40 to-black'
+    },
+    {
+      id: 'block_hindi_indie_bollywood',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Hindi Indie & Bollywood Vibe',
+      subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
+      badge: 'HINDI MIX',
+      query: 'Prateek Kuhad Jasleen Royal Anuv Jain The Local Train modern acoustic hindi indie playlist',
+      thumbnail: 'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg',
       color: 'from-amber-600/40 to-black'
     },
     {
-      id: 'block_mashup_ariana_bieber',
+      id: 'block_english_pop_alt',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Ariana Grande x Justin Bieber Duets',
-      subtitle: 'Stuck with U, Positions & Vocal Harmonies',
-      badge: 'Vocal Duets',
-      query: 'Ariana Grande Justin Bieber pop rnb vocal duets playlist',
-      thumbnail: 'https://i.ytimg.com/vi/tcYodQoapMg/maxresdefault.jpg',
-      color: 'from-fuchsia-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_monkeys_neighbourhood',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Arctic Monkeys x The Neighbourhood Mashup',
-      subtitle: 'Do I Wanna Know, Sweater Weather & Alt-Rock Vibes',
-      badge: 'Alt-Rock Mashup',
-      query: 'Arctic Monkeys The Neighbourhood indie alt rock hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/bpOSxM0rNPM/maxresdefault.jpg',
-      color: 'from-zinc-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_prateek_jasleen',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Prateek Kuhad x Jasleen Royal Indie Mix',
-      subtitle: 'Kasoor, Kho Gaye Hum Kahan & Acoustic Warmth',
-      badge: 'Indie Mashup',
-      query: 'Prateek Kuhad Jasleen Royal acoustic indie hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg',
-      color: 'from-orange-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_bruno_paak',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Bruno Mars x Anderson .Paak Silk Sonic Flow',
-      subtitle: 'Leave the Door Open, 24K Magic & Golden Soul',
-      badge: 'Soul Mashup',
-      query: 'Bruno Mars Silk Sonic Anderson Paak funk soul hits',
-      thumbnail: 'https://i.ytimg.com/vi/OPf0YbXqDm0/maxresdefault.jpg',
-      color: 'from-amber-500/40 to-black'
-    },
-    {
-      id: 'block_mashup_fujii_yoasobi',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Fujii Kaze x YOASOBI Melodic Flow',
-      subtitle: 'Shinunoga E-Wa, Idol & Tokyo Crossover',
-      badge: 'Tokyo Crossover',
-      query: 'Fujii Kaze YOASOBI J-Pop anime melodic hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg',
-      color: 'from-indigo-600/40 to-black'
-    }
-  ],
-  [
-    {
-      id: 'block_sonic_archetype',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Drake x Travis Scott Hip-Hop Mashup',
-      subtitle: 'Meltdown, Sicko Mode & Heavy Anthems',
-      badge: 'Artist Mashup',
-      query: 'Drake Travis Scott hip hop anthems mashup playlist',
-      thumbnail: 'https://i.ytimg.com/vi/_Yhyp-_hX2s/maxresdefault.jpg',
-      color: 'from-red-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_sheeran_mendes',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Ed Sheeran x Shawn Mendes Acoustic Mashup',
-      subtitle: 'Shape of You, Senorita & Guitar Melodies',
-      badge: 'Acoustic Mashup',
-      query: 'Ed Sheeran Shawn Mendes acoustic pop hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/JGwWNGJdvx8/maxresdefault.jpg',
-      color: 'from-sky-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_lana_cas',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Lana Del Rey x Cigarettes After Sex Dream Mix',
-      subtitle: 'Video Games, Apocalypse & Cinematic Noir',
-      badge: 'Dream Pop Mashup',
-      query: 'Lana Del Rey Cigarettes After Sex dream pop noir hits',
-      thumbnail: 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg',
+      title: 'English Pop & Alt Anthems',
+      subtitle: 'Chart-topping Western pop, alt-rock & synth',
+      badge: 'ENGLISH MIX',
+      query: 'Dua Lipa Elton John Harry Styles Bruno Mars Anderson Paak western pop anthems playlist',
+      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
       color: 'from-purple-600/40 to-black'
     },
     {
-      id: 'block_mashup_1d_harry',
+      id: 'block_rediscover_favorites',
       tier: 2,
       isNewUserSeed: true,
-      title: 'One Direction x Harry Styles Mashup',
-      subtitle: 'Night Changes, As It Was & Pop Anthems',
-      badge: 'Pop Mashup',
-      query: 'One Direction Harry Styles greatest pop hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/H5v3kku4y6Q/maxresdefault.jpg',
-      color: 'from-rose-500/40 to-black'
-    },
-    {
-      id: 'block_mashup_shreya_sunidhi',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Shreya Ghoshal x Sunidhi Chauhan Mashup',
-      subtitle: 'Deewani Mastani, Kamli & Powerhouse Vocals',
-      badge: 'Vocal Powerhouse',
-      query: 'Shreya Ghoshal Sunidhi Chauhan Bollywood hit songs playlist',
-      thumbnail: 'https://i.ytimg.com/vi/VuG7ge_8I2Y/maxresdefault.jpg',
-      color: 'from-violet-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_eminem_rihanna',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Eminem x Rihanna Duets & Anthems',
-      subtitle: 'Love The Way You Lie, The Monster & Iconic Hooks',
-      badge: 'Legendary Duets',
-      query: 'Eminem Rihanna hits duet playlist',
-      thumbnail: 'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg',
-      color: 'from-stone-600/40 to-black'
-    },
-    {
-      id: 'block_mashup_maroon_puth',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Maroon 5 x Charlie Puth Pop Mashup',
-      subtitle: 'Sugar, Attention & Groovy Pop Hits',
-      badge: 'Groove Mashup',
-      query: 'Maroon 5 Charlie Puth pop hits playlist',
+      title: 'Rediscover Favorites Mix',
+      subtitle: 'Shuffled liked songs + closely related tracks',
+      badge: 'REDISCOVER',
+      query: 'Maroon 5 Charlie Puth Shawn Mendes Ed Sheeran essential pop radio playlist',
       thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
-      color: 'from-yellow-600/40 to-black'
+      color: 'from-pink-600/40 to-black',
+      isHybridRediscover: true
+    },
+    {
+      id: 'block_on_repeat_vibes',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'On Repeat & Similar Vibes',
+      subtitle: "Inspired by what you've been playing lately",
+      badge: 'HEAVY ROTATION',
+      query: 'Post Malone Swae Lee Kendrick Lamar SZA melodic hip hop and pop playlist',
+      thumbnail: 'https://i.ytimg.com/vi/T6eK-2OQtew/maxresdefault.jpg',
+      color: 'from-indigo-600/40 to-black'
+    },
+    {
+      id: 'block_sonic_dna_radar',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'Sonic DNA Radar',
+      subtitle: 'Fresh discoveries matching your core artists',
+      badge: 'TASTE RADAR',
+      query: 'Billie Eilish Finneas Taylor Swift Gracie Abrams acoustic storytelling hits',
+      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
+      color: 'from-cyan-600/40 to-black'
     }
   ]
 ]
@@ -2485,27 +2525,12 @@ export function getInitialDiscoveryBlocks() {
 
   return [
     ...rankedCharts,
-    ...starterCycle,
-    {
-      id: 'block_rediscover',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'Rediscover Favorites Mix',
-      subtitle: 'Shuffled favorites & related radio',
-      badge: 'Rediscover',
-      query: 'Post Malone Sunflower Lukas Graham 7 Years radio playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
-      thumbnailPool: [
-        'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
-        'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
-        'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
-        'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg'
-      ],
-      color: 'from-purple-600/40 to-black',
-      isHybridRediscover: true
-    }
+    ...starterCycle
   ]
 }
+
+export const THIRTY_MINUTES_MS = 30 * 60 * 1000 // 1,800,000ms
+let hasBootRefreshedThisSession = false
 
 export async function fetchListenTogetherFeed({
   userTracks = [],
@@ -2514,17 +2539,26 @@ export async function fetchListenTogetherFeed({
   timeInfo = null,
   rotationIndex = undefined
 } = {}) {
-  // Stale-While-Revalidate memory cache check (< 3 mins)
-  if (!forceRefresh && _discoveryFeedMemoryCache && Date.now() - _discoveryFeedMemoryCache.ts < DISCOVERY_FEED_CACHE_TTL) {
-    return _discoveryFeedMemoryCache.blocks
+  const now = Date.now()
+  const lastRefresh = Number(localStorage.getItem('upbeat_last_discovery_refresh') || 0)
+  const isColdBoot = !hasBootRefreshedThisSession
+  const hasExpired = now - lastRefresh >= THIRTY_MINUTES_MS
+
+  if (isColdBoot) {
+    hasBootRefreshedThisSession = true
+    advanceRotationCursor(1)
   }
 
-  if (!forceRefresh) {
+  // 30-minute + Cold-Boot Cache Lifecycle
+  if (!forceRefresh && !hasExpired && !isColdBoot) {
+    if (_discoveryFeedMemoryCache && _discoveryFeedMemoryCache.blocks?.length >= 14 && now - (_discoveryFeedMemoryCache.ts || 0) < THIRTY_MINUTES_MS) {
+      return _discoveryFeedMemoryCache.blocks
+    }
     try {
       const raw = sessionStorage.getItem(DISCOVERY_FEED_CACHE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (parsed?.blocks?.length >= 8 && Date.now() - (parsed.ts || 0) < DISCOVERY_FEED_CACHE_TTL) {
+        if (parsed?.blocks?.length >= 14 && now - (parsed.ts || 0) < THIRTY_MINUTES_MS) {
           _discoveryFeedMemoryCache = parsed
           return parsed.blocks
         }
@@ -2534,9 +2568,9 @@ export async function fetchListenTogetherFeed({
 
   const cursor = typeof rotationIndex === 'number' ? rotationIndex : getRotationCursor()
 
-  // 1. Determine User Profile Readiness
+  // 1. Determine User Profile Readiness with strict music filter
   const validUserTracks = (userTracks || []).filter(
-    (t) => t?.title && t?.artist && !DEFAULT_SEED_IDS.has(t?.video_id) && isValidMusicTrack(t)
+    (t) => t?.title && t?.artist && !DEFAULT_SEED_IDS.has(t?.video_id) && isStrictMusicTrack(t)
   )
 
   // Map each unique clean artist to their tracks and high-res artwork pool
@@ -2549,7 +2583,9 @@ export async function fetchListenTogetherFeed({
       cleanArt.length >= 2 &&
       !/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(cleanArt) &&
       !/^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$/i.test(cleanArt) &&
-      !NON_MUSIC_REGEX.test(cleanArt)
+      !NON_MUSIC_REGEX.test(cleanArt) &&
+      !COMEDY_PODCAST_REGEX.test(cleanArt) &&
+      !DEVOTIONAL_RELIGIOUS_REGEX.test(cleanArt)
     ) {
       const key = cleanArt.toLowerCase()
       const thumb = t.video_id
@@ -2573,7 +2609,13 @@ export async function fetchListenTogetherFeed({
       for (const aName of parsed.artists || []) {
         const cleanA = aName.trim()
         const key = cleanA.toLowerCase()
-        if (cleanA && !artistMap.has(key)) {
+        if (
+          cleanA &&
+          !artistMap.has(key) &&
+          !NON_MUSIC_REGEX.test(cleanA) &&
+          !COMEDY_PODCAST_REGEX.test(cleanA) &&
+          !DEVOTIONAL_RELIGIOUS_REGEX.test(cleanA)
+        ) {
           artistMap.set(key, { name: cleanA, tracks: [], thumb: '', thumbs: [] })
         }
       }
@@ -2583,11 +2625,69 @@ export async function fetchListenTogetherFeed({
   const artists = Array.from(artistMap.values())
   const isNewUser = artists.length < 2
 
-  // Tier 1 — At least 6 to 7 Ranked Regional & Global Daily Chart Blocks based on User Preferences
+  // Tier 1 — 7 Ranked Regional & Global Daily Chart Blocks based on User Preferences
   const tier1Blocks = resolveRankedChartBlocks(cursor)
   const usedCoverUrls = new Set(tier1Blocks.map((b) => b.thumbnail))
 
-  // Build the hybrid Rediscover Favorites Mix block
+  // Group A: 4 Personalized Mood & Language Mixes
+  // 1. Chill & Late Night Vibes (Badge: CHILL MIX)
+  const chillArtists = artists
+    .filter((a) => /joji|keshi|cigarettes|billie|finneas|kuhad|the weeknd|charlie|lana|laufey/i.test(a.name))
+    .map((a) => a.name)
+    .slice(0, 3)
+  const chillQuery = chillArtists.length
+    ? `${chillArtists.join(' ')} Joji Keshi Cigarettes After Sex chill late night vibes songs playlist -comedy -podcast`
+    : 'Joji The Weeknd Keshi Cigarettes After Sex Billie Eilish chill late night vibes songs playlist -comedy -podcast'
+  const chillPool = [
+    'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg'
+  ]
+
+  // 2. J-Pop & Anime Essentials (Badge: J-POP & ANIME)
+  const jpopArtists = artists
+    .filter((a) => /yoasobi|kenshi|ado|eve|sawano|lisa|fujii|king gnu|radwimps|vaundy/i.test(a.name))
+    .map((a) => a.name)
+    .slice(0, 3)
+  const jpopQuery = jpopArtists.length
+    ? `${jpopArtists.join(' ')} YOASOBI Kenshi Yonezu Ado official anime jpop songs playlist -shorts`
+    : 'YOASOBI Kenshi Yonezu Ado Eve King Gnu LiSA Fujii Kaze official anime jpop songs playlist -shorts'
+  const jpopPool = [
+    'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg'
+  ]
+
+  // 3. Hindi Indie & Bollywood Vibe (Badge: HINDI MIX)
+  const hindiArtists = artists
+    .filter((a) => /anuv|kuhad|local train|arijit|pritam|vishal|shekhar|mitraz|rikhari|atif|jasleen/i.test(a.name))
+    .map((a) => a.name)
+    .slice(0, 3)
+  const hindiQuery = hindiArtists.length
+    ? `${hindiArtists.join(' ')} Arijit Singh Prateek Kuhad Anuv Jain soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy`
+    : 'Arijit Singh Prateek Kuhad Anuv Jain The Local Train Mitraz Aditya Rikhari soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy'
+  const hindiPool = [
+    'https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'
+  ]
+
+  // 4. English Pop & Alt Anthems (Badge: ENGLISH MIX)
+  const westernArtists = artists
+    .filter((a) => /post malone|the weeknd|maroon 5|arctic monkeys|imagine dragons|dua lipa|travis scott|coldplay|swift|styles/i.test(a.name))
+    .map((a) => a.name)
+    .slice(0, 3)
+  const westernQuery = westernArtists.length
+    ? `${westernArtists.join(' ')} Post Malone The Weeknd Coldplay Imagine Dragons top western pop rock songs playlist -podcast`
+    : 'Post Malone The Weeknd Maroon 5 Coldplay Imagine Dragons Dua Lipa Arctic Monkeys top western pop rock songs playlist -podcast'
+  const westernPool = [
+    'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg'
+  ]
+
+  // Group B: 3 Personal Library & Similar-to-What-You-Hear Mixes
+  // 5. Rediscover Favorites Mix (Badge: REDISCOVER)
   const rediscoverBlock = await buildHybridRediscoverBlock({
     userTracks: validUserTracks,
     usedCoverUrls,
@@ -2595,155 +2695,97 @@ export async function fetchListenTogetherFeed({
     forceShuffle: forceRefresh
   })
 
-  // Tier 2 — 8 Personalized Blocks (1 Featured + 7 Artist Mashups in Made for you, zero gym/lo-fi)
-  let tier2Blocks = []
-  if (isNewUser) {
-    const starterCycle = STARTER_ROTATION_CYCLES[cursor % STARTER_ROTATION_CYCLES.length]
-    tier2Blocks = [...starterCycle, rediscoverBlock]
-  } else {
-    // Modular cyclic windowing: (baseIndex + cursor) % artists.length
-    const n = artists.length
-    const a0 = artists[cursor % n]
-    const a1 = artists[(cursor + 1) % n] || a0
-    const a2 = artists[(cursor + 2) % n] || a0
-    const a3 = artists[(cursor + 3) % n] || a1
-    const a4 = artists[(cursor + 4) % n] || a2
-    const a5 = artists[(cursor + 5) % n] || a0
-    const a6 = artists[(cursor + 6) % n] || a1
+  // 6. On Repeat & Similar Vibes (Badge: HEAVY ROTATION)
+  const recentTrack = validUserTracks[0] || null
+  const onRepeatQuery = recentTrack
+    ? `${recentTrack.artist} ${recentTrack.title} radio songs playlist -comedy -podcast -bhajan`
+    : 'Dua Lipa Post Malone The Weeknd Harry Styles heavy rotation pop hits playlist'
+  const onRepeatThumb = (recentTrack?.thumbnail && !recentTrack.thumbnail.includes('default'))
+    ? recentTrack.thumbnail
+    : 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'
 
-    const allUserThumbs = validUserTracks
-      .map((t) => (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg` : t.thumbnail || ''))
-      .filter(Boolean)
+  // 7. Sonic DNA Radar (Badge: TASTE RADAR)
+  const topCoreArtists = artists.slice(0, 3).map((a) => a.name)
+  const radarQuery = topCoreArtists.length
+    ? `${topCoreArtists.join(' ')} deep cuts rare tracks official songs playlist -comedy -podcast -bhajan`
+    : 'Arctic Monkeys The Neighbourhood Kendrick Lamar deep cuts alternative songs playlist'
+  const radarThumb = 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg'
 
-    const buildPoolForArtists = (...artList) => {
-      const pool = []
-      for (const a of artList) {
-        for (const th of a?.thumbs || []) {
-          if (th && !pool.includes(th)) pool.push(th)
-        }
-      }
-      for (const th of allUserThumbs) {
-        if (pool.length >= 8) break
-        if (th && !pool.includes(th)) pool.push(th)
-      }
-      return pool
+  const tier2Blocks = [
+    {
+      id: 'block_chill_late_night',
+      tier: 2,
+      title: 'Chill & Late Night Vibes',
+      subtitle: 'Atmospheric, melodic & lo-fi chill tailored for you',
+      badge: 'CHILL MIX',
+      query: chillQuery,
+      thumbnail: chillPool[cursor % chillPool.length],
+      thumbnailPool: chillPool,
+      color: 'from-teal-600/40 to-black'
+    },
+    {
+      id: 'block_jpop_anime',
+      tier: 2,
+      title: 'J-Pop & Anime Essentials',
+      subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
+      badge: 'J-POP & ANIME',
+      query: jpopQuery,
+      thumbnail: jpopPool[cursor % jpopPool.length],
+      thumbnailPool: jpopPool,
+      color: 'from-rose-600/40 to-black'
+    },
+    {
+      id: 'block_hindi_indie_bollywood',
+      tier: 2,
+      title: 'Hindi Indie & Bollywood Vibe',
+      subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
+      badge: 'HINDI MIX',
+      query: hindiQuery,
+      thumbnail: hindiPool[cursor % hindiPool.length],
+      thumbnailPool: hindiPool,
+      color: 'from-amber-600/40 to-black'
+    },
+    {
+      id: 'block_english_pop_alt',
+      tier: 2,
+      title: 'English Pop & Alt Anthems',
+      subtitle: 'Chart-topping Western pop, alt-rock & synth',
+      badge: 'ENGLISH MIX',
+      query: westernQuery,
+      thumbnail: westernPool[cursor % westernPool.length],
+      thumbnailPool: westernPool,
+      color: 'from-purple-600/40 to-black'
+    },
+    rediscoverBlock,
+    {
+      id: 'block_on_repeat_vibes',
+      tier: 2,
+      title: 'On Repeat & Similar Vibes',
+      subtitle: "Inspired by what you've been playing lately",
+      badge: 'HEAVY ROTATION',
+      query: onRepeatQuery,
+      thumbnail: onRepeatThumb,
+      thumbnailPool: [onRepeatThumb, 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'],
+      color: 'from-indigo-600/40 to-black'
+    },
+    {
+      id: 'block_sonic_dna_radar',
+      tier: 2,
+      title: 'Sonic DNA Radar',
+      subtitle: 'Fresh discoveries matching your core artists',
+      badge: 'TASTE RADAR',
+      query: radarQuery,
+      thumbnail: radarThumb,
+      thumbnailPool: [radarThumb, 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'],
+      color: 'from-cyan-600/40 to-black'
     }
-
-    const pickUniqueCover = (pool, fallbackArtist) => {
-      for (let i = 0; i < (pool?.length || 0); i++) {
-        const candidate = pool[(cursor + i) % pool.length]
-        if (candidate && !usedCoverUrls.has(candidate)) {
-          usedCoverUrls.add(candidate)
-          return candidate
-        }
-      }
-      if (fallbackArtist?.thumb && !usedCoverUrls.has(fallbackArtist.thumb)) {
-        usedCoverUrls.add(fallbackArtist.thumb)
-        return fallbackArtist.thumb
-      }
-      for (const thumb of allUserThumbs) {
-        if (thumb && !usedCoverUrls.has(thumb)) {
-          usedCoverUrls.add(thumb)
-          return thumb
-        }
-      }
-      return 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'
-    }
-
-    const pool0 = buildPoolForArtists(a0, a1)
-    const pool1 = buildPoolForArtists(a2, a3)
-    const pool2 = buildPoolForArtists(a4, a0)
-    const pool3 = buildPoolForArtists(a1, a3)
-    const pool4 = buildPoolForArtists(a2, a5)
-    const pool5 = buildPoolForArtists(a0, a6)
-    const pool6 = buildPoolForArtists(a1, a4, a5)
-
-    tier2Blocks = [
-      {
-        id: 'block_sonic_archetype',
-        tier: 2,
-        title: `${a0.name} x ${a1.name} Mashup`,
-        subtitle: `Signature hits, vocal duets & iconic mashups from ${a0.name} and ${a1.name}`,
-        badge: 'Artist Mashup',
-        query: `${a0.name} ${a1.name} mashup acoustic duet hit songs playlist`,
-        thumbnail: pickUniqueCover(pool0, a0),
-        thumbnailPool: pool0,
-        color: 'from-rose-600/40 to-black'
-      },
-      {
-        id: 'block_mashup_crossover',
-        tier: 2,
-        title: `${a2.name} x ${a3.name} Crossover Mix`,
-        subtitle: `Curated crossover blending ${a2.name} and ${a3.name}`,
-        badge: 'Crossover Mashup',
-        query: `${a2.name} ${a3.name} mashup top hits playlist`,
-        thumbnail: pickUniqueCover(pool1, a2),
-        thumbnailPool: pool1,
-        color: 'from-indigo-600/40 to-black'
-      },
-      {
-        id: 'block_mashup_acoustic',
-        tier: 2,
-        title: `${a4.name} x ${a0.name} Unplugged Mashup`,
-        subtitle: `Acoustic duets, stripped-down vocals & soulful melodies`,
-        badge: 'Acoustic Mashup',
-        query: `${a4.name} ${a0.name} acoustic unplugged mashup songs`,
-        thumbnail: pickUniqueCover(pool2, a4),
-        thumbnailPool: pool2,
-        color: 'from-amber-600/40 to-black'
-      },
-      {
-        id: 'block_mashup_anthems',
-        tier: 2,
-        title: `${a1.name} x ${a3.name} High-Energy Mashup`,
-        subtitle: `Anthemic hooks & high-octane hits from ${a1.name} & ${a3.name}`,
-        badge: 'Anthem Mashup',
-        query: `${a1.name} ${a3.name} high energy anthem songs mashup`,
-        thumbnail: pickUniqueCover(pool3, a1),
-        thumbnailPool: pool3,
-        color: 'from-emerald-600/40 to-black'
-      },
-      {
-        id: 'block_mashup_melodic',
-        tier: 2,
-        title: `${a2.name} x ${a4.name} Melodic Flow`,
-        subtitle: `Infectious hooks, timeless melodies & signature tracks`,
-        badge: 'Melodic Mashup',
-        query: `${a2.name} ${a4.name} melodic pop mashup hits playlist`,
-        thumbnail: pickUniqueCover(pool4, a2),
-        thumbnailPool: pool4,
-        color: 'from-teal-600/40 to-black'
-      },
-      {
-        id: 'block_mashup_collabs',
-        tier: 2,
-        title: `${a0.name} & Friends Mashup`,
-        subtitle: `Top collaborations, iconic features & special guest duets with ${a0.name}`,
-        badge: 'Collaborations',
-        query: `${a0.name} collaborations features duet hits playlist`,
-        thumbnail: pickUniqueCover(pool5, a0),
-        thumbnailPool: pool5,
-        color: 'from-purple-600/40 to-black'
-      },
-      {
-        id: 'block_mashup_blend',
-        tier: 2,
-        title: `${a1.name} x ${a5.name} Soundstage Mashup`,
-        subtitle: `Cross-artist blend of essential hits and viral favorites`,
-        badge: 'Soundstage Mix',
-        query: `${a1.name} ${a5.name} greatest hits mashup playlist`,
-        thumbnail: pickUniqueCover(pool6, a1),
-        thumbnailPool: pool6,
-        color: 'from-pink-600/40 to-black'
-      },
-      rediscoverBlock
-    ]
-  }
+  ]
 
   const allBlocks = [...tier1Blocks, ...tier2Blocks]
-  _discoveryFeedMemoryCache = { blocks: allBlocks, isNewUser, ts: Date.now() }
+  _discoveryFeedMemoryCache = { blocks: allBlocks, isNewUser, ts: now }
   try {
     sessionStorage.setItem(DISCOVERY_FEED_CACHE_KEY, JSON.stringify(_discoveryFeedMemoryCache))
+    localStorage.setItem('upbeat_last_discovery_refresh', String(now))
   } catch {}
 
   return allBlocks
@@ -2799,14 +2841,14 @@ export async function rerollDiscoveryBlock(blockId, { userTracks = [], tasteDna 
 export async function loadBlockTracks(block) {
   if (!block) return []
   if (block.preloadedTracks && block.preloadedTracks.length > 0) {
-    return block.preloadedTracks
+    return block.preloadedTracks.filter(isStrictMusicTrack)
   }
 
   // Hybrid rediscover mix on-demand generation
-  if (block.id === 'block_rediscover') {
+  if (block.id === 'block_rediscover' || block.id === 'block_rediscover_favorites') {
     const hybrid = await buildHybridRediscoverBlock()
     if (hybrid?.preloadedTracks?.length > 0) {
-      return hybrid.preloadedTracks
+      return hybrid.preloadedTracks.filter(isStrictMusicTrack)
     }
   }
 
@@ -2814,7 +2856,7 @@ export async function loadBlockTracks(block) {
   if (block.query) {
     try {
       const res = await directSearchStandalone(block.query, 'songs')
-      if (res?.tracks?.length > 0) return res.tracks
+      if (res?.tracks?.length > 0) return res.tracks.filter(isStrictMusicTrack)
     } catch {}
   }
 
@@ -2822,7 +2864,7 @@ export async function loadBlockTracks(block) {
   if (block.browse_id) {
     try {
       const plTracks = await browsePlaylistStandalone(block.browse_id, block.title, block.subtitle)
-      if (plTracks && plTracks.length > 0) return plTracks
+      if (plTracks && plTracks.length > 0) return plTracks.filter(isStrictMusicTrack)
     } catch {}
   }
 
