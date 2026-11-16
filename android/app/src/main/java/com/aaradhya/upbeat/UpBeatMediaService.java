@@ -86,6 +86,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     private static final String KEY_QUEUE = "car_queue_json";
     private static final String KEY_FAVS = "car_favs_json";
     private static final String KEY_MIXES = "car_mixes_json";
+    private static final String KEY_REPEAT_MODE = "car_repeat_mode";
 
     public static final String ACTION_TOGGLE_PLAY = "com.aaradhya.upbeat.ACTION_TOGGLE_PLAY";
     public static final String ACTION_PLAY = "com.aaradhya.upbeat.ACTION_PLAY";
@@ -96,10 +97,18 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     public static final String ACTION_FORWARD = "com.aaradhya.upbeat.ACTION_FORWARD";
     public static final String ACTION_STOP = "com.aaradhya.upbeat.ACTION_STOP";
 
-    // Top-level Android Auto hierarchy (2 Tabs: Home & Library)
+    public static final String ACTION_CUSTOM_TOGGLE_LOOP = "com.aaradhya.upbeat.AA_TOGGLE_LOOP";
+    public static final String ACTION_CUSTOM_TOGGLE_LIKE = "com.aaradhya.upbeat.AA_TOGGLE_LIKE";
+    public static final String ACTION_CUSTOM_SHUFFLE = "com.aaradhya.upbeat.AA_SHUFFLE";
+    public static final String ACTION_CUSTOM_AUTOMIX = "com.aaradhya.upbeat.AA_AUTOMIX";
+
+    // Top-level Android Auto hierarchy (4 Tabs matching UpBeat v7.6.0 phone UI)
     public static final String MEDIA_ID_ROOT = "root";
-    public static final String MEDIA_ID_TAB_HOME = "tab_home";
+    public static final String MEDIA_ID_TAB_FORYOU = "tab_foryou";
+    public static final String MEDIA_ID_TAB_PLAYLISTS = "tab_playlists";
+    public static final String MEDIA_ID_TAB_CHARTS = "tab_charts";
     public static final String MEDIA_ID_TAB_LIBRARY = "tab_library";
+    public static final String MEDIA_ID_TAB_HOME = MEDIA_ID_TAB_FORYOU;
 
     // Library folders
     public static final String MEDIA_ID_LIB_FAVS = "lib_favorites";
@@ -128,11 +137,19 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         public final String title;
         public final String artist;
         public final String videoId;
+        public final String durationText;
+        public final String coverUrl;
 
         public CarTrack(String title, String artist, String videoId) {
+            this(title, artist, videoId, "", "");
+        }
+
+        public CarTrack(String title, String artist, String videoId, String durationText, String coverUrl) {
             this.title = title != null ? title : "Unknown Track";
             this.artist = artist != null ? artist : "UpBeat";
             this.videoId = videoId != null ? videoId : "";
+            this.durationText = durationText != null ? durationText : "";
+            this.coverUrl = coverUrl != null ? coverUrl : "";
         }
     }
 
@@ -144,16 +161,24 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         public final String badgeRibbon;
         public final String badgeColor;
         public final String searchQuery;
+        public final String kind;
+        public final String coverUrl;
         public final List<CarTrack> tracks = Collections.synchronizedList(new ArrayList<>());
 
         public HotPlaylistDef(String id, String title, String subtitle, String badgeTop, String badgeRibbon, String badgeColor, String searchQuery, CarTrack[] seedTracks) {
+            this(id, title, subtitle, badgeTop, badgeRibbon, badgeColor, searchQuery, "chart", "", seedTracks);
+        }
+
+        public HotPlaylistDef(String id, String title, String subtitle, String badgeTop, String badgeRibbon, String badgeColor, String searchQuery, String kind, String coverUrl, CarTrack[] seedTracks) {
             this.id = id;
             this.title = title;
             this.subtitle = subtitle;
             this.badgeTop = badgeTop;
             this.badgeRibbon = badgeRibbon;
             this.badgeColor = badgeColor;
-            this.searchQuery = searchQuery;
+            this.searchQuery = searchQuery != null ? searchQuery : "";
+            this.kind = kind != null ? kind : "chart";
+            this.coverUrl = coverUrl != null ? coverUrl : "";
             if (seedTracks != null) {
                 Collections.addAll(this.tracks, seedTracks);
             }
@@ -161,22 +186,43 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         public String getHeroVideoId() {
             synchronized (tracks) {
-                if (!tracks.isEmpty() && !tracks.get(0).videoId.isEmpty()) {
-                    return tracks.get(0).videoId;
+                for (CarTrack t : tracks) {
+                    if (t.videoId != null && t.videoId.length() == 11) {
+                        return t.videoId;
+                    }
                 }
             }
-            return "XtZTpxnrHAc";
+            return "";
+        }
+
+        public String getHeroCoverUrl() {
+            if (coverUrl != null && !coverUrl.isEmpty()) {
+                return coverUrl;
+            }
+            synchronized (tracks) {
+                for (CarTrack t : tracks) {
+                    if (t.coverUrl != null && !t.coverUrl.isEmpty()) {
+                        return t.coverUrl;
+                    }
+                }
+            }
+            return "";
         }
     }
 
     private final Map<String, HotPlaylistDef> mPlaylists = new LinkedHashMap<>();
-    // Mixes and playlists saved in the phone app. Kept apart from mPlaylists so the
-    // background chart refresh never appends search results to them.
+    // Synced phone collections: Made For You, Daily Top Charts, and User Playlists/Mixes
+    private final Map<String, HotPlaylistDef> mForYouMixes = Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Map<String, HotPlaylistDef> mSyncedCharts = Collections.synchronizedMap(new LinkedHashMap<>());
     private final Map<String, HotPlaylistDef> mUserMixes = Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Map<String, HotPlaylistDef> mMoodPlaylists = Collections.synchronizedMap(new LinkedHashMap<>());
     private final List<CarTrack> mUserFavorites = Collections.synchronizedList(new ArrayList<>());
     private final List<CarTrack> mUserQueue = Collections.synchronizedList(new ArrayList<>());
     private final List<CarTrack> mActiveCarQueue = Collections.synchronizedList(new ArrayList<>());
     private volatile int mActiveCarQueueIndex = 0;
+    private volatile String mRepeatMode = "off";
+    private String currentVideoId = "";
+    private String currentQueueTitle = "UpBeat Queue";
 
     // Standalone Native MediaPlayer for 100% Phone-Free Car Playback
     private MediaPlayer mStandalonePlayer = null;
@@ -255,6 +301,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         acquireLocks();
 
         initCuratedPlaylists();
+        initMoodPlaylists();
         loadSavedUserLists();
 
         mMediaSession = new MediaSessionCompat(this, "UpBeatMediaSession");
@@ -273,6 +320,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         mMediaSession.setMediaButtonReceiver(mbPendingIntent);
 
         mMediaSession.setCallback(new MediaSessionCallback());
+        syncMediaSessionRepeatMode();
         mMediaSession.setActive(true);
         setSessionToken(mMediaSession.getSessionToken());
 
@@ -280,21 +328,28 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         synchronized (mActiveCarQueue) {
             if (!mUserFavorites.isEmpty()) {
                 mActiveCarQueue.addAll(mUserFavorites);
+                currentQueueTitle = "Liked Songs";
             } else if (!mUserQueue.isEmpty()) {
                 mActiveCarQueue.addAll(mUserQueue);
+                currentQueueTitle = "Up Next Queue";
             } else {
                 HotPlaylistDef hindiLatest = mPlaylists.get(PL_HINDI_LATEST);
                 if (hindiLatest != null) {
                     mActiveCarQueue.addAll(hindiLatest.tracks);
+                    currentQueueTitle = hindiLatest.title;
                 }
             }
             if (!mActiveCarQueue.isEmpty()) {
                 CarTrack first = mActiveCarQueue.get(0);
                 currentTitle = first.title;
                 currentArtist = first.artist;
-                currentArtUrl = "https://i.ytimg.com/vi/" + first.videoId + "/hqdefault.jpg";
+                currentVideoId = first.videoId;
+                currentArtUrl = !first.coverUrl.isEmpty()
+                    ? first.coverUrl
+                    : (!first.videoId.isEmpty() ? "https://i.ytimg.com/vi/" + first.videoId + "/hqdefault.jpg" : "");
                 applyMediaMetadata();
             }
+            syncActiveCarQueueToMediaSession();
         }
 
         updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0, false);
@@ -302,6 +357,28 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         // Refresh playlists with live YouTube Music tracks in the background
         refreshPlaylistsFromYouTubeAsync();
+    }
+
+    private void initMoodPlaylists() {
+        mMoodPlaylists.clear();
+        mMoodPlaylists.put("mood_energize", new HotPlaylistDef(
+            "mood_energize", "Energize", "High Energy Pop & Upbeat Hits", "MOOD", "Energize", "#F59E0B",
+            "high energy upbeat pop hits songs", "mood", "", null));
+        mMoodPlaylists.put("mood_chill", new HotPlaylistDef(
+            "mood_chill", "Chill & Late Night", "Acoustic, Chill & Indie Vibes", "MOOD", "Chill", "#3B82F6",
+            "late night chill acoustic hindi english indie songs", "mood", "", null));
+        mMoodPlaylists.put("mood_focus", new HotPlaylistDef(
+            "mood_focus", "Deep Focus", "Ambient, Instrumental & Study Flow", "MOOD", "Focus", "#10B981",
+            "deep focus instrumental ambient study music", "mood", "", null));
+        mMoodPlaylists.put("mood_workout", new HotPlaylistDef(
+            "mood_workout", "Workout & Pump", "Adrenaline & Gym Anthems", "MOOD", "Workout", "#EF4444",
+            "high energy workout gym bollywood punjabi edm songs", "mood", "", null));
+        mMoodPlaylists.put("mood_party", new HotPlaylistDef(
+            "mood_party", "Party & Dance", "Club Bangers & Party Anthems", "MOOD", "Party", "#EC4899",
+            "bollywood punjabi dance party hit songs", "mood", "", null));
+        mMoodPlaylists.put("mood_romantic", new HotPlaylistDef(
+            "mood_romantic", "Romantic Duets", "Soulful Love Songs & Classics", "MOOD", "Romance", "#F43F5E",
+            "romantic hindi love songs arijit singh duets", "mood", "", null));
     }
 
     private void initCuratedPlaylists() {
@@ -457,18 +534,43 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     private void loadSavedUserLists() {
         try {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            mRepeatMode = normalizeRepeatMode(prefs.getString(KEY_REPEAT_MODE, "off"));
             parseJsonToTrackList(prefs.getString(KEY_FAVS, "[]"), mUserFavorites);
             parseJsonToTrackList(prefs.getString(KEY_QUEUE, "[]"), mUserQueue);
             parseMixes(prefs.getString(KEY_MIXES, "[]"));
         } catch (Exception ignored) {}
     }
 
-    /** Looks up a built-in chart playlist or one of the user's mixes. */
+    private static String normalizeRepeatMode(String mode) {
+        if ("one".equalsIgnoreCase(mode)) return "one";
+        if ("all".equalsIgnoreCase(mode)) return "all";
+        return "off";
+    }
+
+    /** Looks up a built-in chart, mood, For You card, synced chart, or user playlist/mix. */
     private HotPlaylistDef findPlaylist(String id) {
         if (id == null) return null;
-        HotPlaylistDef pl = mPlaylists.get(id);
+        HotPlaylistDef pl = mForYouMixes.get(id);
         if (pl != null) return pl;
-        return mUserMixes.get(id);
+        pl = mSyncedCharts.get(id);
+        if (pl != null) return pl;
+        pl = mUserMixes.get(id);
+        if (pl != null) return pl;
+        pl = mPlaylists.get(id);
+        if (pl != null) return pl;
+        return mMoodPlaylists.get(id);
+    }
+
+    private List<HotPlaylistDef> getForYouMixes() {
+        synchronized (mForYouMixes) {
+            return new ArrayList<>(mForYouMixes.values());
+        }
+    }
+
+    private List<HotPlaylistDef> getSyncedCharts() {
+        synchronized (mSyncedCharts) {
+            return new ArrayList<>(mSyncedCharts.values());
+        }
     }
 
     private List<HotPlaylistDef> getUserMixes() {
@@ -477,37 +579,61 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
     }
 
-    /** JSON: [{ title, subtitle, kind, tracks: [{ title, artist, video_id }] }] */
+    /** JSON: [{ id, title, subtitle, kind, query, cover, tracks: [{ title, artist, video_id, thumbnail, duration_text }] }] */
     private void parseMixes(String json) {
-        Map<String, HotPlaylistDef> next = new LinkedHashMap<>();
+        Map<String, HotPlaylistDef> nextForYou = new LinkedHashMap<>();
+        Map<String, HotPlaylistDef> nextCharts = new LinkedHashMap<>();
+        Map<String, HotPlaylistDef> nextUser = new LinkedHashMap<>();
         try {
             JSONArray arr = new JSONArray(json);
-            for (int i = 0; i < arr.length() && i < 20; i++) {
+            for (int i = 0; i < arr.length() && i < 36; i++) {
                 JSONObject obj = arr.getJSONObject(i);
                 String title = obj.optString("title", "").trim();
                 if (title.isEmpty()) continue;
+                String kind = obj.optString("kind", "mix").trim().toLowerCase();
+                String query = obj.optString("query", "").trim();
+                String cover = obj.optString("cover", "").trim();
                 JSONArray trackArr = obj.optJSONArray("tracks");
                 List<CarTrack> tracks = new ArrayList<>();
                 parseJsonToTrackList(trackArr != null ? trackArr.toString() : "[]", tracks);
-                if (tracks.isEmpty()) continue;
-                String kind = obj.optString("kind", "mix");
-                boolean isAi = "mix".equals(kind) || "foryou".equals(kind);
-                String id = "umix_" + i;
-                next.put(id, new HotPlaylistDef(
-                    id,
-                    title,
-                    obj.optString("subtitle", tracks.size() + " songs"),
-                    "Your",
-                    isAi ? "AI Mix" : "Playlist",
-                    isAi ? "#FF5E3A" : "#2A2A2F",
-                    "",
-                    tracks.toArray(new CarTrack[0])
-                ));
+
+                if (tracks.isEmpty() && query.isEmpty()) continue;
+
+                String subtitle = obj.optString("subtitle", tracks.isEmpty() ? "Curated Mix" : (tracks.size() + " songs")).trim();
+                if ("foryou".equals(kind)) {
+                    String id = "fy_" + i;
+                    nextForYou.put(id, new HotPlaylistDef(
+                        id, title, subtitle, "FOR YOU", "Curated", "#F43F5E",
+                        query.isEmpty() ? title : query, "foryou", cover, tracks.toArray(new CarTrack[0])
+                    ));
+                } else if ("chart".equals(kind)) {
+                    String id = "ch_" + i;
+                    nextCharts.put(id, new HotPlaylistDef(
+                        id, title, subtitle, "DAILY CHART", "Top Chart", "#E11D48",
+                        query.isEmpty() ? title : query, "chart", cover, tracks.toArray(new CarTrack[0])
+                    ));
+                } else {
+                    boolean isAi = "mix".equals(kind);
+                    String id = "umix_" + i;
+                    nextUser.put(id, new HotPlaylistDef(
+                        id, title, subtitle, isAi ? "AI MIX" : "PLAYLIST",
+                        tracks.size() + " songs", isAi ? "#F43F5E" : "#3F3F46",
+                        query, kind, cover, tracks.toArray(new CarTrack[0])
+                    ));
+                }
             }
         } catch (Exception ignored) {}
+        synchronized (mForYouMixes) {
+            mForYouMixes.clear();
+            mForYouMixes.putAll(nextForYou);
+        }
+        synchronized (mSyncedCharts) {
+            mSyncedCharts.clear();
+            mSyncedCharts.putAll(nextCharts);
+        }
         synchronized (mUserMixes) {
             mUserMixes.clear();
-            mUserMixes.putAll(next);
+            mUserMixes.putAll(nextUser);
         }
     }
 
@@ -521,15 +647,16 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     String title = obj.optString("title", "").trim();
                     String artist = obj.optString("artist", "UpBeat").trim();
                     String vid = obj.optString("video_id", "").trim();
+                    String thumb = obj.optString("thumbnail", "").trim();
+                    String durText = obj.optString("duration_text", "").trim();
                     if (vid.isEmpty()) {
-                        String thumb = obj.optString("thumbnail", "");
                         int viIdx = thumb.indexOf("/vi/");
                         if (viIdx >= 0 && thumb.length() >= viIdx + 15) {
                             vid = thumb.substring(viIdx + 4, viIdx + 15);
                         }
                     }
                     if (!title.isEmpty()) {
-                        target.add(new CarTrack(title, artist, vid));
+                        target.add(new CarTrack(title, artist, vid, durText, thumb));
                     }
                 }
             } catch (Exception ignored) {}
@@ -615,6 +742,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private void playQueueAtIndex(List<CarTrack> sourceList, int startIndex) {
+        playQueueAtIndex(sourceList, startIndex, "UpBeat Queue");
+    }
+
+    private void playQueueAtIndex(List<CarTrack> sourceList, int startIndex, String queueTitle) {
         synchronized (mActiveCarQueue) {
             mActiveCarQueue.clear();
             if (sourceList != null && !sourceList.isEmpty()) {
@@ -626,11 +757,183 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             }
             if (mActiveCarQueue.isEmpty()) return;
 
+            if (queueTitle != null && !queueTitle.trim().isEmpty()) {
+                currentQueueTitle = queueTitle.trim();
+            }
             mActiveCarQueueIndex = Math.max(0, Math.min(startIndex, mActiveCarQueue.size() - 1));
+            syncActiveCarQueueToMediaSession();
             CarTrack track = mActiveCarQueue.get(mActiveCarQueueIndex);
             playCarTrackStandalone(track);
             prefetchNextTrackAsync();
         }
+    }
+
+    private void syncActiveCarQueueToMediaSession() {
+        if (mMediaSession == null) return;
+        List<MediaSessionCompat.QueueItem> qItems = new ArrayList<>();
+        synchronized (mActiveCarQueue) {
+            int limit = Math.min(40, mActiveCarQueue.size());
+            for (int i = 0; i < limit; i++) {
+                CarTrack t = mActiveCarQueue.get(i);
+                MediaDescriptionCompat.Builder desc = new MediaDescriptionCompat.Builder()
+                    .setMediaId(!t.videoId.isEmpty() ? t.videoId : ("q_" + i))
+                    .setTitle(t.title)
+                    .setSubtitle(t.artist)
+                    .setIconUri(UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl));
+                qItems.add(new MediaSessionCompat.QueueItem(desc.build(), (long) i));
+            }
+        }
+        mMediaSession.setQueue(qItems);
+        mMediaSession.setQueueTitle(currentQueueTitle);
+    }
+
+    private void syncMediaSessionRepeatMode() {
+        if (mMediaSession == null) return;
+        if ("one".equals(mRepeatMode)) {
+            mMediaSession.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_ONE);
+        } else if ("all".equals(mRepeatMode)) {
+            mMediaSession.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_ALL);
+        } else {
+            mMediaSession.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_NONE);
+        }
+    }
+
+    private void toggleLoopOneFromCar() {
+        String next = "one".equals(mRepeatMode) ? "off" : "one";
+        mRepeatMode = next;
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_REPEAT_MODE, next).apply();
+        syncMediaSessionRepeatMode();
+        updatePlaybackState(
+            isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+            currentPositionMs,
+            isCurrentlyPlaying
+        );
+        if (MainActivity.sInstance != null) {
+            MainActivity.sInstance.dispatchCarAction("toggle_loop", next);
+        }
+    }
+
+    private boolean isCurrentTrackLiked() {
+        synchronized (mUserFavorites) {
+            for (CarTrack t : mUserFavorites) {
+                if (currentVideoId != null && !currentVideoId.isEmpty() && currentVideoId.equals(t.videoId)) {
+                    return true;
+                }
+                if (currentTitle != null && !currentTitle.isEmpty() && currentTitle.equalsIgnoreCase(t.title)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void toggleLikeCurrentTrack() {
+        if (currentTitle == null || currentTitle.isEmpty() || "UpBeat".equals(currentTitle)) return;
+        synchronized (mUserFavorites) {
+            int foundIdx = -1;
+            for (int i = 0; i < mUserFavorites.size(); i++) {
+                CarTrack t = mUserFavorites.get(i);
+                if ((currentVideoId != null && !currentVideoId.isEmpty() && currentVideoId.equals(t.videoId))
+                    || currentTitle.equalsIgnoreCase(t.title)) {
+                    foundIdx = i;
+                    break;
+                }
+            }
+            if (foundIdx >= 0) {
+                mUserFavorites.remove(foundIdx);
+            } else {
+                mUserFavorites.add(0, new CarTrack(currentTitle, currentArtist, currentVideoId, "", currentArtUrl));
+            }
+            try {
+                JSONArray arr = new JSONArray();
+                for (CarTrack t : mUserFavorites) {
+                    JSONObject o = new JSONObject();
+                    o.put("title", t.title);
+                    o.put("artist", t.artist);
+                    o.put("video_id", t.videoId);
+                    o.put("thumbnail", t.coverUrl);
+                    o.put("duration_text", t.durationText);
+                    arr.put(o);
+                }
+                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().putString(KEY_FAVS, arr.toString()).apply();
+            } catch (Exception ignored) {}
+        }
+        notifyAllBrowserTabs();
+        updatePlaybackState(
+            isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+            currentPositionMs,
+            isCurrentlyPlaying
+        );
+        if (MainActivity.sInstance != null) {
+            MainActivity.sInstance.dispatchCarAction("toggle_like", currentVideoId != null ? currentVideoId : "");
+        }
+    }
+
+    private void shuffleCurrentQueueFromCar() {
+        synchronized (mActiveCarQueue) {
+            if (mActiveCarQueue.size() <= 1) return;
+            CarTrack curr = (mActiveCarQueueIndex >= 0 && mActiveCarQueueIndex < mActiveCarQueue.size())
+                ? mActiveCarQueue.get(mActiveCarQueueIndex)
+                : null;
+            List<CarTrack> rest = new ArrayList<>();
+            for (int i = 0; i < mActiveCarQueue.size(); i++) {
+                if (curr == null || i != mActiveCarQueueIndex) {
+                    rest.add(mActiveCarQueue.get(i));
+                }
+            }
+            Collections.shuffle(rest);
+            mActiveCarQueue.clear();
+            if (curr != null) {
+                mActiveCarQueue.add(curr);
+            }
+            mActiveCarQueue.addAll(rest);
+            mActiveCarQueueIndex = 0;
+            syncActiveCarQueueToMediaSession();
+        }
+        prefetchNextTrackAsync();
+    }
+
+    private void startRadioAutomixFromCar(final boolean playImmediately) {
+        final String baseTitle = (currentTitle != null && !"UpBeat".equals(currentTitle)) ? currentTitle : "";
+        final String baseArtist = currentArtist != null ? currentArtist : "";
+        final String query = (!baseTitle.isEmpty())
+            ? (baseTitle + " " + baseArtist + " mix")
+            : "latest hindi english hit songs mix";
+        final CarTrack anchorTrack;
+        synchronized (mActiveCarQueue) {
+            anchorTrack = (!mActiveCarQueue.isEmpty() && mActiveCarQueueIndex < mActiveCarQueue.size())
+                ? mActiveCarQueue.get(mActiveCarQueueIndex)
+                : null;
+        }
+        mNetworkExecutor.submit(() -> {
+            List<CarTrack> found = searchYouTubeMusicTracksNative(query, 15);
+            if (found.isEmpty()) return;
+            mMainHandler.post(() -> {
+                if (playImmediately) {
+                    playQueueAtIndex(found, 0, "Automix Radio");
+                    return;
+                }
+                synchronized (mActiveCarQueue) {
+                    List<CarTrack> nextList = new ArrayList<>();
+                    if (anchorTrack != null) nextList.add(anchorTrack);
+                    for (CarTrack cand : found) {
+                        if (anchorTrack != null && cand.videoId.equals(anchorTrack.videoId)) continue;
+                        nextList.add(cand);
+                    }
+                    mActiveCarQueue.clear();
+                    mActiveCarQueue.addAll(nextList);
+                    mActiveCarQueueIndex = 0;
+                    currentQueueTitle = "Automix Radio";
+                    syncActiveCarQueueToMediaSession();
+                    if (!isCurrentlyPlaying) {
+                        playCarTrackStandalone(mActiveCarQueue.get(0));
+                    }
+                }
+                prefetchNextTrackAsync();
+            });
+        });
     }
 
     private void playNextInCarQueue(boolean forward) {
@@ -691,9 +994,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         // Immediate optimistic UI update on car screen
         currentTitle = track.title;
         currentArtist = track.artist;
-        currentArtUrl = !track.videoId.isEmpty()
-            ? "https://i.ytimg.com/vi/" + track.videoId + "/hqdefault.jpg"
-            : "";
+        currentVideoId = track.videoId != null ? track.videoId : "";
+        currentArtUrl = !track.coverUrl.isEmpty()
+            ? track.coverUrl
+            : (!currentVideoId.isEmpty() ? "https://i.ytimg.com/vi/" + currentVideoId + "/hqdefault.jpg" : "");
         currentPositionMs = 0;
         cachedArtworkBitmap = createDefaultArtwork(currentTitle);
         if (!currentArtUrl.isEmpty()) {
@@ -769,6 +1073,24 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
             mp.setOnCompletionListener(player -> {
                 if (gen != mPlaybackGeneration) return;
+                if ("one".equals(mRepeatMode)) {
+                    try {
+                        player.seekTo(0);
+                        player.start();
+                        currentPositionMs = 0;
+                        isCurrentlyPlaying = true;
+                        applyMediaMetadata();
+                        updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, 0, true);
+                        notifyNotification();
+                        return;
+                    } catch (Exception ignored) {}
+                    synchronized (mActiveCarQueue) {
+                        if (!mActiveCarQueue.isEmpty() && mActiveCarQueueIndex < mActiveCarQueue.size()) {
+                            playCarTrackStandalone(mActiveCarQueue.get(mActiveCarQueueIndex));
+                            return;
+                        }
+                    }
+                }
                 playNextInCarQueue(true);
             });
 
@@ -1160,6 +1482,48 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
 
         @Override
+        public void onSkipToQueueItem(long id) {
+            synchronized (mActiveCarQueue) {
+                int idx = (int) id;
+                if (idx >= 0 && idx < mActiveCarQueue.size()) {
+                    playQueueAtIndex(new ArrayList<>(mActiveCarQueue), idx, currentQueueTitle);
+                }
+            }
+        }
+
+        @Override
+        public void onSetRepeatMode(int repeatMode) {
+            String next = "off";
+            if (repeatMode == PlaybackStateCompat.REPEAT_MODE_ONE) next = "one";
+            else if (repeatMode == PlaybackStateCompat.REPEAT_MODE_ALL || repeatMode == PlaybackStateCompat.REPEAT_MODE_GROUP) next = "all";
+            mRepeatMode = next;
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putString(KEY_REPEAT_MODE, next).apply();
+            syncMediaSessionRepeatMode();
+            updatePlaybackState(
+                isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                currentPositionMs,
+                isCurrentlyPlaying
+            );
+            if (MainActivity.sInstance != null) {
+                MainActivity.sInstance.dispatchCarAction("toggle_loop", next);
+            }
+        }
+
+        @Override
+        public void onCustomAction(String action, Bundle extras) {
+            if (ACTION_CUSTOM_TOGGLE_LOOP.equals(action)) {
+                toggleLoopOneFromCar();
+            } else if (ACTION_CUSTOM_TOGGLE_LIKE.equals(action)) {
+                toggleLikeCurrentTrack();
+            } else if (ACTION_CUSTOM_SHUFFLE.equals(action)) {
+                shuffleCurrentQueueFromCar();
+            } else if (ACTION_CUSTOM_AUTOMIX.equals(action)) {
+                startRadioAutomixFromCar(false);
+            }
+        }
+
+        @Override
         public void onPrepare() {
             resumeStandaloneOrApp();
         }
@@ -1178,25 +1542,54 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         public void onPlayFromMediaId(String mediaId, Bundle extras) {
             if (mediaId == null) return;
 
-            // 1. Play All button inside a playlist (e.g. "playall_pl_hindi_latest")
-            if (mediaId.startsWith("playall_")) {
-                String targetId = mediaId.substring("playall_".length());
+            if ("play_automix".equals(mediaId)) {
+                startRadioAutomixFromCar(true);
+                return;
+            }
+
+            // 1. Shuffle Play button inside a playlist ("shuffleall_<id>") or Play All ("playall_<id>")
+            boolean isShuffleAll = mediaId.startsWith("shuffleall_");
+            if (isShuffleAll || mediaId.startsWith("playall_")) {
+                String prefix = isShuffleAll ? "shuffleall_" : "playall_";
+                String targetId = mediaId.substring(prefix.length());
+                List<CarTrack> targetTracks = null;
+                String qTitle = "UpBeat Queue";
                 if (MEDIA_ID_LIB_FAVS.equals(targetId)) {
-                    playQueueAtIndex(getEffectiveFavorites(), 0);
-                    return;
+                    targetTracks = getEffectiveFavorites();
+                    qTitle = "Liked Songs";
+                } else if (MEDIA_ID_LIB_QUEUE.equals(targetId)) {
+                    targetTracks = getEffectiveQueue();
+                    qTitle = "Recent Plays";
+                } else {
+                    final HotPlaylistDef pl = findPlaylist(targetId);
+                    if (pl != null) {
+                        if (pl.tracks.isEmpty() && !pl.searchQuery.isEmpty()) {
+                            mNetworkExecutor.submit(() -> {
+                                List<CarTrack> fetched = searchYouTubeMusicTracksNative(pl.searchQuery, 15);
+                                if (!fetched.isEmpty()) {
+                                    synchronized (pl.tracks) {
+                                        pl.tracks.clear();
+                                        pl.tracks.addAll(fetched);
+                                    }
+                                    List<CarTrack> copy = new ArrayList<>(fetched);
+                                    if (isShuffleAll) Collections.shuffle(copy);
+                                    mMainHandler.post(() -> playQueueAtIndex(copy, 0, pl.title));
+                                }
+                            });
+                            return;
+                        }
+                        targetTracks = new ArrayList<>(pl.tracks);
+                        qTitle = pl.title;
+                    }
                 }
-                if (MEDIA_ID_LIB_QUEUE.equals(targetId)) {
-                    playQueueAtIndex(getEffectiveQueue(), 0);
-                    return;
-                }
-                HotPlaylistDef pl = findPlaylist(targetId);
-                if (pl != null) {
-                    playQueueAtIndex(pl.tracks, 0);
+                if (targetTracks != null && !targetTracks.isEmpty()) {
+                    if (isShuffleAll) Collections.shuffle(targetTracks);
+                    playQueueAtIndex(targetTracks, 0, qTitle);
                     return;
                 }
             }
 
-            // 2. Specific track inside a Hot Playlist ("pltrack__pl_hindi_latest__3")
+            // 2. Specific track inside a Playlist ("pltrack__<plId>__<idx>")
             if (mediaId.startsWith("pltrack__")) {
                 String[] parts = mediaId.split("__");
                 if (parts.length >= 3) {
@@ -1204,7 +1597,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     int idx = parseIntSafe(parts[2], 0);
                     HotPlaylistDef pl = findPlaylist(plId);
                     if (pl != null) {
-                        playQueueAtIndex(pl.tracks, idx);
+                        playQueueAtIndex(pl.tracks, idx, pl.title);
                         return;
                     }
                 }
@@ -1213,21 +1606,21 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             // 3. Direct Playlist ID tapped
             HotPlaylistDef directPl = findPlaylist(mediaId);
             if (directPl != null) {
-                playQueueAtIndex(directPl.tracks, 0);
+                playQueueAtIndex(directPl.tracks, 0, directPl.title);
                 return;
             }
 
             // 4. Frequent Plays / Liked Song item ("fav_2" or "freq_2")
             if (mediaId.startsWith("fav_") || mediaId.startsWith("freq_")) {
                 int idx = parseIntSafe(mediaId.substring(mediaId.indexOf('_') + 1), 0);
-                playQueueAtIndex(getEffectiveFavorites(), idx);
+                playQueueAtIndex(getEffectiveFavorites(), idx, "Liked Songs");
                 return;
             }
 
             // 5. Recent Queue item ("queue_1")
             if (mediaId.startsWith("queue_")) {
                 int idx = parseIntSafe(mediaId.substring("queue_".length()), 0);
-                playQueueAtIndex(getEffectiveQueue(), idx);
+                playQueueAtIndex(getEffectiveQueue(), idx, "Recent Plays");
                 return;
             }
 
@@ -1239,7 +1632,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     List<CarTrack> singleAndMore = new ArrayList<>();
                     singleAndMore.add(st);
                     singleAndMore.addAll(getEffectiveFavorites());
-                    playQueueAtIndex(singleAndMore, 0);
+                    playQueueAtIndex(singleAndMore, 0, "Search Results");
                     return;
                 }
             }
@@ -1247,7 +1640,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             // Fallback: play Hindi Latest
             HotPlaylistDef def = mPlaylists.get(PL_HINDI_LATEST);
             if (def != null) {
-                playQueueAtIndex(def.tracks, 0);
+                playQueueAtIndex(def.tracks, 0, def.title);
             }
         }
 
@@ -1297,145 +1690,193 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     public void onLoadChildren(@NonNull String parentMediaId, @NonNull final Result<List<MediaBrowserCompat.MediaItem>> result) {
         List<MediaBrowserCompat.MediaItem> items = new ArrayList<>();
 
-        // 1. ROOT -> 2 Top Navigation Tabs: "Home" and "Library" (Matches Screenshot 2 & 3)
+        // 1. ROOT -> 4 Top Navigation Tabs matching UpBeat v7.6.0 UI: "For You", "Playlists", "Top Charts", "Library"
         if (MEDIA_ID_ROOT.equals(parentMediaId)) {
-            items.add(createTabItem(MEDIA_ID_TAB_HOME, "Home", R.drawable.ic_aa_home, CONTENT_STYLE_GRID_ITEM, CONTENT_STYLE_GRID_ITEM));
+            items.add(createTabItem(MEDIA_ID_TAB_FORYOU, "For You", R.drawable.ic_aa_foryou, CONTENT_STYLE_GRID_ITEM, CONTENT_STYLE_GRID_ITEM));
+            items.add(createTabItem(MEDIA_ID_TAB_PLAYLISTS, "Playlists", R.drawable.ic_aa_playlists, CONTENT_STYLE_GRID_ITEM, CONTENT_STYLE_LIST_ITEM));
+            items.add(createTabItem(MEDIA_ID_TAB_CHARTS, "Top Charts", R.drawable.ic_aa_charts, CONTENT_STYLE_GRID_ITEM, CONTENT_STYLE_LIST_ITEM));
             items.add(createTabItem(MEDIA_ID_TAB_LIBRARY, "Library", R.drawable.ic_aa_library, CONTENT_STYLE_GRID_ITEM, CONTENT_STYLE_LIST_ITEM));
             result.sendResult(items);
             return;
         }
 
-        // 2. HOME TAB -> Grouped Grid Sections (Matches Screenshots 2, 4, 5)
-        if (MEDIA_ID_TAB_HOME.equals(parentMediaId)) {
-            // Section A: "Hot Playlists" (Screenshot 4: Hindi Latest, Hindi Trendy, English Latest, Japanese Latest, Fresh Indie)
-            String hotGroup = "Hot Playlists";
-            addPlaylistCardToGroup(items, PL_HINDI_LATEST, hotGroup);
-            addPlaylistCardToGroup(items, PL_HINDI_TRENDY, hotGroup);
-            addPlaylistCardToGroup(items, PL_ENGLISH_LATEST, hotGroup);
-            addPlaylistCardToGroup(items, PL_JAPANESE_LATEST, hotGroup);
-            addPlaylistCardToGroup(items, PL_INDIE_FRESH, hotGroup);
+        // 2. FOR YOU TAB -> Jump Back In, Synced Made For You, Moods, Quick Pick Songs
+        if (MEDIA_ID_TAB_FORYOU.equals(parentMediaId) || "tab_home".equals(parentMediaId)) {
+            List<CarTrack> favs = getEffectiveFavorites();
+            List<CarTrack> queue = getEffectiveQueue();
 
-            // Section A2: "Your Mixes" (AI mixes and playlists saved in the phone app)
-            List<HotPlaylistDef> homeMixes = getUserMixes();
-            for (int i = 0; i < homeMixes.size() && i < 6; i++) {
-                addPlaylistCardToGroup(items, homeMixes.get(i).id, "Your Mixes");
-            }
-
-            // Section B: "Your Frequent Plays" (Screenshot 2: 1-Tap Playable Song Cards with Cover Art)
-            String freqGroup = "Your Frequent Plays";
-            List<CarTrack> freqTracks = getEffectiveFavorites();
-            int freqCount = Math.min(6, freqTracks.size());
-            for (int i = 0; i < freqCount; i++) {
-                CarTrack t = freqTracks.get(i);
-                Uri artUri = UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title);
-                items.add(createPlayableGridCard("freq_" + i, t.title, t.artist, artUri, freqGroup));
-            }
-
-            // Section C: "Based on Your Recents" (Screenshot 5: Bollywood Soul & Personalized Mixes)
-            String recentGroup = "Based on Your Recents";
-            addPlaylistCardToGroup(items, PL_BOLLYWOOD_SOUL, recentGroup);
+            String jumpGroup = "Jump Back In";
             items.add(createBrowsableGridCard(
                 MEDIA_ID_LIB_FAVS,
-                "Liked Songs Mix",
-                "Your Saved Favourites",
-                UpBeatArtProvider.buildCardUri("card_liked_home", "Rediscover", "Liked Songs", "#EC4899", getHeroVidFromList(freqTracks)),
-                recentGroup
+                "Liked Songs",
+                favs.size() + " tracks • Rediscover",
+                UpBeatArtProvider.buildCardUri("card_liked_home", "FAVORITES", "Liked Songs", "#F43F5E", getHeroVidFromList(favs)),
+                jumpGroup
             ));
             items.add(createBrowsableGridCard(
                 MEDIA_ID_LIB_QUEUE,
                 "Recent Session",
-                "Continue Listening",
-                UpBeatArtProvider.buildCardUri("card_recent_home", "Resume", "Recent Plays", "#6366F1", getHeroVidFromList(getEffectiveQueue())),
-                recentGroup
+                queue.size() + " tracks • Resume",
+                UpBeatArtProvider.buildCardUri("card_recent_home", "RESUME", "Up Next", "#27272A", getHeroVidFromList(queue)),
+                jumpGroup
             ));
+            items.add(createPlayableGridCard(
+                "play_automix",
+                "Start Automix",
+                "Endless vibe-matched radio",
+                UpBeatArtProvider.buildCardUri("card_automix", "RADIO", "Automix", "#F43F5E", getHeroVidFromList(favs)),
+                jumpGroup
+            ));
+
+            String forYouGroup = "Made For You";
+            List<HotPlaylistDef> syncedForYou = getForYouMixes();
+            for (int i = 0; i < syncedForYou.size() && i < 8; i++) {
+                addPlaylistCardToGroup(items, syncedForYou.get(i).id, forYouGroup);
+            }
+            if (syncedForYou.isEmpty()) {
+                addPlaylistCardToGroup(items, PL_BOLLYWOOD_SOUL, forYouGroup);
+                addPlaylistCardToGroup(items, PL_INDIE_FRESH, forYouGroup);
+                addPlaylistCardToGroup(items, PL_HINDI_TRENDY, forYouGroup);
+            }
+
+            String moodGroup = "Browse by Mood";
+            synchronized (mMoodPlaylists) {
+                for (HotPlaylistDef mood : mMoodPlaylists.values()) {
+                    addPlaylistCardToGroup(items, mood.id, moodGroup);
+                }
+            }
+
+            String quickGroup = "Quick Pick Songs";
+            int freqCount = Math.min(6, favs.size());
+            for (int i = 0; i < freqCount; i++) {
+                CarTrack t = favs.get(i);
+                Uri artUri = UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl);
+                items.add(createPlayableGridCard("freq_" + i, t.title, t.artist, artUri, quickGroup));
+            }
 
             result.sendResult(items);
             return;
         }
 
-        // 3. LIBRARY TAB -> Saved Playlists + Direct Liked Songs (Matches Screenshot 3)
-        if (MEDIA_ID_TAB_LIBRARY.equals(parentMediaId)) {
+        // 3. PLAYLISTS TAB -> User Saved Playlists + AI Mixes + Curated Mixes
+        if (MEDIA_ID_TAB_PLAYLISTS.equals(parentMediaId)) {
             List<CarTrack> favs = getEffectiveFavorites();
-            List<CarTrack> queue = getEffectiveQueue();
-
-            // Section A: Top Playlists Row (Matches Screenshot 3: "My Recent Plays and More", "My Discovery Mix", "Liked Songs")
-            String plGroup = "Playlists";
+            List<HotPlaylistDef> mixes = getUserMixes();
+            String userGroup = "Your Playlists & Saved Mixes";
             items.add(createBrowsableGridCard(
                 MEDIA_ID_LIB_FAVS,
                 "Liked Songs",
-                favs.size() + " saved tracks",
-                UpBeatArtProvider.buildCardUri("lib_liked", "My", "Liked Songs", "#E11D48", ""),
-                plGroup
+                favs.size() + " tracks",
+                UpBeatArtProvider.buildCardUri("pl_liked", "COLLECTION", "Liked Songs", "#F43F5E", getHeroVidFromList(favs)),
+                userGroup
             ));
-            items.add(createBrowsableGridCard(
-                MEDIA_ID_LIB_QUEUE,
-                "My Recent Plays",
-                queue.size() + " recent tracks",
-                UpBeatArtProvider.buildCardUri("lib_recent", "My", "Recent Plays", "#7C3AED", ""),
-                plGroup
-            ));
-            items.add(createBrowsableGridCard(
-                PL_HINDI_TRENDY,
-                "My Discovery Mix",
-                "Fresh & Trending",
-                UpBeatArtProvider.buildCardUri("lib_discovery", "My", "Discovery Mix", "#2563EB", ""),
-                plGroup
-            ));
-            for (HotPlaylistDef mix : getUserMixes()) {
-                addPlaylistCardToGroup(items, mix.id, plGroup);
+            for (HotPlaylistDef mix : mixes) {
+                addPlaylistCardToGroup(items, mix.id, userGroup);
             }
 
-            // Section B: Direct 1-Tap Liked Songs List right inside Library!
-            String songsGroup = "Liked Songs (" + favs.size() + ")";
-            for (int i = 0; i < favs.size(); i++) {
-                CarTrack t = favs.get(i);
-                Uri thumbUri = UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title);
-                items.add(createPlayableListItem("fav_" + i, t.title, t.artist, thumbUri, songsGroup));
-            }
-
+            String curatedGroup = "UpBeat Curated Mixes";
+            addPlaylistCardToGroup(items, PL_INDIE_FRESH, curatedGroup);
+            addPlaylistCardToGroup(items, PL_BOLLYWOOD_SOUL, curatedGroup);
+            addPlaylistCardToGroup(items, PL_HINDI_LATEST, curatedGroup);
             result.sendResult(items);
             return;
         }
 
-        // 4. INSIDE A HOT PLAYLIST (e.g. Hindi Latest, English Latest, Japanese Latest, Hindi Trendy)
-        if (findPlaylist(parentMediaId) != null) {
-            HotPlaylistDef pl = findPlaylist(parentMediaId);
-            if (pl != null) {
-                Uri playAllArt = UpBeatArtProvider.buildCardUri("playall_" + pl.id, "Play All", pl.badgeRibbon, pl.badgeColor, pl.getHeroVideoId());
-                items.add(createPlayableListItem(
-                    "playall_" + pl.id,
-                    "▶ Play All — " + pl.title,
-                    pl.tracks.size() + " songs • Continuous Car Playback",
-                    playAllArt,
-                    "Quick Actions"
-                ));
-
-                synchronized (pl.tracks) {
-                    for (int i = 0; i < pl.tracks.size(); i++) {
-                        CarTrack t = pl.tracks.get(i);
-                        Uri thumb = UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title);
-                        items.add(createPlayableListItem(
-                            "pltrack__" + pl.id + "__" + i,
-                            t.title,
-                            t.artist,
-                            thumb,
-                            pl.title
-                        ));
-                    }
+        // 4. TOP CHARTS TAB -> Synced Daily Top Charts + Built-in Chart Fallbacks
+        if (MEDIA_ID_TAB_CHARTS.equals(parentMediaId)) {
+            String chartGroup = "Daily Top Charts";
+            List<HotPlaylistDef> syncedCharts = getSyncedCharts();
+            java.util.Set<String> addedTitles = new java.util.HashSet<>();
+            for (HotPlaylistDef ch : syncedCharts) {
+                addPlaylistCardToGroup(items, ch.id, chartGroup);
+                addedTitles.add(ch.title.toLowerCase());
+            }
+            for (HotPlaylistDef def : mPlaylists.values()) {
+                if (!addedTitles.contains(def.title.toLowerCase())) {
+                    addPlaylistCardToGroup(items, def.id, chartGroup);
                 }
             }
             result.sendResult(items);
             return;
         }
 
-        // 5. INSIDE LIBRARY -> LIKED SONGS FOLDER
+        // 5. LIBRARY TAB -> Saved Collections + Direct Liked Songs List
+        if (MEDIA_ID_TAB_LIBRARY.equals(parentMediaId)) {
+            List<CarTrack> favs = getEffectiveFavorites();
+            List<CarTrack> queue = getEffectiveQueue();
+
+            String plGroup = "Your Collection";
+            items.add(createBrowsableGridCard(
+                MEDIA_ID_LIB_FAVS,
+                "Liked Songs",
+                favs.size() + " saved tracks",
+                UpBeatArtProvider.buildCardUri("lib_liked", "COLLECTION", "Liked Songs", "#F43F5E", getHeroVidFromList(favs)),
+                plGroup
+            ));
+            items.add(createBrowsableGridCard(
+                MEDIA_ID_LIB_QUEUE,
+                "Up Next & Recents",
+                queue.size() + " tracks",
+                UpBeatArtProvider.buildCardUri("lib_recent", "QUEUE", "Recent Plays", "#27272A", getHeroVidFromList(queue)),
+                plGroup
+            ));
+            for (HotPlaylistDef mix : getUserMixes()) {
+                addPlaylistCardToGroup(items, mix.id, "Saved Playlists");
+            }
+
+            String songsGroup = "Liked Songs (" + favs.size() + ")";
+            for (int i = 0; i < favs.size(); i++) {
+                CarTrack t = favs.get(i);
+                Uri thumbUri = UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl);
+                items.add(createPlayableListItem("fav_" + i, t.title, formatTrackSubtitle(t), thumbUri, songsGroup));
+            }
+
+            result.sendResult(items);
+            return;
+        }
+
+        // 6. INSIDE ANY PLAYLIST / FOR YOU / CHART / MOOD
+        final HotPlaylistDef pl = findPlaylist(parentMediaId);
+        if (pl != null) {
+            if (!pl.tracks.isEmpty()) {
+                result.sendResult(buildPlaylistDetailItems(pl));
+                return;
+            }
+            if (!pl.searchQuery.isEmpty()) {
+                result.detach();
+                mNetworkExecutor.submit(() -> {
+                    List<CarTrack> fetched = searchYouTubeMusicTracksNative(pl.searchQuery, 15);
+                    synchronized (pl.tracks) {
+                        if (pl.tracks.isEmpty()) {
+                            if (!fetched.isEmpty()) {
+                                pl.tracks.addAll(fetched);
+                            } else {
+                                HotPlaylistDef fallback = mPlaylists.get(PL_HINDI_LATEST);
+                                if (fallback != null) pl.tracks.addAll(fallback.tracks);
+                            }
+                        }
+                    }
+                    result.sendResult(buildPlaylistDetailItems(pl));
+                });
+                return;
+            }
+        }
+
+        // 7. INSIDE LIBRARY -> LIKED SONGS FOLDER
         if (MEDIA_ID_LIB_FAVS.equals(parentMediaId)) {
             List<CarTrack> favs = getEffectiveFavorites();
             items.add(createPlayableListItem(
                 "playall_" + MEDIA_ID_LIB_FAVS,
                 "▶ Play All Liked Songs",
-                favs.size() + " songs • Continuous Playback",
-                UpBeatArtProvider.buildCardUri("playall_favs", "Play All", "Liked Songs", "#E11D48", getHeroVidFromList(favs)),
+                favs.size() + " songs • In Order",
+                UpBeatArtProvider.buildCardUri("playall_favs", "PLAY ALL", "Liked Songs", "#F43F5E", getHeroVidFromList(favs)),
+                "Controls"
+            ));
+            items.add(createPlayableListItem(
+                "shuffleall_" + MEDIA_ID_LIB_FAVS,
+                "🔀 Shuffle Liked Songs",
+                favs.size() + " songs • Shuffled",
+                UpBeatArtProvider.buildCardUri("shuf_favs", "SHUFFLE", "Liked Songs", "#27272A", getHeroVidFromList(favs)),
                 "Controls"
             ));
             for (int i = 0; i < favs.size(); i++) {
@@ -1443,8 +1884,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 items.add(createPlayableListItem(
                     "fav_" + i,
                     t.title,
-                    t.artist,
-                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title),
+                    formatTrackSubtitle(t),
+                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl),
                     "Liked Songs"
                 ));
             }
@@ -1452,14 +1893,21 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             return;
         }
 
-        // 6. INSIDE LIBRARY -> RECENT PLAYS & QUEUE FOLDER
+        // 8. INSIDE LIBRARY -> RECENT PLAYS & QUEUE FOLDER
         if (MEDIA_ID_LIB_QUEUE.equals(parentMediaId)) {
             List<CarTrack> queue = getEffectiveQueue();
             items.add(createPlayableListItem(
                 "playall_" + MEDIA_ID_LIB_QUEUE,
                 "▶ Resume Recent Plays",
                 queue.size() + " tracks in queue",
-                UpBeatArtProvider.buildCardUri("playall_queue", "Resume", "Recent Plays", "#7C3AED", getHeroVidFromList(queue)),
+                UpBeatArtProvider.buildCardUri("playall_queue", "RESUME", "Recent Plays", "#F43F5E", getHeroVidFromList(queue)),
+                "Controls"
+            ));
+            items.add(createPlayableListItem(
+                "shuffleall_" + MEDIA_ID_LIB_QUEUE,
+                "🔀 Shuffle Recent Queue",
+                queue.size() + " tracks • Shuffled",
+                UpBeatArtProvider.buildCardUri("shuf_queue", "SHUFFLE", "Recent Plays", "#27272A", getHeroVidFromList(queue)),
                 "Controls"
             ));
             for (int i = 0; i < queue.size(); i++) {
@@ -1467,8 +1915,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 items.add(createPlayableListItem(
                     "queue_" + i,
                     t.title,
-                    t.artist,
-                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title),
+                    formatTrackSubtitle(t),
+                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl),
                     "Recent Plays"
                 ));
             }
@@ -1479,20 +1927,54 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         // Fallback: never return an empty list so Android Auto never shows "Could not load your selection"
         HotPlaylistDef fallbackPl = mPlaylists.get(PL_HINDI_LATEST);
         if (fallbackPl != null) {
-            synchronized (fallbackPl.tracks) {
-                for (int i = 0; i < fallbackPl.tracks.size(); i++) {
-                    CarTrack t = fallbackPl.tracks.get(i);
-                    items.add(createPlayableListItem(
-                        "pltrack__" + fallbackPl.id + "__" + i,
-                        t.title,
-                        t.artist,
-                        UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title),
-                        fallbackPl.title
-                    ));
-                }
-            }
+            result.sendResult(buildPlaylistDetailItems(fallbackPl));
+            return;
         }
         result.sendResult(items);
+    }
+
+    private List<MediaBrowserCompat.MediaItem> buildPlaylistDetailItems(HotPlaylistDef pl) {
+        List<MediaBrowserCompat.MediaItem> list = new ArrayList<>();
+        String heroVid = pl.getHeroVideoId();
+        String heroCover = pl.getHeroCoverUrl();
+        int count;
+        synchronized (pl.tracks) {
+            count = pl.tracks.size();
+        }
+        list.add(createPlayableListItem(
+            "playall_" + pl.id,
+            "▶ Play All — " + pl.title,
+            count + " songs • Continuous Playback",
+            UpBeatArtProvider.buildCardUri("playall_" + pl.id, "PLAY ALL", pl.badgeRibbon, pl.badgeColor, heroVid, heroCover),
+            "Quick Actions"
+        ));
+        list.add(createPlayableListItem(
+            "shuffleall_" + pl.id,
+            "🔀 Shuffle Play — " + pl.title,
+            count + " songs • Shuffled Order",
+            UpBeatArtProvider.buildCardUri("shuf_" + pl.id, "SHUFFLE", pl.badgeRibbon, "#27272A", heroVid, heroCover),
+            "Quick Actions"
+        ));
+        synchronized (pl.tracks) {
+            for (int i = 0; i < pl.tracks.size(); i++) {
+                CarTrack t = pl.tracks.get(i);
+                list.add(createPlayableListItem(
+                    "pltrack__" + pl.id + "__" + i,
+                    t.title,
+                    formatTrackSubtitle(t),
+                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl),
+                    pl.title
+                ));
+            }
+        }
+        return list;
+    }
+
+    private String formatTrackSubtitle(CarTrack t) {
+        if (t.durationText != null && !t.durationText.isEmpty()) {
+            return t.durationText + " • " + t.artist;
+        }
+        return t.artist;
     }
 
     @Override
@@ -1576,7 +2058,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             pl.badgeTop,
             pl.badgeRibbon,
             pl.badgeColor,
-            pl.getHeroVideoId()
+            pl.getHeroVideoId(),
+            pl.getHeroCoverUrl()
         );
         items.add(createBrowsableGridCard(pl.id, pl.title, pl.subtitle, cardArtUri, groupTitle));
     }
@@ -1783,6 +2266,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         if (durationSec > 0) {
             currentDurationMs = durationSec * 1000;
         }
+        int viIdx = cleanArt.indexOf("/vi/");
+        if (viIdx >= 0 && cleanArt.length() >= viIdx + 15) {
+            currentVideoId = cleanArt.substring(viIdx + 4, viIdx + 15);
+        }
 
         if (trackChanged || durationChanged) {
             if (trackChanged) {
@@ -1815,6 +2302,9 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             | PlaybackStateCompat.ACTION_PLAY_PAUSE
             | PlaybackStateCompat.ACTION_SKIP_TO_NEXT
             | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+            | PlaybackStateCompat.ACTION_SKIP_TO_QUEUE_ITEM
+            | PlaybackStateCompat.ACTION_SET_REPEAT_MODE
+            | PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE
             | PlaybackStateCompat.ACTION_SEEK_TO
             | PlaybackStateCompat.ACTION_STOP
             | PlaybackStateCompat.ACTION_FAST_FORWARD
@@ -1827,7 +2317,34 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
             .setActions(actions)
+            .setActiveQueueItemId(Math.max(0, mActiveCarQueueIndex))
             .setState(state, positionMs, isPlaying ? 1.0f : 0.0f, SystemClock.elapsedRealtime());
+
+        boolean loopOne = "one".equals(mRepeatMode);
+        stateBuilder.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(
+            ACTION_CUSTOM_TOGGLE_LOOP,
+            loopOne ? "Looping Song" : "Loop Song",
+            loopOne ? R.drawable.ic_aa_loop_one : R.drawable.ic_aa_loop_off
+        ).build());
+
+        boolean liked = isCurrentTrackLiked();
+        stateBuilder.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(
+            ACTION_CUSTOM_TOGGLE_LIKE,
+            liked ? "Liked" : "Like",
+            liked ? R.drawable.ic_aa_heart_filled : R.drawable.ic_aa_heart_outline
+        ).build());
+
+        stateBuilder.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(
+            ACTION_CUSTOM_SHUFFLE,
+            "Shuffle",
+            R.drawable.ic_aa_shuffle
+        ).build());
+
+        stateBuilder.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(
+            ACTION_CUSTOM_AUTOMIX,
+            "Automix",
+            R.drawable.ic_aa_foryou
+        ).build());
 
         mMediaSession.setPlaybackState(stateBuilder.build());
     }
@@ -1836,8 +2353,11 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         MediaMetadataCompat.Builder metaBuilder = new MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
-            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "UpBeat")
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, currentQueueTitle != null ? currentQueueTitle : "UpBeat")
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDurationMs);
+        if (currentVideoId != null && !currentVideoId.isEmpty()) {
+            metaBuilder.putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, currentVideoId);
+        }
 
         Bitmap artToUse = cachedArtworkBitmap != null ? cachedArtworkBitmap : createDefaultArtwork(currentTitle);
         if (artToUse != null) {
@@ -1869,8 +2389,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             Shader gradient = new LinearGradient(
                 0, 0, size, size,
-                new int[]{Color.parseColor("#141522"), Color.parseColor("#262844"), Color.parseColor("#0e0f18")},
-                new float[]{0f, 0.6f, 1f},
+                new int[]{Color.parseColor("#0A0A0B"), Color.parseColor("#16161D"), Color.parseColor("#101015")},
+                new float[]{0f, 0.55f, 1f},
                 Shader.TileMode.CLAMP
             );
             bgPaint.setShader(gradient);
@@ -1879,13 +2399,13 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             ringPaint.setStyle(Paint.Style.STROKE);
             ringPaint.setStrokeWidth(2f);
-            ringPaint.setColor(Color.argb(35, 99, 102, 241));
+            ringPaint.setColor(Color.argb(55, 244, 63, 94));
             canvas.drawCircle(size / 2f, size / 2f, size * 0.42f, ringPaint);
             canvas.drawCircle(size / 2f, size / 2f, size * 0.30f, ringPaint);
             canvas.drawCircle(size / 2f, size / 2f, size * 0.18f, ringPaint);
 
             Paint centerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            centerPaint.setColor(Color.parseColor("#4F46E5"));
+            centerPaint.setColor(Color.parseColor("#F43F5E"));
             canvas.drawCircle(size / 2f, size / 2f, size * 0.14f, centerPaint);
 
             Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1991,7 +2511,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             .setSilent(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setColor(Color.parseColor("#6366F1"))
+            .setColor(Color.parseColor("#F43F5E"))
             .setColorized(true)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT);
 
@@ -2039,15 +2559,43 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
     }
 
+    private void notifyAllBrowserTabs() {
+        notifyChildrenChanged(MEDIA_ID_ROOT);
+        notifyChildrenChanged(MEDIA_ID_TAB_FORYOU);
+        notifyChildrenChanged(MEDIA_ID_TAB_PLAYLISTS);
+        notifyChildrenChanged(MEDIA_ID_TAB_CHARTS);
+        notifyChildrenChanged(MEDIA_ID_TAB_LIBRARY);
+        notifyChildrenChanged(MEDIA_ID_LIB_FAVS);
+        notifyChildrenChanged(MEDIA_ID_LIB_QUEUE);
+    }
+
+    public static void setRepeatMode(Context context, String mode) {
+        if (context == null) return;
+        String norm = normalizeRepeatMode(mode);
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_REPEAT_MODE, norm).apply();
+        if (sInstance != null) {
+            sInstance.mRepeatMode = norm;
+            sInstance.mMainHandler.post(() -> {
+                if (sInstance != null) {
+                    sInstance.syncMediaSessionRepeatMode();
+                    sInstance.updatePlaybackState(
+                        sInstance.isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                        sInstance.currentPositionMs,
+                        sInstance.isCurrentlyPlaying
+                    );
+                }
+            });
+        }
+    }
+
     public static void saveQueue(Context context, String queueJson) {
         if (context == null || queueJson == null) return;
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit().putString(KEY_QUEUE, queueJson).apply();
         if (sInstance != null) {
             sInstance.parseJsonToTrackList(queueJson, sInstance.mUserQueue);
-            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_HOME);
-            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_LIBRARY);
-            sInstance.notifyChildrenChanged(MEDIA_ID_LIB_QUEUE);
+            sInstance.notifyAllBrowserTabs();
         }
     }
 
@@ -2057,8 +2605,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         prefs.edit().putString(KEY_MIXES, mixesJson).apply();
         if (sInstance != null) {
             sInstance.parseMixes(mixesJson);
-            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_HOME);
-            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_LIBRARY);
+            sInstance.notifyAllBrowserTabs();
         }
     }
 
@@ -2068,9 +2615,12 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         prefs.edit().putString(KEY_FAVS, favsJson).apply();
         if (sInstance != null) {
             sInstance.parseJsonToTrackList(favsJson, sInstance.mUserFavorites);
-            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_HOME);
-            sInstance.notifyChildrenChanged(MEDIA_ID_TAB_LIBRARY);
-            sInstance.notifyChildrenChanged(MEDIA_ID_LIB_FAVS);
+            sInstance.notifyAllBrowserTabs();
+            sInstance.updatePlaybackState(
+                sInstance.isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                sInstance.currentPositionMs,
+                sInstance.isCurrentlyPlaying
+            );
         }
     }
 

@@ -309,6 +309,11 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void syncRepeatMode(String mode) {
+            UpBeatMediaService.setRepeatMode(MainActivity.this, mode);
+        }
+
+        @JavascriptInterface
         public void openExternalUrl(String url) {
             if (url == null || url.trim().isEmpty()) return;
             try {

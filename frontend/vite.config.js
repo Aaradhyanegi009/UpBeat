@@ -14,7 +14,7 @@ function vercelEdgeFunctionsInDev() {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const match = (req.url || '').match(/^\/api\/(innertube|audio-info|audio)(?:\/([^/?]+))?(\?.*)?$/)
+        const match = (req.url || '').match(/^\/api\/(innertube|audio-info|audio|social)(?:\/([^/?]+))?(\?.*)?$/)
         if (!match) return next()
         const [, name, id, query = ''] = match
         try {

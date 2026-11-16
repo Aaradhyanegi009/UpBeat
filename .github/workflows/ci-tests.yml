@@ -1,0 +1,64 @@
+name: UpBeat CI Verification
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  frontend-checks:
+    name: Frontend Tests & Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: npm --prefix frontend ci
+
+      - name: Verify Shared Filter Rules Sync
+        run: |
+          npm run sync:shared
+          git diff --exit-code shared/ frontend/src/config/musicFilters.js backend/music_filters.json
+
+      - name: Run Frontend Unit Tests (node --test)
+        run: npm run test:frontend
+
+      - name: Run React Hook & UI Smoke Tests (Vitest)
+        run: npm run test:ui
+
+      - name: Verify Vite Production Build
+        run: npm run build
+
+  backend-checks:
+    name: Backend Compile & API Contract Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Backend Dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Compile Python Modules
+        run: python -m compileall -q backend
+
+      - name: Run Python Backend Tests
+        run: python -m unittest discover -s backend/tests -v

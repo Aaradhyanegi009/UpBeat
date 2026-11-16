@@ -4,6 +4,34 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.6.1] - 2026-11-16
+
+### ✨ AI Curator & AI Search Hotfix
+- **Fixed Unresponsive AI Curation & Search-to-Mix (`App.jsx`)**: Restored missing `setCollectionLoading` and `collectionTokenRef` destructuring from `useLibraryStorage(...)`, resolving a synchronous `ReferenceError` that caused **Make my mix** (`CreateView`), **Make a mix from “…”** (`SearchView`), and **Tweak mix** (`CollectionView`) to silently fail on click.
+- **Eliminated `gemini-3.8-flash` Stalls & Brittle Fallbacks (`geminiClient.js`, `geminiCurator.js`, `backend/curator.py`)**: Switched default AI curator & Taste DNA models to `gemini-4-argon`, removed `gemini-3.8-flash` from the automatic fast fallback chain, added a `14s` `AbortController` / REST timeout per attempt, hardened JSON fence/prose extraction, and ensured non-key HTTP 400 errors fall through to healthy Gemini models instead of aborting early.
+- **Improved AI Track Resolution & Companion Fallback (`innertubeClient.js`, `App.jsx`)**: Added `ytWebSearch` fallback to `searchYouTubeStandalone` when `WEB_REMIX` returns no matches, added timeout protection on `/api/curate` companion requests, and surfaced empty/backend error details cleanly.
+
+---
+
+## [v7.6.0] - 2026-11-16
+
+### 🔁 Bulletproof Single-Song Loop Option
+- Added 1-tap Single-Song Loop (`repeatMode === 'one'`) toggle across the Desktop PlayerBar (with keyboard shortcut `L`), Mobile Mini-Player, Full-Screen `NowPlayingView`, track `⋯` context menus, and Android Auto Now Playing controls.
+- Persisted `repeatMode` in `localStorage` (`upbeat_repeat_mode`) and synced it to native Android Auto via `window.UpBeatNative.syncRepeatMode`.
+- Hardened `PlayerBar.jsx` dual-deck `tick()` and `handleTrackEnded()` so looped tracks restart cleanly at `0` without premature crossfade/advance.
+
+### 🔍 Curated Non-AI Direct Search & Redundancy Reduction
+- Overhauled `directSearchStandalone` (`frontend/src/services/innertubeClient.js`) and `direct_search_youtube_music` (`backend/yt/innertube_client.py`) with consensus artist scoring (`scoreDirectSearchTrack` / `score_direct_search_track`) so exact title queries rank the official original track at `#1`.
+- Filtered out unrequested derivatives (`remix`, `slowed + reverb`, `sped up`, `nightcore`, `8d`, `lofi`, `cover`, `karaoke`, `instrumental`) and collapsed redundant uploads into `fallback_ids`.
+- Blended primary-artist top songs and `RDAMVM` Watch Radio vibe-matched tracks for slots `#2..#25`, displaying top 10 songs cleanly on the Search All view.
+
+### 🚗 Android Auto `v7.6.0` UI/UX & Playlist Overhaul
+- Restyled `UpBeatArtProvider.java` & `UpBeatMediaService.java` to match UpBeat's Obsidian Dark (`#0A0A0B`) and Crimson Rose (`#F43F5E`) UI with `400x400` frosted-pill artwork cards.
+- Synced phone `Made For You`, `Daily Top Charts`, and `Your Playlists` directly from `HomeView.jsx` & `useLibraryStorage.js` into Android Auto's upgraded 4-tab hierarchy (**For You**, **Playlists**, **Top Charts**, **Library**).
+- Added **▶ Play All** and **🔀 Shuffle Play** controls plus lazy YouTube track resolution inside playlists & moods, `MediaSession` queue sync, and **Loop Song**, **Like**, **Shuffle**, and **Automix** custom actions on Now Playing.
+
+---
+
 ## [v7.5.1] - 2026-11-11
 
 ### 🛡️ Ironclad Pure Music Sanitization & Zero Trash Guarantee

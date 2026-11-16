@@ -60,6 +60,10 @@ export default function PlayerBar({
   isShuffle: externalIsShuffle,
   setIsShuffle: externalSetIsShuffle,
   onToggleShuffle: externalOnToggleShuffle,
+  repeatMode: externalRepeatMode,
+  setRepeatMode: externalSetRepeatMode,
+  onCycleRepeat: externalOnCycleRepeat,
+  onToggleLoopSong: externalOnToggleLoopSong,
   onUserSeek,
   isDesktop = false,
   playingFromTitle = '',
@@ -101,7 +105,16 @@ export default function PlayerBar({
   const isShuffle = typeof externalIsShuffle === 'boolean' ? externalIsShuffle : internalShuffle
   const setIsShuffle = externalSetIsShuffle || setInternalShuffle
   const handleToggleShuffle = externalOnToggleShuffle || (() => setIsShuffle((prev) => !prev))
-  const [repeatMode, setRepeatMode] = useState('off') // 'off', 'all', 'one'
+  const [internalRepeatMode, setInternalRepeatMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('upbeat_repeat_mode')
+      return saved === 'all' || saved === 'one' ? saved : 'off'
+    } catch {
+      return 'off'
+    }
+  }) // 'off', 'all', 'one'
+  const repeatMode = externalRepeatMode || internalRepeatMode
+  const setRepeatMode = externalSetRepeatMode || setInternalRepeatMode
   const [showVideo, setShowVideo] = useState(false)
   const [showLyrics, setShowLyrics] = useState(false)
   const [volume, setVolume] = useState(80)
@@ -142,7 +155,18 @@ export default function PlayerBar({
   }, [volume, isMuted])
   useEffect(() => {
     repeatModeRef.current = repeatMode
-  }, [repeatMode])
+    try {
+      localStorage.setItem('upbeat_repeat_mode', repeatMode)
+    } catch {}
+    const shouldLoop = repeatMode === 'one' && !(sleepTimer?.active && sleepTimer?.mode === 'end_of_track')
+    ;[audioRefA.current, audioRefB.current].forEach((a) => {
+      if (a) {
+        try {
+          a.loop = a === (activeDeckRef.current === 'A' ? audioRefA.current : audioRefB.current) && shouldLoop
+        } catch {}
+      }
+    })
+  }, [repeatMode, sleepTimer?.active, sleepTimer?.mode, resolvedVid])
 
   const audioRefA = useRef(null)
   const audioRefB = useRef(null)
@@ -330,7 +354,8 @@ export default function PlayerBar({
 
   const miniArt = thumbUrl
   const swipeRef = useRef(null)
-  const cycleRepeat = () => setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'))
+  const cycleRepeat = externalOnCycleRepeat || (() => setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off')))
+  const handleToggleLoopSong = externalOnToggleLoopSong || (() => setRepeatMode((m) => (m === 'one' ? 'off' : 'one')))
 
   // Other surfaces (desktop right panel) can ask for the lyrics view
   useEffect(() => {
@@ -504,8 +529,29 @@ export default function PlayerBar({
       notifyNativePlayback(false, currentTimeRef.current, effectiveDuration)
       return true
     }
+    if (repeatModeRef.current === 'one') {
+      clearEndTriggered()
+      lastCurPosRef.current = 0
+      lastCurChangeTimeRef.current = Date.now()
+      currentTimeRef.current = 0
+      setCurrentTime(0)
+      const active = getActiveAudio()
+      if (!useIframeFallback && active) {
+        try {
+          active.currentTime = 0
+          active.play().catch(() => {})
+        } catch {}
+      } else if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
+        try {
+          playerRef.current.seekTo(0, true)
+          playerRef.current.playVideo()
+        } catch {}
+      }
+      notifyNativePlayback(true, 0, effectiveDuration)
+      return true
+    }
     return false
-  }, [isMuted, volume, effectiveDuration, notifyNativePlayback, setIsPlaying])
+  }, [isMuted, volume, effectiveDuration, useIframeFallback, notifyNativePlayback, setIsPlaying])
 
   const handleSetSleepTimer = useCallback((type, fadeOut = true) => {
     restoreVolume()
@@ -1680,12 +1726,6 @@ export default function PlayerBar({
               const rawDur = e.currentTarget.duration
               const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
               if (effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
-                if (repeatMode === 'one') {
-                  commitSeek(0)
-                  e.currentTarget.currentTime = 0
-                  e.currentTarget.play().catch(() => {})
-                  return
-                }
                 markEndTriggered(e.currentTarget.dataset.vid)
                 if (handleTrackEnded()) return
                 onNextRef.current()
@@ -1699,12 +1739,6 @@ export default function PlayerBar({
               const rawDur = e.currentTarget.duration
               const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
               if (effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
-                if (repeatMode === 'one') {
-                  commitSeek(0)
-                  e.currentTarget.currentTime = 0
-                  e.currentTarget.play().catch(() => {})
-                  return
-                }
                 markEndTriggered(e.currentTarget.dataset.vid)
                 if (handleTrackEnded()) return
                 onNextRef.current()
@@ -1713,12 +1747,6 @@ export default function PlayerBar({
           }}
           onEnded={(e) => {
             if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid && !isEndTriggered(e.currentTarget.dataset.vid)) {
-              if (repeatMode === 'one') {
-                commitSeek(0)
-                e.currentTarget.currentTime = 0
-                e.currentTarget.play().catch(() => {})
-                return
-              }
               markEndTriggered(e.currentTarget.dataset.vid)
               if (handleTrackEnded()) return
               onNextRef.current()
@@ -1851,7 +1879,7 @@ export default function PlayerBar({
                 <SkipForward className="w-5 h-5 fill-current" />
               </BarButton>
               <BarButton label={repeatMode === 'one' ? 'Repeat one' : repeatMode === 'all' ? 'Repeat all' : 'Repeat off'} onClick={cycleRepeat} active={repeatMode !== 'off'} dot={repeatMode !== 'off'} disabled={!track}>
-                {repeatMode === 'one' ? <Repeat1 className="w-[18px] h-[18px]" /> : <Repeat className="w-[18px] h-[18px]" />}
+                {repeatMode === 'one' ? <Repeat1 className="w-[18px] h-[18px] text-accent" /> : <Repeat className="w-[18px] h-[18px]" />}
               </BarButton>
             </div>
             <div className="w-full max-w-[600px] flex items-center gap-2.5 text-xs text-t3 font-semibold tabular-nums">
@@ -1881,6 +1909,15 @@ export default function PlayerBar({
 
           {/* Tools */}
           <div className="flex items-center justify-end gap-0.5 min-w-0">
+            <BarButton
+              label={repeatMode === 'one' ? 'Disable song loop (L)' : 'Loop this song (L)'}
+              onClick={handleToggleLoopSong}
+              active={repeatMode === 'one'}
+              dot={repeatMode === 'one'}
+              disabled={!track}
+            >
+              <Repeat1 className={`w-[18px] h-[18px] ${repeatMode === 'one' ? 'text-accent' : ''}`} />
+            </BarButton>
             <BarButton
               label="Lyrics"
               disabled={!track}
@@ -1985,6 +2022,17 @@ export default function PlayerBar({
               </span>
             </span>
           </button>
+          <button
+            type="button"
+            onClick={handleToggleLoopSong}
+            aria-label={repeatMode === 'one' ? 'Disable song loop' : 'Loop this song'}
+            aria-pressed={repeatMode === 'one'}
+            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+              repeatMode === 'one' ? 'text-accent bg-accent/15' : 'text-white/75'
+            }`}
+          >
+            <Repeat1 className="w-[18px] h-[18px]" />
+          </button>
           {onToggleFavorite && (
             <button
               type="button"
@@ -2040,6 +2088,8 @@ export default function PlayerBar({
         onToggleShuffle={handleToggleShuffle}
         repeatMode={repeatMode}
         setRepeatMode={setRepeatMode}
+        onCycleRepeat={cycleRepeat}
+        onToggleLoopSong={handleToggleLoopSong}
         volume={volume}
         setVolume={setVolume}
         isMuted={isMuted}

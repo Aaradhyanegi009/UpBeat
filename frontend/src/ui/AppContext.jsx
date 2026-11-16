@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react'
-import { ListEnd, ListPlus, ListMusic, Download, Radio, User, Heart, Trash2, CircleCheck, Play } from 'lucide-react'
+import { ListEnd, ListPlus, ListMusic, Download, Radio, User, Heart, Trash2, CircleCheck, Play, Repeat1 } from 'lucide-react'
 import { TrackRow, Art } from './primitives'
 
 /**
@@ -29,8 +29,10 @@ export function useTrackMenu() {
     if (!app || !track) return []
     const downloaded = track.video_id && app.downloadedIds?.has(track.video_id)
     const liked = app.isFav?.(track)
+    const isLoopingThis = app.repeatMode === 'one' && sameTrack(app.currentTrack, track)
     return [
       { label: 'Play next', icon: ListEnd, onClick: () => app.playNext(track) },
+      { label: isLoopingThis ? 'Turn off song loop' : 'Loop this song', icon: Repeat1, onClick: () => app.toggleLoopSong?.(track) },
       { label: 'Add to queue', icon: ListPlus, onClick: () => app.addToQueue(track) },
       { label: 'Add to playlist…', icon: ListMusic, onClick: () => app.openAddToPlaylist(track) },
       { divider: true },

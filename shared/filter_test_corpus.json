@@ -1,0 +1,21 @@
+[
+  { "label": "Valid J-Pop track", "track": { "title": "Shinunoga E-Wa", "artist": "Fujii Kaze", "video_id": "dawrQnvwMTY", "duration_text": "3:05" }, "expected": true },
+  { "label": "Valid Bollywood track", "track": { "title": "Tum Hi Ho", "artist": "Arijit Singh", "video_id": "Umqb9KENgmk", "duration": 262 }, "expected": true },
+  { "label": "Valid English Pop", "track": { "title": "Blinding Lights", "artist": "The Weeknd", "video_id": "4NRXx6U8ABQ", "duration": 200 }, "expected": true },
+  { "label": "Valid lower duration bound 75s", "track": { "title": "Short Interlude Song", "artist": "Artist Name", "video_id": "abcdefghijk", "duration": 75 }, "expected": true },
+  { "label": "Valid upper duration bound 420s", "track": { "title": "Extended Ballad", "artist": "Artist Name", "video_id": "abcdefghij1", "duration": 420 }, "expected": true },
+  { "label": "Reject 74s clip", "track": { "title": "Too Short Clip", "artist": "Artist Name", "video_id": "abcdefghij2", "duration": 74 }, "expected": false },
+  { "label": "Reject 421s long video", "track": { "title": "Hour Long Video", "artist": "Artist Name", "video_id": "abcdefghij3", "duration": 421 }, "expected": false },
+  { "label": "Reject Aakash Gupta standup", "track": { "title": "Office Politics", "artist": "Aakash Gupta", "video_id": "dQw4w9WgXcQ", "duration": 240 }, "expected": false },
+  { "label": "Reject Zakir Khan crowd work", "track": { "title": "Sakht Launda", "artist": "Zakir Khan", "video_id": "dQw4w9WgXcQ", "duration": 240 }, "expected": false },
+  { "label": "Reject Samay Raina latent", "track": { "title": "Indias Got Latent Highlight", "artist": "Samay Raina", "video_id": "dQw4w9WgXcQ", "duration": 240 }, "expected": false },
+  { "label": "Reject Ganesh Aarti", "track": { "title": "Sampoorna Ganesh Aarti", "artist": "Rahul Vaidya", "video_id": "dQw4w9WgXcQ", "duration": 240 }, "expected": false },
+  { "label": "Reject Krishna Serenity devotional", "track": { "title": "Dawn of Serenity Krishna Flute", "artist": "T-Series Bhakti", "video_id": "dQw4w9WgXcQ", "duration": 240 }, "expected": false },
+  { "label": "Reject Kids Music", "track": { "title": "Kids Music Playlist", "artist": "Fun Family", "video_id": "dQw4w9WgXcQ", "duration": 180 }, "expected": false },
+  { "label": "Reject #shorts hashtag", "track": { "title": "Quick Clip #shorts", "artist": "Some Creator", "video_id": "dQw4w9WgXcQ", "duration": 90 }, "expected": false },
+  { "label": "Reject Laplace lecture", "track": { "title": "Laplace Transform Part 2", "artist": "NPTEL", "video_id": "dQw4w9WgXcQ", "duration": 300 }, "expected": false },
+  { "label": "Reject Minecraft gameplay", "track": { "title": "Minecraft Speedrun", "artist": "Dream", "video_id": "dQw4w9WgXcQ", "duration": 250 }, "expected": false },
+  { "label": "Reject numeric views artist", "track": { "title": "Some Song", "artist": "4.2M views", "video_id": "dQw4w9WgXcQ", "duration": 200 }, "expected": false },
+  { "label": "Reject unknown artist", "track": { "title": "Some Song", "artist": "unknown", "video_id": "dQw4w9WgXcQ", "duration": 200 }, "expected": false },
+  { "label": "Reject malformed video_id", "track": { "title": "Some Song", "artist": "Valid Artist", "video_id": "bad_id", "duration": 200 }, "expected": false }
+]

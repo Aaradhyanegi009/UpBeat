@@ -1,6 +1,6 @@
 {
   "name": "upbeat-web",
-  "version": "7.5.1",
+  "version": "7.6.1",
   "type": "module",
   "private": true,
   "description": "UpBeat — Minimalist AI Music Curator & Player",
@@ -8,6 +8,11 @@
     "build": "npm run build --prefix frontend",
     "build:win": "npm run build --prefix frontend && npm --prefix electron install && npm --prefix electron run dist:win",
     "dev": "npm run dev --prefix frontend",
-    "preview": "npm run preview --prefix frontend"
+    "preview": "npm run preview --prefix frontend",
+    "sync:shared": "node shared/sync_filters.mjs",
+    "test:frontend": "npm test --prefix frontend",
+    "test:ui": "npm run test:ui --prefix frontend",
+    "test:backend": "if [ -x .venv/bin/python ]; then .venv/bin/python -m unittest discover -s backend/tests -v; else python3 -m unittest discover -s backend/tests -v; fi",
+    "test": "npm run test:frontend && npm run test:ui && npm run test:backend"
   }
 }

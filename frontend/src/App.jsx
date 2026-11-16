@@ -1,20 +1,8 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import { Sparkles, Loader2, X, Share, Users, Settings, Trash2, Pencil } from 'lucide-react'
-import SonicDnaView from './components/SonicDnaView'
 import PlayerBar from './components/PlayerBar'
-import QueueDrawer from './components/QueueDrawer'
-import GoogleAuthModal from './components/GoogleAuthModal'
-import JamModal from './components/JamModal'
 import JamFloatingBar from './components/JamFloatingBar'
-import {
-  jamManager,
-  evaluateAudioDrift,
-  normalizeRoomCode,
-  normalizeFriendCode,
-  extractDeepLinkParams,
-  renderEmoji
-} from './jamEngine'
-import { getOfflineTracks, getOfflineStorageStats, subscribeOfflineChanges, saveTrackOffline, deleteOfflineTrack, clearAllOfflineTracks } from './offlineStorage'
+import { jamManager, normalizeRoomCode, normalizeFriendCode } from './jamEngine'
 import { useRoute, navigate, goBack, canGoBack, useMediaQuery } from './ui/router'
 import { AppContext, sameTrack } from './ui/AppContext'
 import { TabBar, SideNav, TopBar, TABS } from './ui/Shell'
@@ -22,12 +10,6 @@ import { RightPanel, AddToPlaylistSheet, NameDialog, Toast } from './ui/Panels'
 import { PageHeader, IconButton } from './ui/primitives'
 import HomeView from './views/HomeView'
 import SearchView from './views/SearchView'
-import CreateView from './views/CreateView'
-import CollectionView from './views/CollectionView'
-import LibraryView from './views/LibraryView'
-import SettingsView from './views/SettingsView'
-import Onboarding from './views/Onboarding'
-import ProfileEditModal from './components/ProfileEditModal'
 import { initOtaUpdater } from './otaUpdater'
 import { getThemeInfo, applyThemeToDocument } from './utils/themeCycle'
 import {
@@ -42,50 +24,28 @@ import {
   getStoredApiKey,
   getStoredServerUrl,
   fetchRelatedCompanionTracks,
-  formatDurationSeconds,
-  openExternalUrl,
-  fisherYatesShuffle,
   loadBlockTracks,
   isValidMusicTrack,
-  isStrictMusicTrack,
   sanitizeLocalMusicLibrary
 } from './standaloneApi'
+import { useLibraryStorage, slimTrack, saveStorage, loadStorage, hasMacCompanion } from './hooks/useLibraryStorage'
+import { useCompanionSync } from './hooks/useCompanionSync'
+import { useAudioPlayback } from './hooks/useAudioPlayback'
+import { useJamSync } from './hooks/useJamSync'
+
+const SonicDnaView = lazy(() => import('./components/SonicDnaView'))
+const QueueDrawer = lazy(() => import('./components/QueueDrawer'))
+const GoogleAuthModal = lazy(() => import('./components/GoogleAuthModal'))
+const JamModal = lazy(() => import('./components/JamModal'))
+const ProfileEditModal = lazy(() => import('./components/ProfileEditModal'))
+const CreateView = lazy(() => import('./views/CreateView'))
+const CollectionView = lazy(() => import('./views/CollectionView'))
+const LibraryView = lazy(() => import('./views/LibraryView'))
+const SettingsView = lazy(() => import('./views/SettingsView'))
+const Onboarding = lazy(() => import('./views/Onboarding'))
 
 // Immediately run library sanitizer to purge non-music, standup, and devotional pollution
 sanitizeLocalMusicLibrary()
-
-const DEFAULT_SEEDS = []
-
-// Keep stored track snapshots small.
-function slimTrack(t) {
-  if (!t) return t
-  const { title, artist, video_id, duration_text, thumbnail, url } = t
-  return { title, artist, video_id, duration_text, thumbnail, url }
-}
-
-function saveStorage(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {}
-}
-
-// The Mac app serves this UI from its companion server on :8000; other devices can point at it in Settings.
-function hasMacCompanion() {
-  try {
-    return Boolean(getStoredServerUrl()) || (!isNativeApp() && window.location.port === '8000')
-  } catch {
-    return false
-  }
-}
-
-function loadStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
 
 export default function App() {
   // Dark only. Song-artwork colours are applied by the player separately.
@@ -95,139 +55,8 @@ export default function App() {
     applyThemeToDocument()
   }, [])
 
-  // Boot music sanitizer: Purge non-music videos (gameplay, vlogs, tutorial) from localStorage
-  useEffect(() => {
-    try {
-      const favKeys = ['argon_favs_v2', 'argon_favorites_v2']
-      for (const k of favKeys) {
-        const raw = localStorage.getItem(k)
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          if (Array.isArray(parsed)) {
-            const clean = parsed.filter(isValidMusicTrack)
-            if (clean.length !== parsed.length) {
-              localStorage.setItem(k, JSON.stringify(clean))
-              if (k === 'argon_favs_v2') setFavorites(clean)
-            }
-          }
-        }
-      }
-
-      const seedKeys = ['argon_seeds_v2', 'argon_extracted_v2', 'upbeat_extracted_tracks_v1']
-      for (const k of seedKeys) {
-        const raw = localStorage.getItem(k)
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          if (Array.isArray(parsed)) {
-            const clean = parsed.filter(isValidMusicTrack)
-            if (clean.length !== parsed.length) {
-              localStorage.setItem(k, JSON.stringify(clean))
-              if (k === 'argon_seeds_v2') setExtractedTracks(clean)
-            }
-          }
-        }
-      }
-
-      const rawPl = localStorage.getItem('argon_playlist_v2')
-      if (rawPl) {
-        const parsedPl = JSON.parse(rawPl)
-        if (parsedPl?.tracks && Array.isArray(parsedPl.tracks)) {
-          const cleanTracks = parsedPl.tracks.filter(isValidMusicTrack)
-          if (cleanTracks.length !== parsedPl.tracks.length) {
-            parsedPl.tracks = cleanTracks
-            localStorage.setItem('argon_playlist_v2', JSON.stringify(parsedPl))
-            setPlaylist(parsedPl)
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Boot music sanitizer error:', e)
-    }
-  }, [])
-
-  const [models] = useState([
-    { id: 'gemini-4-argon', name: 'Gemini 4 Argon (⚡ 1s Fastest)' },
-    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Active)' },
-    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (2s Fast)' },
-    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Active)' },
-    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest' },
-    { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash Preview' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-    { id: 'gemma-4-26b-a4b-it', name: 'Gemma 4 26B MoE' }
-  ])
-  const [selectedModel, setSelectedModel] = useState(() => {
-    return localStorage.getItem('argon_selected_model') || 'gemini-4-argon'
-  })
-
-  const handleSelectModel = (modelId) => {
-    setSelectedModel(modelId)
-    try {
-      localStorage.setItem('argon_selected_model', modelId)
-    } catch {}
-  }
-  const [safariStatus, setSafariStatus] = useState(null)
-  const [safariNowPlaying, setSafariNowPlaying] = useState(null)
-  const [extractedTracks, setExtractedTracks] = useState(() => {
-    // New users start with no taste sources (onboarding fills them); never the developer's demo seeds
-    const raw = loadStorage('argon_seeds_v2', [])
-    const animeIds = new Set(['F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE', 'CXDUXjsU5ao', 'MM8RufZr5lw', '2ZN-zAKIfyQ', 'tdzsOODJiX8', 'TCd6PfxOy0Y', 'QpxFcMYRV08'])
-    return (raw || []).filter((t) => !animeIds.has(t?.video_id))
-  })
-  const [favorites, setFavorites] = useState(() => {
-    const raw = loadStorage('argon_favs_v2', [])
-    const animeIds = new Set(['F8xpmTmdf6o', 'F_Cr9vZ08Ws', '0VpGoDp3FCE', 'CXDUXjsU5ao', 'MM8RufZr5lw', '2ZN-zAKIfyQ', 'tdzsOODJiX8', 'TCd6PfxOy0Y', 'QpxFcMYRV08'])
-    return (raw || []).filter((t) => !animeIds.has(t?.video_id))
-  })
-  const [tasteDna, setTasteDna] = useState(() => {
-    const raw = loadStorage('argon_dna_v2', null)
-    if (raw) {
-      const isAnime = /anime|j-pop|j-rock|monogatari|sawano|higuchi/i.test(
-        `${raw.archetype || ''} ${raw.summary || ''} ${(raw.primary_genres || []).join(' ')}`
-      )
-      if (isAnime) return null
-    }
-    return raw
-  })
-  const [playlist, setPlaylist] = useState(() => loadStorage('argon_playlist_v2', null))
-  const [currentTrack, setCurrentTrack] = useState(null)
-  const [currentTrackIdx, setCurrentTrackIdx] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [playbackMode, setPlaybackMode] = useState('app')
-  const [prompt, setPrompt] = useState('')
-  const [activePresetId, setActivePresetId] = useState(null)
-  const [energyLevel, setEnergyLevel] = useState(60)
-  const [discoveryLevel, setDiscoveryLevel] = useState(50)
-  const [trackCount, setTrackCount] = useState(20)
-  const [createSeed, setCreateSeed] = useState(null)
-  const [crossfadeSec, setCrossfadeSecState] = useState(() => {
-    try {
-      const saved = localStorage.getItem('upbeat_crossfade_sec')
-      return saved !== null ? Math.max(0, Math.min(12, parseInt(saved, 10) || 0)) : 5
-    } catch {
-      return 5
-    }
-  })
-  const setCrossfadeSec = (val) => {
-    const clean = Math.max(0, Math.min(12, Math.round(Number(val) || 0)))
-    setCrossfadeSecState(clean)
-    try {
-      localStorage.setItem('upbeat_crossfade_sec', String(clean))
-    } catch {}
-  }
-  const [activeTab, setActiveTab] = useState('curator')
-  const [searchMode, setSearchMode] = useState('direct')
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
-  const [isLoadingPlaylistBrowse, setIsLoadingPlaylistBrowse] = useState(false)
-  const [isResolvingBatch, setIsResolvingBatch] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth >= 1024
-    }
-    return true
-  })
-  const [showKeyModal, setShowKeyModal] = useState(false)
+  const route = useRoute()
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
   const [notification, setNotification] = useState(null)
   const notifyTimerRef = useRef(null)
   const showNotify = useCallback((msg, type = 'info', action = null) => {
@@ -235,88 +64,80 @@ export default function App() {
     clearTimeout(notifyTimerRef.current)
     notifyTimerRef.current = setTimeout(() => setNotification(null), action ? 5000 : 3200)
   }, [])
-  const [offlineTracks, setOfflineTracks] = useState([])
-  const [offlineStats, setOfflineStats] = useState({ count: 0, totalBytes: 0, formattedSize: '0 B' })
-  const [activePlaybackContext, setActivePlaybackContext] = useState(null)
-  const [queue, setQueue] = useState(() => loadStorage('upbeat_playback_queue', []))
-  const [isShuffle, setIsShuffle] = useState(false)
-  const originalQueueRef = useRef(null)
-  const originalContextRef = useRef(null)
+  const remoteJamGuardRef = useRef(false)
+  const initialBootRef = useRef(false)
+
+  const [models] = useState([
+    { id: 'gemini-4-argon', name: 'Gemini 4 Argon (⚡ 1s Fastest)' },
+    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (2s Fast)' },
+    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Active)' },
+    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest' },
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash Preview' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+    { id: 'gemma-4-26b-a4b-it', name: 'Gemma 4 26B MoE' },
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Legacy)' }
+  ])
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem('argon_selected_model') || 'gemini-4-argon'
+  })
+  const handleSelectModel = (modelId) => {
+    setSelectedModel(modelId)
+    try { localStorage.setItem('argon_selected_model', modelId) } catch {}
+  }
+
+  const [prompt, setPrompt] = useState('')
+  const [activePresetId, setActivePresetId] = useState(null)
+  const [energyLevel, setEnergyLevel] = useState(60)
+  const [discoveryLevel, setDiscoveryLevel] = useState(50)
+  const [trackCount, setTrackCount] = useState(20)
+  const [createSeed, setCreateSeed] = useState(null)
+  const [activeTab, setActiveTab] = useState('curator')
+  const [searchMode, setSearchMode] = useState('direct')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [isLoadingPlaylistBrowse, setIsLoadingPlaylistBrowse] = useState(false)
+  const [isResolvingBatch, setIsResolvingBatch] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') return window.innerWidth >= 1024
+    return true
+  })
+  const [showKeyModal, setShowKeyModal] = useState(false)
   const [isQueueOpen, setIsQueueOpen] = useState(false)
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [googleUser, setGoogleUser] = useState(() => {
-    const user = loadStorage('upbeat_google_user', null)
-    // Clear out any hardcoded personal developer account or stale profile
-    if (user) {
-      const userEmail = (user.email || '').toLowerCase()
-      const userName = (user.name || '').toLowerCase()
-      if (userEmail.includes('negi') || userEmail.includes('divyansh') || userName.includes('negi') || userName.includes('divyansh')) {
-        try {
-          localStorage.removeItem('upbeat_google_user')
-          localStorage.removeItem('upbeat_last_google_email')
-          localStorage.removeItem('upbeat_last_google_name')
-        } catch {}
-        return null
-      }
-    }
-    if (user && user.picture && user.picture.includes('yt3.ggpht.com/ZHW03BCR5_1wypqdYcayGib5T')) {
-      const sanitized = { ...user, picture: '' }
-      try {
-        localStorage.setItem('upbeat_google_user', JSON.stringify(sanitized))
-      } catch {}
-      return sanitized
-    }
-    return user
-  })
-  const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
-  const [isSyncingLikes, setIsSyncingLikes] = useState(false)
   const [otaUpdate, setOtaUpdate] = useState(null)
   const [isApplyingOta, setIsApplyingOta] = useState(false)
   const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
-
-  const handleSaveProfile = (updatedProfile) => {
-    const profileWithFlag = {
-      ...updatedProfile,
-      customPicture: Boolean(updatedProfile.picture)
-    }
-    setGoogleUser(profileWithFlag)
-    try {
-      localStorage.setItem('upbeat_google_user', JSON.stringify(profileWithFlag))
-      localStorage.setItem(
-        'upbeat_jam_profile',
-        JSON.stringify({
-          name: profileWithFlag.name,
-          picture: profileWithFlag.picture,
-          avatar: '🎧'
-        })
-      )
-    } catch {}
-    if (hasBackend()) {
-      fetch(`${getApiBase()}/profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileWithFlag)
-      }).catch(() => {})
-    }
-    jamManager.refreshProfile(profileWithFlag)
-    jamManager.broadcastPresenceStatus()
-    showNotify('Profile updated', 'success')
-  }
-
-  // ---- v8 shell state -------------------------------------------------
-  const route = useRoute()
-  const isDesktop = useMediaQuery('(min-width: 1024px)')
   const [leftNavOpen, setLeftNavOpen] = useState(() => loadStorage('upbeat_left_nav_open_v1', true))
   const [leftNavWidth, setLeftNavWidth] = useState(() => {
     const w = Number(loadStorage('upbeat_left_nav_width_v1', 280))
     return w >= 210 && w <= 380 ? w : 280
   })
   const [isDraggingLeftNav, setIsDraggingLeftNav] = useState(false)
+  const [rightPanelOpen, setRightPanelOpen] = useState(() => loadStorage('upbeat_right_panel_v1', true))
+  const [rightTab, setRightTab] = useState('next')
+  const [addToPlaylistTrack, setAddToPlaylistTrack] = useState(null)
+  const [nameDialog, setNameDialog] = useState(null)
+  const [sideLibFilter, setSideLibFilter] = useState('all')
+  const lastTabRef = useRef('home')
+  const scrollRef = useRef(null)
+  const scrollMemoryRef = useRef({})
+  const searchInputRef = useRef(null)
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      if (localStorage.getItem('upbeat_onboarded_v1') && localStorage.getItem('upbeat_chart_prefs_v1')) return false
+      if (!localStorage.getItem('upbeat_chart_prefs_v1') && !localStorage.getItem('upbeat_taste_prefs_v1')) return true
+      return false
+    } catch {
+      return false
+    }
+  })
+  const [onboardingBusy, setOnboardingBusy] = useState(false)
 
   useEffect(() => saveStorage('upbeat_left_nav_open_v1', leftNavOpen), [leftNavOpen])
   useEffect(() => saveStorage('upbeat_left_nav_width_v1', leftNavWidth), [leftNavWidth])
+  useEffect(() => saveStorage('upbeat_right_panel_v1', rightPanelOpen), [rightPanelOpen])
 
   const handleStartLeftNavSlider = useCallback((e) => {
     e.preventDefault()
@@ -343,288 +164,100 @@ export default function App() {
       setIsDraggingLeftNav(false)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
-      if (!moved) {
-        setLeftNavOpen((v) => !v)
-      }
+      if (!moved) setLeftNavOpen((v) => !v)
     }
 
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }, [leftNavOpen, leftNavWidth])
-  const [searchQuery, setSearchQuery] = useState(() => route.params?.q || '')
-  const [searchResults, setSearchResults] = useState(null)
-  const [recentSearches, setRecentSearches] = useState(() => loadStorage('upbeat_recent_searches_v1', []))
-  const [savedCollections, setSavedCollections] = useState(() => loadStorage('upbeat_library_v1', []))
-  const [recentMixes, setRecentMixes] = useState(() => loadStorage('upbeat_mixes_v1', []))
-  const [playHistory, setPlayHistory] = useState(() => loadStorage('upbeat_history_v1', []))
-  const [recents, setRecents] = useState(() => loadStorage('upbeat_recents_v1', []))
-  const [collectionLoading, setCollectionLoading] = useState(false)
-  const [playingFrom, setPlayingFrom] = useState(null)
-  const [rightPanelOpen, setRightPanelOpen] = useState(() => loadStorage('upbeat_right_panel_v1', true))
-  const [rightTab, setRightTab] = useState('next')
-  const [addToPlaylistTrack, setAddToPlaylistTrack] = useState(null)
-  const [nameDialog, setNameDialog] = useState(null) // { mode: 'create' | 'rename', id?, initial?, pendingTrack? }
-  const [downloadJobs, setDownloadJobs] = useState({}) // collectionId -> { busy, done, total }
-  const [sideLibFilter, setSideLibFilter] = useState('all')
-  const collectionTokenRef = useRef(0)
-  const lastTabRef = useRef('home')
-  const scrollRef = useRef(null)
-  const scrollMemoryRef = useRef({})
-  const searchInputRef = useRef(null)
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    try {
-      if (localStorage.getItem('upbeat_onboarded_v1') && localStorage.getItem('upbeat_chart_prefs_v1')) return false
-      // If user hasn't set chart & taste preferences, show onboarding prior to anything
-      if (!localStorage.getItem('upbeat_chart_prefs_v1') && !localStorage.getItem('upbeat_taste_prefs_v1')) return true
-      return false
-    } catch {
-      return false
-    }
+
+  // Domain hooks (library persistence, companion sync, audio playback, and live Jam sync)
+  const {
+    extractedTracks, setExtractedTracks,
+    favorites, setFavorites,
+    tasteDna, setTasteDna,
+    playlist, setPlaylist,
+    queue, setQueue,
+    offlineTracks, offlineStats, downloadedIds,
+    searchQuery, setSearchQuery,
+    searchResults, setSearchResults,
+    recentSearches, setRecentSearches,
+    savedCollections, setSavedCollections,
+    recentMixes, playHistory, recents,
+    collectionLoading, setCollectionLoading, playingFrom, setPlayingFrom, downloadJobs, collectionTokenRef,
+    recordMix, recordRecent, recordHistoryTrack, showCollection, loadCollection,
+    isSavedId, toggleSave, createPlaylist, addTrackToPlaylist, removeFromPlaylist, deletePlaylist,
+    downloadTrack, downloadAll, deleteDownload, clearDownloads
+  } = useLibraryStorage({ showNotify, navigate, goBack, initialSearchQuery: route.params?.q || '' })
+
+  const {
+    safariStatus, safariNowPlaying, isSyncing, setIsSyncing,
+    googleUser, showGoogleModal, setShowGoogleModal, isSyncingLikes,
+    checkSafari, checkNowPlaying, handleSaveProfile, handleSyncSafari,
+    handleOpenSafari, handlePushToSafari, handleSafariControl,
+    handleGoogleLogin, handleGoogleLogout, handleSyncGoogleYouTubeLikes
+  } = useCompanionSync({
+    favorites,
+    setFavorites,
+    extractedTracks,
+    setExtractedTracks,
+    setTasteDna,
+    selectedModel,
+    showNotify
   })
-  const [onboardingBusy, setOnboardingBusy] = useState(false)
 
-  // Live Jam & Friends Social State & Refs
-  const [jamState, setJamState] = useState(() => jamManager.state)
-  const [isJamModalOpen, setIsJamModalOpen] = useState(false)
-  const [initialJamCode, setInitialJamCode] = useState('')
-  const [initialFriendCode, setInitialFriendCode] = useState('')
-  const [initialJamSection, setInitialJamSection] = useState('')
-  const [jamReactions, setJamReactions] = useState([])
-  const currentTrackRef = useRef(currentTrack)
-  const isPlayingRef = useRef(isPlaying)
-  const queueRef = useRef(queue)
-  const remoteJamGuardRef = useRef(false)
-  const remoteJamGuardTimerRef = useRef(null)
-  const handleNextRef = useRef(null)
-  const handlePrevRef = useRef(null)
+  const {
+    currentTrack, setCurrentTrack, currentTrackIdx, setCurrentTrackIdx,
+    isPlaying, setIsPlaying, playbackMode, setPlaybackMode,
+    isShuffle, setIsShuffle, repeatMode, setRepeatMode, crossfadeSec, setCrossfadeSec,
+    currentTrackRef, isPlayingRef, queueRef, handleNextRef, handlePrevRef,
+    upNext, isTrackFavorite, handleToggleFavorite, handlePlayTrack, handleTogglePlay,
+    handleNext, handlePlayNext, handleAddToQueue, handleRemoveFromQueue, handleClearQueue,
+    handleToggleShuffle, cycleRepeatMode, toggleLoopSong, handlePrev, handleUserSeek, handleTrackResolved, playList
+  } = useAudioPlayback({
+    playlist,
+    setPlaylist,
+    favorites,
+    setFavorites,
+    extractedTracks,
+    offlineTracks,
+    queue,
+    setQueue,
+    activeTab,
+    setPlayingFrom,
+    remoteJamGuardRef,
+    onPushToSafari: handlePushToSafari,
+    showNotify
+  })
 
-  const activateRemoteJamGuard = useCallback((durationMs = 350) => {
-    remoteJamGuardRef.current = true
-    if (remoteJamGuardTimerRef.current) {
-      clearTimeout(remoteJamGuardTimerRef.current)
-    }
-    remoteJamGuardTimerRef.current = setTimeout(() => {
-      remoteJamGuardRef.current = false
-      remoteJamGuardTimerRef.current = null
-    }, durationMs)
-  }, [])
+  const {
+    jamState, isJamModalOpen, setIsJamModalOpen,
+    initialJamCode, setInitialJamCode, initialFriendCode, setInitialFriendCode,
+    initialJamSection, setInitialJamSection, jamReactions,
+    openFriends, listenAlong, startJamWith
+  } = useJamSync({
+    currentTrack,
+    isPlaying,
+    queue,
+    setCurrentTrack,
+    setIsPlaying,
+    setQueue,
+    currentTrackRef,
+    isPlayingRef,
+    queueRef,
+    handleNextRef,
+    handlePrevRef,
+    remoteJamGuardRef,
+    handlePlayTrack,
+    playList,
+    setPlayingFrom,
+    googleUser,
+    showNotify
+  })
 
-  currentTrackRef.current = currentTrack
-  isPlayingRef.current = isPlaying
-  queueRef.current = queue
-
-  // Direct Join & Social Invite Deep-Link handler
-  const handleDeepLinkUrl = useCallback(async (rawUrl = '') => {
-    const { jamCode, friendCode } = extractDeepLinkParams(rawUrl)
-
-    if (jamCode && jamCode.length >= 6) {
-      try {
-        const cleanUrl = window.location.pathname
-        window.history.replaceState({}, document.title, cleanUrl)
-      } catch {}
-
-      setInitialJamCode(jamCode)
-      showNotify(`Connecting to Live Jam (${jamCode})...`, 'info')
-      const ok = await jamManager.joinJam(jamCode, googleUser)
-      if (ok) {
-        showNotify(`Connected to Jam ${jamCode}! Audio syncing.`, 'success')
-      }
-    } else if (friendCode && friendCode.length >= 7) {
-      try {
-        const cleanUrl = window.location.pathname
-        window.history.replaceState({}, document.title, cleanUrl)
-      } catch {}
-
-      setInitialFriendCode(friendCode)
-      setInitialJamSection('friends')
-      setIsJamModalOpen(true)
-    }
-  }, [googleUser, showNotify])
-
-  // Subscribe to Jam Engine state & reactively handle deep links
   useEffect(() => {
-    const unsub = jamManager.subscribe((nextState) => {
-      setJamState(nextState)
-    })
-
-    // Auto-join or add friend immediately on initial load
-    handleDeepLinkUrl()
-
-    // Listen to browser navigation, hash changes, and macOS deep-link events
-    const onPop = () => handleDeepLinkUrl()
-    const onHash = () => handleDeepLinkUrl()
-    const onCustomDeepLink = (e) => {
-      if (e?.detail) handleDeepLinkUrl(e.detail)
-    }
-    const onPostMsg = (e) => {
-      if (e?.data?.type === 'UPBEAT_DEEP_LINK' && e.data.url) {
-        handleDeepLinkUrl(e.data.url)
-      }
-    }
-
-    window.addEventListener('popstate', onPop)
-    window.addEventListener('hashchange', onHash)
-    window.addEventListener('upbeat-deep-link', onCustomDeepLink)
-    window.addEventListener('message', onPostMsg)
-
-    return () => {
-      unsub()
-      window.removeEventListener('popstate', onPop)
-      window.removeEventListener('hashchange', onHash)
-      window.removeEventListener('upbeat-deep-link', onCustomDeepLink)
-      window.removeEventListener('message', onPostMsg)
-    }
-  }, [handleDeepLinkUrl])
-
-  // Bind Jam Engine synchronization & control handlers
-  useEffect(() => {
-    jamManager.setHandlers({
-      getHostPlaybackSnapshot: () => ({
-        track: currentTrackRef.current,
-        isPlaying: isPlayingRef.current,
-        currentTime: window.UpBeatControls?.getCurrentTime?.() || 0,
-        queue: queueRef.current || []
-      }),
-      onRemoteSync: (data, clockOffsetMs) => {
-        if (!data) return
-        activateRemoteJamGuard(350)
-        try {
-          if (data.track?.video_id && data.track.video_id !== currentTrackRef.current?.video_id) {
-            currentTrackRef.current = data.track
-            setCurrentTrack(data.track)
-          }
-          if (Array.isArray(data.queue)) {
-            queueRef.current = data.queue
-            setQueue(data.queue)
-          }
-
-          // Authoritative Pause Enforcement: immediately halt both audio decks & skip drift ramping
-          if (data.isPlaying === false) {
-            isPlayingRef.current = false
-            setIsPlaying(false)
-            window.UpBeatControls?.forcePause?.(
-              typeof data.currentTime === 'number' ? data.currentTime : undefined
-            )
-            jamManager.reportDriftStatus(0, 'LOCKED')
-            return
-          }
-
-          if (data.isPlaying === true) {
-            if (!isPlayingRef.current || data.forcePlayState) {
-              isPlayingRef.current = true
-              setIsPlaying(true)
-              window.UpBeatControls?.forcePlay?.()
-            }
-          }
-
-          if (data.track?.video_id || currentTrackRef.current?.video_id) {
-            const localTime = window.UpBeatControls?.getCurrentTime?.() || 0
-            const drift = evaluateAudioDrift(
-              localTime,
-              Number(data.currentTime) || 0,
-              Number(data.hostTimestamp) || Date.now(),
-              clockOffsetMs || 0,
-              Boolean(data.isPlaying)
-            )
-            if (drift.action === 'SEEK') {
-              window.UpBeatControls?.seekTo?.(drift.targetTime, true)
-              window.UpBeatControls?.setPlaybackRate?.(1.0)
-            } else if (drift.action === 'RAMP') {
-              window.UpBeatControls?.setPlaybackRate?.(drift.playbackRate)
-            } else {
-              window.UpBeatControls?.setPlaybackRate?.(1.0)
-            }
-            jamManager.reportDriftStatus(drift.driftMs, drift.syncTier)
-          }
-        } catch {}
-      },
-      onRemoteControl: (data) => {
-        if (!data || !data.action) return
-        activateRemoteJamGuard(350)
-        try {
-          if (data.action === 'SELECT_TRACK' && data.track) {
-            currentTrackRef.current = data.track
-            setCurrentTrack(data.track)
-            isPlayingRef.current = true
-            setIsPlaying(true)
-            window.UpBeatControls?.seekTo?.(0, true)
-            window.UpBeatControls?.forcePlay?.(0)
-          } else if (data.action === 'PLAY') {
-            isPlayingRef.current = true
-            setIsPlaying(true)
-            window.UpBeatControls?.forcePlay?.(
-              typeof data.currentTime === 'number' ? data.currentTime : undefined
-            )
-          } else if (data.action === 'PAUSE') {
-            isPlayingRef.current = false
-            setIsPlaying(false)
-            window.UpBeatControls?.forcePause?.(
-              typeof data.currentTime === 'number' ? data.currentTime : undefined
-            )
-          } else if (data.action === 'SEEK' && typeof data.currentTime === 'number') {
-            window.UpBeatControls?.seekTo?.(data.currentTime, true)
-          } else if (data.action === 'NEXT') {
-            handleNextRef.current?.(true)
-          } else if (data.action === 'PREV') {
-            handlePrevRef.current?.(true)
-          }
-
-          if (jamManager.state.active && jamManager.state.isHost) {
-            setTimeout(() => jamManager.broadcastHostSync(), 60)
-          }
-        } catch {}
-      },
-      onRemoteQueueAdd: (track, addedBy) => {
-        if (!track) return
-        setQueue((prev) => {
-          const nextQ = [...prev, track]
-          if (jamManager.state.active && jamManager.state.isHost) {
-            setTimeout(() => jamManager.broadcastHostSync({ queue: nextQ }), 50)
-          }
-          return nextQ
-        })
-        showNotify(
-          `${addedBy?.name || 'Friend'} added "${track.title}" to Jam queue`,
-          'info'
-        )
-      },
-      onReaction: (packet) => {
-        if (!packet?.emoji) return
-        const id = packet.id || `${Date.now()}_${Math.random()}`
-        const xOffset = 18 + Math.floor(Math.random() * 64)
-        const cleanEmoji = renderEmoji(packet.emoji, '🔥')
-        const cleanAvatar = renderEmoji(packet.senderAvatar, '🎧')
-        setJamReactions((prev) => [
-          ...prev.slice(-14),
-          {
-            id,
-            emoji: cleanEmoji,
-            senderName: packet.senderName || 'Listener',
-            senderAvatar: cleanAvatar,
-            xOffset
-          }
-        ])
-        setTimeout(() => {
-          setJamReactions((prev) => prev.filter((r) => r.id !== id))
-        }, 2650)
-      },
-      onNotify: (msg, type) => {
-        showNotify(msg, type || 'info')
-      }
-    })
-  }, [])
-
-  // Automatically broadcast Host playback state changes to Jam room & Friends presence feed
-  useEffect(() => {
-    jamManager.broadcastPresenceStatus()
-    if (!jamState.active || !jamState.isHost || remoteJamGuardRef.current) return
-    jamManager.broadcastHostSync({
-      track: currentTrack,
-      isPlaying,
-      currentTime: window.UpBeatControls?.getCurrentTime?.() || 0,
-      queue
-    })
-  }, [currentTrack?.video_id, isPlaying, queue.length, jamState.active, jamState.isHost])
+    if (isPlaying && currentTrack) recordHistoryTrack(currentTrack)
+  }, [currentTrack?.video_id, currentTrack?.title, isPlaying, recordHistoryTrack])
 
   // Detect iOS Safari (browser mode) to guide users toward adding to Home Screen
   useEffect(() => {
@@ -645,101 +278,6 @@ export default function App() {
     })
   }, [])
 
-  // Universal offline storage subscription & connection listener
-  useEffect(() => {
-    let active = true
-    const loadOffline = async () => {
-      try {
-        const list = await getOfflineTracks()
-        const st = await getOfflineStorageStats()
-        if (active) {
-          setOfflineTracks(list)
-          setOfflineStats(st)
-        }
-      } catch (err) {
-        console.error('Offline loader error:', err)
-      }
-    }
-    loadOffline()
-    const unsub = subscribeOfflineChanges(() => loadOffline())
-
-    const handleOnline = () => showNotify('Internet connection restored', 'info')
-    const handleOffline = () => {
-      showNotify("You're offline. Downloaded songs still play.", 'info', {
-        label: 'Downloads',
-        onClick: () => navigate('/downloads')
-      })
-    }
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      active = false
-      unsub()
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
-
-  const initialBootRef = useRef(false)
-
-  // Automatic purge of developer anime/J-pop seeds and hardcoded accounts across all platforms (Android/Mac/Web)
-  useEffect(() => {
-    try {
-      const animeIds = new Set([
-        'F8xpmTmdf6o', // Renai Circulation
-        'F_Cr9vZ08Ws', // mathemagics
-        '0VpGoDp3FCE', // Kimi no Shiranai Monogatari
-        'CXDUXjsU5ao', // Staple Stable
-        'MM8RufZr5lw', // Duvet
-        '2ZN-zAKIfyQ', // Kiri
-        'tdzsOODJiX8', // Akuma no Ko
-        'TCd6PfxOy0Y', // Veridis Quo
-        'QpxFcMYRV08'  // A New Error
-      ])
-
-      const lastEmail = localStorage.getItem('upbeat_last_google_email') || ''
-      const lastName = localStorage.getItem('upbeat_last_google_name') || ''
-      if (/divyansh|negi/i.test(lastEmail)) localStorage.removeItem('upbeat_last_google_email')
-      if (/divyansh|negi/i.test(lastName)) localStorage.removeItem('upbeat_last_google_name')
-
-      const storedUser = loadStorage('upbeat_google_user', null)
-      if (storedUser) {
-        const uEmail = (storedUser.email || '').toLowerCase()
-        const uName = (storedUser.name || '').toLowerCase()
-        if (uEmail.includes('negi') || uEmail.includes('divyansh') || uName.includes('negi') || uName.includes('divyansh')) {
-          localStorage.removeItem('upbeat_google_user')
-          setGoogleUser(null)
-        }
-      }
-
-      setExtractedTracks((prev) => {
-        const filtered = (prev || []).filter((t) => !animeIds.has(t?.video_id))
-        try { localStorage.setItem('argon_seeds_v2', JSON.stringify(filtered)) } catch {}
-        return filtered
-      })
-
-      setFavorites((prev) => {
-        const filtered = (prev || []).filter((t) => !animeIds.has(t?.video_id))
-        try { localStorage.setItem('argon_favs_v2', JSON.stringify(filtered)) } catch {}
-        return filtered
-      })
-
-      const storedDna = loadStorage('argon_dna_v2', null)
-      if (storedDna) {
-        const isAnime = /anime|j-pop|j-rock|monogatari|sawano|higuchi/i.test(
-          `${storedDna.archetype || ''} ${storedDna.summary || ''} ${(storedDna.primary_genres || []).join(' ')}`
-        )
-        if (isAnime) {
-          setTasteDna(null)
-          try { localStorage.removeItem('argon_dna_v2') } catch {}
-        }
-      }
-    } catch (err) {
-      console.warn('Seeds and profile cleanup warning:', err)
-    }
-  }, [])
-
   // Global shortcut: Cmd+B / Ctrl+B to slide toggle sidebar
   useEffect(() => {
     const handleKey = (e) => {
@@ -751,271 +289,6 @@ export default function App() {
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
-
-
-  // Persist to localStorage
-  useEffect(() => {
-    try { localStorage.setItem('argon_seeds_v2', JSON.stringify(extractedTracks)) } catch {}
-  }, [extractedTracks])
-
-  useEffect(() => {
-    try { localStorage.setItem('argon_favs_v2', JSON.stringify(favorites)) } catch {}
-    if (window.UpBeatNative && typeof window.UpBeatNative.syncFavorites === 'function') {
-      const favsToSync = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : [])
-      try {
-        const items = favsToSync.slice(0, 50).map((f, idx) => ({
-          index: idx,
-          title: f.title || 'Unknown Title',
-          artist: f.artist || 'UpBeat',
-          video_id: f.video_id || '',
-          thumbnail: f.thumbnail || (f.video_id ? `https://i.ytimg.com/vi/${f.video_id}/hqdefault.jpg` : '')
-        }))
-        window.UpBeatNative.syncFavorites(JSON.stringify(items))
-      } catch {}
-    }
-  }, [favorites, extractedTracks])
-
-  useEffect(() => {
-    if (tasteDna) {
-      try { localStorage.setItem('argon_dna_v2', JSON.stringify(tasteDna)) } catch {}
-    }
-  }, [tasteDna])
-
-  useEffect(() => {
-    if (playlist) {
-      try { localStorage.setItem('argon_playlist_v2', JSON.stringify(playlist)) } catch {}
-    }
-    if (window.UpBeatNative && typeof window.UpBeatNative.syncQueue === 'function') {
-      const tracksToSync = playlist?.tracks?.length
-        ? playlist.tracks
-        : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : []))
-      if (tracksToSync?.length) {
-        try {
-          const items = tracksToSync.slice(0, 50).map((t, idx) => ({
-            index: idx,
-            title: t.title || 'Unknown Title',
-            artist: t.artist || 'UpBeat',
-            video_id: t.video_id || '',
-            thumbnail: t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
-          }))
-          window.UpBeatNative.syncQueue(JSON.stringify(items))
-        } catch {}
-      }
-    }
-  }, [playlist, queue, extractedTracks])
-
-  useEffect(() => {
-    try { localStorage.setItem('upbeat_playback_queue', JSON.stringify(queue)) } catch {}
-  }, [queue])
-
-  useEffect(() => {
-    try {
-      if (googleUser) {
-        localStorage.setItem('upbeat_google_user', JSON.stringify(googleUser))
-      } else {
-        localStorage.removeItem('upbeat_google_user')
-      }
-    } catch {}
-  }, [googleUser])
-
-  // Sync offline tracks & stats from client IndexedDB
-  useEffect(() => {
-    let mounted = true
-    const reloadOffline = async () => {
-      try {
-        const tracks = await getOfflineTracks()
-        const stats = await getOfflineStorageStats()
-        if (mounted) {
-          setOfflineTracks(tracks || [])
-          setOfflineStats(stats || { count: 0, totalBytes: 0, formattedSize: '0 B' })
-        }
-      } catch (err) {
-        console.error('Error loading offline tracks in App:', err)
-      }
-    }
-    reloadOffline()
-    const unsubscribe = subscribeOfflineChanges(() => {
-      reloadOffline()
-    })
-    return () => {
-      mounted = false
-      unsubscribe()
-    }
-  }, [])
-
-  // Auto-sync saved local profile or authentic Google avatar from active YouTube Music Safari session
-  useEffect(() => {
-    if (hasBackend()) {
-      fetch(`${getApiBase()}/profile`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((saved) => {
-          if (saved && (saved.name || saved.picture)) {
-            setGoogleUser((prev) => {
-              if (prev?.picture && (prev.customPicture || prev.picture.startsWith('data:'))) return prev
-              return { ...(prev || {}), ...saved }
-            })
-          }
-        })
-        .catch(() => {})
-
-      fetch(`${getApiBase()}/safari/profile`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (data?.picture) {
-            setGoogleUser((prev) => {
-              if (!prev) return prev
-              // Never overwrite a custom user-uploaded avatar
-              if (prev.customPicture || prev.picture?.startsWith('data:')) return prev
-              if (prev.picture !== data.picture) {
-                return { ...prev, picture: data.picture }
-              }
-              return prev
-            })
-          }
-        })
-        .catch(() => {})
-    }
-  }, [])
-
-  const handleGoogleLogin = (user) => {
-    setGoogleUser(user)
-    showNotify(`Connected Google Account: ${user.name}`, 'success')
-    handleSyncGoogleYouTubeLikes(user)
-  }
-
-  const handleGoogleLogout = () => {
-    setGoogleUser(null)
-    showNotify('Disconnected Google account', 'info')
-  }
-
-  const handleSyncGoogleYouTubeLikes = async (overrideUser) => {
-    const activeU = overrideUser || googleUser
-    if (!activeU) {
-      setShowGoogleModal(true)
-      return
-    }
-    setIsSyncingLikes(true)
-    showNotify(`Syncing ${activeU.name}'s YouTube Music profile...`, 'info')
-    try {
-      // 1. Direct imported tracks from playlist link
-      if (activeU.importedTracks && activeU.importedTracks.length > 0) {
-        const clean = activeU.importedTracks.filter(isValidMusicTrack)
-        if (clean.length > 0) {
-          setFavorites(clean)
-          setExtractedTracks(clean)
-          try { localStorage.setItem('argon_seeds_v2', JSON.stringify(clean)) } catch {}
-          const dna = await analyzeTasteDnaStandalone(clean)
-          if (dna) setTasteDna(dna)
-          showNotify(`Imported ${clean.length} songs & tailored taste DNA for ${activeU.name}!`, 'success')
-          return
-        }
-      }
-
-      // 2. Real Google OAuth 2.0: Fetch authentic YouTube Liked Videos (playlist ID 'LL')
-      if (activeU.accessToken) {
-        try {
-          const ytRes = await fetch(
-            'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=LL&maxResults=50',
-            { headers: { Authorization: `Bearer ${activeU.accessToken}` } }
-          )
-          if (ytRes.ok) {
-            const data = await ytRes.json()
-            const realTracks = (data.items || []).map((item) => ({
-              title: item.snippet?.title || 'Unknown Title',
-              artist: item.snippet?.videoOwnerChannelTitle || item.snippet?.channelTitle || 'YouTube Artist',
-              video_id: item.contentDetails?.videoId || item.snippet?.resourceId?.videoId,
-              thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || '',
-              vibe: 'YouTube Liked',
-              liked_at: Date.now()
-            })).filter((t) => t.video_id && !t.title.includes('Deleted video') && !t.title.includes('Private video') && isValidMusicTrack(t))
-
-            if (realTracks.length > 0) {
-              setFavorites(realTracks)
-              setExtractedTracks(realTracks)
-              try { localStorage.setItem('argon_seeds_v2', JSON.stringify(realTracks)) } catch {}
-              const dna = await analyzeTasteDnaStandalone(realTracks)
-              if (dna) setTasteDna(dna)
-              showNotify(`Synced ${realTracks.length} authentic liked songs from ${activeU.name}'s YouTube account!`, 'success')
-              return
-            }
-          } else {
-            const errJson = await ytRes.json().catch(() => ({}))
-            const errMsg = errJson?.error?.message || `Status ${ytRes.status}`
-            console.warn('YouTube API Liked Videos returned error:', errMsg)
-            showNotify(`YouTube API notice: ${errMsg}`, 'info')
-          }
-        } catch (oauthErr) {
-          console.warn('YouTube API Liked Videos error, trying fallback:', oauthErr)
-        }
-      }
-
-      // 3. On MacBook with local backend, sync authentic liked songs from active Safari session
-      if (hasBackend()) {
-        try {
-          const res = await fetch(`${getApiBase()}/safari/liked`)
-          if (res.ok) {
-            const data = await res.json()
-            if (data.tracks && data.tracks.length) {
-              const clean = data.tracks.filter(isValidMusicTrack)
-              if (clean.length > 0) {
-                setFavorites(clean)
-                setExtractedTracks(clean)
-                try { localStorage.setItem('argon_seeds_v2', JSON.stringify(clean)) } catch {}
-                const dna = await analyzeTasteDnaStandalone(clean)
-                if (dna) setTasteDna(dna)
-                showNotify(`Synced ${clean.length} songs from YouTube Music`, 'success')
-                return
-              }
-            }
-          }
-        } catch {}
-      }
-
-      // 4. On Android / standalone mobile:
-      // If user already has hearted favorites on this device, derive their authentic taste profile from them!
-      if (favorites && favorites.length > 0) {
-        const cleanFavs = favorites.filter(isValidMusicTrack)
-        setExtractedTracks((prev) => {
-          const cleanPrev = prev.filter(isValidMusicTrack)
-          const existingIds = new Set(cleanPrev.map((t) => t.video_id))
-          const newSeeds = cleanFavs.filter((f) => !existingIds.has(f.video_id))
-          const updated = [...newSeeds, ...cleanPrev]
-          try { localStorage.setItem('argon_seeds_v2', JSON.stringify(updated)) } catch {}
-          return updated
-        })
-        const dna = await analyzeTasteDnaStandalone(cleanFavs)
-        if (dna) setTasteDna(dna)
-        showNotify(`Analyzed ${cleanFavs.length} saved songs into ${activeU.name}'s taste profile!`, 'success')
-        return
-      }
-
-      // 5. If user has seed tracks in their Library, derive from their seed tracks
-      if (extractedTracks && extractedTracks.length > 0) {
-        const cleanSeeds = extractedTracks.filter(isValidMusicTrack)
-        const dna = await analyzeTasteDnaStandalone(cleanSeeds)
-        if (dna) setTasteDna(dna)
-        showNotify(`Generated taste profile for ${activeU.name} from seed tracks!`, 'success')
-        return
-      }
-
-      // 6. For new users with zero songs, pull real top trending songs (not hardcoded anime or non-music)
-      const searchRes = await directSearchStandalone('Top Hits 2026', 'songs')
-      const starterTracks = (searchRes?.tracks || []).filter(isValidMusicTrack).slice(0, 6)
-      if (starterTracks.length > 0) {
-        setExtractedTracks(starterTracks)
-        try { localStorage.setItem('argon_seeds_v2', JSON.stringify(starterTracks)) } catch {}
-        const dna = await analyzeTasteDnaStandalone(starterTracks)
-        if (dna) setTasteDna(dna)
-        showNotify(`Synced starter music feed for ${activeU.name}!`, 'success')
-      } else {
-        showNotify(`Connected ${activeU.name}! Search or heart songs to build your profile.`, 'success')
-      }
-    } catch (err) {
-      showNotify(`Sync error: ${err.message}`, 'error')
-    } finally {
-      setIsSyncingLikes(false)
-    }
-  }
 
   // Handle in-car controls from Android Auto & car head units
   useEffect(() => {
@@ -1094,6 +367,16 @@ export default function App() {
           }
           break
         }
+        case 'toggle_loop': {
+          if (payload === 'one') setRepeatMode('one')
+          else if (payload === 'off') setRepeatMode('off')
+          else toggleLoopSong()
+          break
+        }
+        case 'toggle_like': {
+          if (currentTrackRef.current) handleToggleFavorite(currentTrackRef.current)
+          break
+        }
         default:
           break
       }
@@ -1110,78 +393,6 @@ export default function App() {
       delete window.onUpBeatCarAction
     }
   }, [playlist, favorites, queue, extractedTracks, currentTrackIdx])
-
-  // Load persistent favorites from disk on mount (only when Mac backend is configured)
-  useEffect(() => {
-    if (!hasBackend()) return
-    fetch(`${getApiBase()}/favorites`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.favorites) setFavorites(data.favorites)
-      })
-      .catch(() => {})
-  }, [])
-
-  // Check if a track is in favorites
-  const isTrackFavorite = (track) => {
-    if (!track || !favorites.length) return false
-    const tVid = (track.video_id || '').trim()
-    const tTitle = (track.title || '').trim().toLowerCase()
-    const tArtist = (track.artist || '').trim().toLowerCase()
-
-    return favorites.some((f) => {
-      if (tVid && f.video_id && f.video_id === tVid) return true
-      return (
-        (f.title || '').trim().toLowerCase() === tTitle &&
-        (f.artist || '').trim().toLowerCase() === tArtist
-      )
-    })
-  }
-
-  // Toggle favorite on backend + local state (with standalone mobile fallback)
-  const handleToggleFavorite = async (track) => {
-    if (!track) return
-    if (hasBackend()) {
-      try {
-        const res = await fetch(`${getApiBase()}/favorites/toggle`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ track })
-        })
-        const ct = res.headers.get('content-type') || ''
-        if (res.ok && ct.includes('application/json')) {
-          const data = await res.json()
-          setFavorites(data.favorites || [])
-          showNotify(
-            data.is_favorite ? 'Added to liked songs' : 'Removed from liked songs',
-            'info',
-            data.is_favorite ? null : { label: 'Undo', onClick: () => handleToggleFavorite(track) }
-          )
-          return
-        }
-      } catch {}
-    }
-
-    // Standalone mobile fallback using localStorage
-    const alreadyLiked = isTrackFavorite(track)
-    const nextFavs = alreadyLiked
-      ? favorites.filter(
-          (f) =>
-            !(
-              (track.video_id && f.video_id === track.video_id) ||
-              ((f.title || '').toLowerCase() === (track.title || '').toLowerCase() &&
-                (f.artist || '').toLowerCase() === (track.artist || '').toLowerCase())
-            )
-        )
-      : [{ ...track, liked_at: Math.floor(Date.now() / 1000) }, ...favorites]
-    setFavorites(nextFavs)
-    showNotify(
-      !alreadyLiked ? 'Added to liked songs' : 'Removed from liked songs',
-      'info',
-      alreadyLiked ? { label: 'Undo', onClick: () => setFavorites((cur) => (cur.some((f) => sameTrack(f, track)) ? cur : [track, ...cur])) } : null
-    )
-  }
-
   // Auto-heal any cached playlist tracks missing thumbnails or real durations
   useEffect(() => {
     if (!hasBackend() || !playlist?.tracks?.length) return
@@ -1218,88 +429,6 @@ export default function App() {
       .catch(() => {})
       .finally(() => setIsResolvingBatch(false))
   }, [playlist?.playlist_title])
-
-  const checkSafari = async () => {
-    if (!hasBackend()) return null
-    try {
-      const res = await fetch(`${getApiBase()}/safari/tabs`)
-      const ct = res.headers.get('content-type') || ''
-      if (res.ok && ct.includes('application/json')) {
-        const data = await res.json()
-        setSafariStatus(data)
-        return data
-      }
-    } catch {}
-    return null
-  }
-
-  const checkNowPlaying = async () => {
-    if (!hasBackend()) return
-    try {
-      const res = await fetch(`${getApiBase()}/safari/now-playing`)
-      const ct = res.headers.get('content-type') || ''
-      if (res.ok && ct.includes('application/json')) {
-        const data = await res.json()
-        setSafariNowPlaying(data.now_playing)
-      }
-    } catch {}
-  }
-
-  // Sync from Safari
-  const handleSyncSafari = async (silent = false) => {
-    if (!hasBackend()) {
-      if (!silent) showNotify('Safari sync requires a Mac server connection', 'info')
-      return []
-    }
-    setIsSyncing(true)
-    if (!silent) showNotify('Syncing tracks from Safari...', 'info')
-    try {
-      const extractRes = await fetch(`${getApiBase()}/safari/extract`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      })
-      if (!extractRes.ok) {
-        if (!silent) {
-          const err = await extractRes.json().catch(() => ({}))
-          showNotify(err.detail || 'No YouTube tab found in Safari', 'error')
-        }
-        setIsSyncing(false)
-        return []
-      }
-
-      const extractData = await extractRes.json()
-      const rawTracks = extractData.tracks || []
-      const newTracks = rawTracks.filter(isStrictMusicTrack)
-
-      if (newTracks.length > 0) {
-        setExtractedTracks(newTracks)
-        if (!silent) showNotify(`Synced ${newTracks.length} tracks from Safari`, 'success')
-
-        fetch(`${getApiBase()}/taste-dna`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tracks: newTracks, model_name: selectedModel })
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((dna) => {
-            if (dna) setTasteDna(dna)
-          })
-          .catch(() => {})
-
-        return newTracks
-      } else {
-        if (!silent) showNotify('Safari tab open, but 0 video items found on page', 'warning')
-        return []
-      }
-    } catch (e) {
-      if (!silent) showNotify(`Sync failed: ${e.message}`, 'error')
-      return []
-    } finally {
-      setIsSyncing(false)
-    }
-  }
-
   // Sync Liked Songs: Analyzes favorites to update Sonic Taste DNA and curates fresh songs
   const handleSyncFavorites = async () => {
     if (!favorites || favorites.length === 0) {
@@ -1428,10 +557,13 @@ export default function App() {
       }
 
       if (hasCompanion) {
+        const companionController = new AbortController()
+        const companionTimer = setTimeout(() => companionController.abort(), hasKey ? 8000 : 30000)
         try {
           const res = await fetch(`${getApiBase()}/curate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: companionController.signal,
             body: JSON.stringify({
               seed_tracks: overrideSeeds || extractedTracks,
               mood_prompt: activePrompt,
@@ -1443,15 +575,21 @@ export default function App() {
           const ct = res.headers.get('content-type') || ''
           if (!res.ok || !ct.includes('application/json')) {
             const err = ct.includes('application/json') ? await res.json().catch(() => ({})) : {}
-            throw new Error(err.detail || `Mac companion returned HTTP ${res.status}`)
+            const backendErr = new Error(err.detail || `Mac companion returned HTTP ${res.status}`)
+            backendErr.hasBackendDetail = Boolean(err.detail)
+            throw backendErr
           }
           data = await res.json()
         } catch (backendErr) {
           if (hasKey) {
             data = await curateStandalone(curateArgs)
+          } else if (backendErr?.hasBackendDetail) {
+            throw backendErr
           } else {
             throw new Error('Add a Gemini key in Settings to make mixes')
           }
+        } finally {
+          clearTimeout(companionTimer)
         }
       } else {
         data = await curateStandalone(curateArgs)
@@ -1459,6 +597,9 @@ export default function App() {
 
       if (token !== collectionTokenRef.current) return
       const tracks = (data?.tracks || []).filter((t) => t && (t.video_id || t.title))
+      if (!tracks.length) {
+        throw new Error('No matching songs were returned for that prompt')
+      }
       const mix = {
         id: `mix_${Date.now()}`,
         kind: 'mix',
@@ -1655,21 +796,6 @@ export default function App() {
     }, 7000)
     return () => clearInterval(timer)
   }, [])
-
-  const handleOpenSafari = async (destination = 'yt_liked') => {
-    try {
-      await fetch(`${getApiBase()}/safari/open`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ destination })
-      })
-      showNotify('Opened YouTube in Safari', 'info')
-      setTimeout(checkSafari, 1500)
-    } catch (e) {
-      showNotify(`Safari error: ${e.message}`, 'error')
-    }
-  }
-
   const handleSelectPreset = (preset) => {
     setActivePresetId(preset.id)
     setPrompt(preset.prompt)
@@ -1680,272 +806,6 @@ export default function App() {
   const handlePromptChange = (val) => {
     setPrompt(val)
   }
-
-  const handlePlayTrack = (track, idxOrList, customList) => {
-    if (!track) return
-
-    if (jamManager.state.active && !jamManager.state.isHost && jamManager.state.djMode === 'host_only' && !remoteJamGuardRef.current) {
-      jamManager.emitQueueAdd(track)
-      setQueue((prev) => [...prev, track])
-      showNotify(`Host Only DJ mode: Added "${track.title}" to shared Jam queue`, 'info')
-      return
-    }
-
-    let listToUse = null
-    let actualIdx = 0
-
-    if (Array.isArray(idxOrList)) {
-      listToUse = idxOrList
-      const found = listToUse.findIndex(
-        (t) => (t.video_id && track.video_id && t.video_id === track.video_id) ||
-               (t.title === track.title && t.artist === track.artist)
-      )
-      actualIdx = found >= 0 ? found : 0
-    } else if (typeof idxOrList === 'number') {
-      actualIdx = idxOrList
-      if (Array.isArray(customList) && customList.length > 0) {
-        listToUse = customList
-      }
-    }
-
-    if (listToUse && listToUse.length > 0) {
-      setActivePlaybackContext(listToUse)
-    } else {
-      if (activeTab === 'library') setActivePlaybackContext(extractedTracks)
-      else if (activeTab === 'favorites') setActivePlaybackContext(favorites)
-      else if (activeTab === 'offline') setActivePlaybackContext(offlineTracks)
-      else setActivePlaybackContext(playlist?.tracks || [])
-    }
-
-    const isSame = currentTrack && (
-      (currentTrack.video_id && currentTrack.video_id === track.video_id) ||
-      (currentTrack.title === track.title && currentTrack.artist === track.artist)
-    )
-    if (isSame) {
-      const nextPlay = !isPlayingRef.current
-      isPlayingRef.current = nextPlay
-      setIsPlaying(nextPlay)
-      const curTime = window.UpBeatControls?.getCurrentTime?.() || 0
-      if (!nextPlay) {
-        window.UpBeatControls?.forcePause?.(curTime)
-      } else {
-        window.UpBeatControls?.forcePlay?.()
-      }
-      if (jamManager.state.active && !remoteJamGuardRef.current) {
-        jamManager.broadcastPlayState(nextPlay, curTime, currentTrackRef.current || track)
-      }
-      return
-    }
-    currentTrackRef.current = track
-    isPlayingRef.current = true
-    setCurrentTrack(track)
-    setCurrentTrackIdx(actualIdx)
-    setIsPlaying(true)
-    if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
-      jamManager.emitPlaybackControl('SELECT_TRACK', { track, currentTime: 0 })
-    }
-    if (playbackMode === 'safari') {
-      handlePushToSafari(track)
-    }
-  }
-
-  const handleTogglePlay = () => {
-    if (jamManager.state.active && !jamManager.state.isHost && jamManager.state.djMode === 'host_only' && !remoteJamGuardRef.current) {
-      showNotify('Host Only DJ mode is active — ask the host to enable Open Party mode', 'info')
-      return
-    }
-    if (!currentTrack && playlist?.tracks?.length > 0) {
-      const firstTrack = playlist.tracks[0]
-      currentTrackRef.current = firstTrack
-      isPlayingRef.current = true
-      setCurrentTrack(firstTrack)
-      setCurrentTrackIdx(0)
-      setIsPlaying(true)
-      if (jamManager.state.active && !remoteJamGuardRef.current) {
-        jamManager.broadcastPlayState(true, 0, firstTrack)
-      }
-      return
-    }
-    const next = !isPlayingRef.current
-    isPlayingRef.current = next
-    setIsPlaying(next)
-    const curTime = window.UpBeatControls?.getCurrentTime?.() || 0
-    if (!next) {
-      window.UpBeatControls?.forcePause?.(curTime)
-    } else {
-      window.UpBeatControls?.forcePlay?.()
-    }
-    if (jamManager.state.active && !remoteJamGuardRef.current) {
-      jamManager.broadcastPlayState(next, curTime, currentTrackRef.current)
-    }
-  }
-
-  const getActiveTrackList = () => {
-    if (activePlaybackContext && activePlaybackContext.length > 0) {
-      return activePlaybackContext
-    }
-    if (activeTab === 'library') return extractedTracks
-    if (activeTab === 'favorites') return favorites
-    if (activeTab === 'offline') return offlineTracks
-    return playlist?.tracks || []
-  }
-
-  const handleNext = (fromRemote = false) => {
-    if (jamManager.state.active && !jamManager.state.isHost && !fromRemote && !remoteJamGuardRef.current) {
-      if (jamManager.state.djMode === 'host_only') {
-        showNotify('Host Only DJ mode is active', 'info')
-        return
-      }
-      jamManager.emitPlaybackControl('NEXT', {})
-    }
-
-    // 1. Prioritize queued tracks
-    if (queue.length > 0) {
-      const nextTrack = queue[0]
-      setQueue((prev) => prev.slice(1))
-      setCurrentTrack(nextTrack)
-      setIsPlaying(true)
-      if (playbackMode === 'safari') {
-        handlePushToSafari(nextTrack)
-      }
-      return
-    }
-
-    // 2. Sequential playlist fallback
-    const list = getActiveTrackList()
-    if (!list || list.length === 0) return
-
-    let curIdx = typeof currentTrackIdx === 'number' ? currentTrackIdx : 0
-    if (currentTrack && (curIdx < 0 || curIdx >= list.length ||
-        (list[curIdx]?.video_id !== currentTrack.video_id && list[curIdx]?.title !== currentTrack.title))) {
-      const found = list.findIndex(
-        (t) => (t.video_id && currentTrack.video_id && t.video_id === currentTrack.video_id) ||
-               (t.title === currentTrack.title && t.artist === currentTrack.artist)
-      )
-      if (found >= 0) curIdx = found
-    }
-
-    const nextIdx = (curIdx + 1) % list.length
-    const nextTrack = list[nextIdx]
-    if (!nextTrack) return
-    setCurrentTrack(nextTrack)
-    setCurrentTrackIdx(nextIdx)
-    setIsPlaying(true)
-    if (playbackMode === 'safari') {
-      handlePushToSafari(nextTrack)
-    }
-  }
-  handleNextRef.current = handleNext
-
-  const handlePlayNext = (track) => {
-    if (!track) return
-    setQueue((prev) => {
-      const filtered = prev.filter((t) => t.video_id !== track.video_id)
-      return [track, ...filtered]
-    })
-    if (jamManager.state.active && !jamManager.state.isHost) {
-      jamManager.emitQueueAdd(track)
-    }
-    showNotify(`"${track.title}" plays next`, 'info')
-  }
-
-  const handleAddToQueue = (track) => {
-    if (!track) return
-    setQueue((prev) => [...prev, track])
-    if (jamManager.state.active && !jamManager.state.isHost) {
-      jamManager.emitQueueAdd(track)
-    }
-    showNotify('Added to queue', 'info', { label: 'Undo', onClick: () => setQueue((q) => { const i = q.lastIndexOf(track); return i >= 0 ? q.filter((_, j) => j !== i) : q }) })
-  }
-
-  const handleRemoveFromQueue = (idx) => {
-    setQueue((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  const handleClearQueue = () => {
-    setQueue([])
-    showNotify('Playback queue cleared', 'info')
-  }
-
-  const handleToggleShuffle = () => {
-    setIsShuffle((prev) => {
-      const nextState = !prev
-      if (nextState) {
-        originalQueueRef.current = [...queue]
-        originalContextRef.current = activePlaybackContext ? [...activePlaybackContext] : null
-        if (queue.length > 0) {
-          setQueue(fisherYatesShuffle(queue))
-        }
-        if (activePlaybackContext && activePlaybackContext.length > 1) {
-          const remaining = activePlaybackContext.filter(
-            (t) => (t.video_id && currentTrack?.video_id ? t.video_id !== currentTrack.video_id : t.title !== currentTrack?.title)
-          )
-          const shuffled = fisherYatesShuffle(remaining)
-          const newContext = currentTrack ? [currentTrack, ...shuffled] : shuffled
-          setActivePlaybackContext(newContext)
-          setCurrentTrackIdx(0)
-        }
-        showNotify('Shuffle on', 'info')
-      } else {
-        if (originalQueueRef.current) {
-          setQueue(originalQueueRef.current)
-          originalQueueRef.current = null
-        }
-        if (originalContextRef.current) {
-          setActivePlaybackContext(originalContextRef.current)
-          if (currentTrack) {
-            const idx = originalContextRef.current.findIndex(
-              (t) => (t.video_id && currentTrack.video_id ? t.video_id === currentTrack.video_id : t.title === currentTrack.title)
-            )
-            if (idx >= 0) setCurrentTrackIdx(idx)
-          }
-          originalContextRef.current = null
-        }
-        showNotify('Shuffle off', 'info')
-      }
-      return nextState
-    })
-  }
-
-  const handleShufflePlayBlock = async (block) => {
-    if (!block) return
-
-    try {
-      const rawTracks = await loadBlockTracks(block)
-      if (!rawTracks || rawTracks.length === 0) {
-        showNotify('Unable to load tracks for this station', 'error')
-        return
-      }
-      const shuffled = fisherYatesShuffle(rawTracks)
-      originalContextRef.current = [...rawTracks]
-      setActivePlaybackContext(shuffled)
-      setCurrentTrack(shuffled[0])
-      setCurrentTrackIdx(0)
-      setQueue(shuffled.slice(1))
-      setIsShuffle(true)
-      setIsPlaying(true)
-      if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
-
-    } catch (e) {
-      showNotify('Error shuffling station: ' + (e?.message || 'Try again'), 'error')
-    }
-  }
-
-  const handleShufflePlayAll = (customTracks) => {
-    const target = customTracks || playlist?.tracks || []
-    if (!target || target.length === 0) return
-    const shuffled = fisherYatesShuffle(target)
-    originalContextRef.current = [...target]
-    setActivePlaybackContext(shuffled)
-    setCurrentTrack(shuffled[0])
-    setCurrentTrackIdx(0)
-    setQueue(shuffled.slice(1))
-    setIsShuffle(true)
-    setIsPlaying(true)
-    if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
-
-  }
-
   const handleAddSeedTrack = (track) => {
     if (!track || !isValidMusicTrack(track)) {
       showNotify('Only music songs can be added to Seeds', 'warning')
@@ -2006,270 +866,6 @@ export default function App() {
       showNotify(`Analysis failed: ${err.message}`, 'error')
     }
   }
-
-  const handlePrev = (fromRemote = false) => {
-    if (jamManager.state.active && !jamManager.state.isHost && !fromRemote && !remoteJamGuardRef.current) {
-      if (jamManager.state.djMode === 'host_only') {
-        showNotify('Host Only DJ mode is active', 'info')
-        return
-      }
-      jamManager.emitPlaybackControl('PREV', {})
-    }
-
-    const list = getActiveTrackList()
-    if (!list || list.length === 0) return
-
-    let curIdx = typeof currentTrackIdx === 'number' ? currentTrackIdx : 0
-    if (currentTrack && (curIdx < 0 || curIdx >= list.length ||
-        (list[curIdx]?.video_id !== currentTrack.video_id && list[curIdx]?.title !== currentTrack.title))) {
-      const found = list.findIndex(
-        (t) => (t.video_id && currentTrack.video_id && t.video_id === currentTrack.video_id) ||
-               (t.title === currentTrack.title && t.artist === currentTrack.artist)
-      )
-      if (found >= 0) curIdx = found
-    }
-
-    const prevIdx = (curIdx - 1 + list.length) % list.length
-    const prevTrack = list[prevIdx]
-    if (!prevTrack) return
-    setCurrentTrack(prevTrack)
-    setCurrentTrackIdx(prevIdx)
-    setIsPlaying(true)
-    if (playbackMode === 'safari') {
-      handlePushToSafari(prevTrack)
-    }
-  }
-  handlePrevRef.current = handlePrev
-
-  const handleUserSeek = (targetSec) => {
-    if (!jamManager.state.active || remoteJamGuardRef.current) return
-    if (jamManager.state.isHost) {
-      jamManager.broadcastHostSync({ currentTime: targetSec })
-    } else if (jamManager.state.djMode !== 'host_only') {
-      jamManager.emitPlaybackControl('SEEK', { currentTime: targetSec })
-    }
-  }
-
-  const handleTrackResolved = (track, resolvedData) => {
-    if (!track || !resolvedData) return
-    const badDurs = new Set(['3:42', '3:30', '--:--', '3:00', '8:29', '8:08'])
-    let resolvedDurText = ''
-    if (resolvedData.duration && resolvedData.duration > 0) {
-      resolvedDurText = formatDurationSeconds(resolvedData.duration)
-    } else if (resolvedData.duration_text && !badDurs.has(resolvedData.duration_text)) {
-      resolvedDurText = resolvedData.duration_text
-    }
-
-    setPlaylist((prev) => {
-      if (!prev || !prev.tracks) return prev
-      let changed = false
-      const nextTracks = prev.tracks.map((t) => {
-        const isMatch =
-          (t.video_id && t.video_id === (resolvedData.video_id || track.video_id)) ||
-          (t.title === track.title && t.artist === track.artist)
-        if (!isMatch) return t
-        const finalDur = resolvedDurText || (badDurs.has(t.duration_text) ? '' : t.duration_text)
-        const newVid = resolvedData.video_id || t.video_id
-        if (t.video_id === newVid && t.duration_text === finalDur && t.thumbnail) {
-          return t
-        }
-        changed = true
-        return {
-          ...t,
-          video_id: newVid,
-          fallback_ids: resolvedData.fallback_ids?.length ? resolvedData.fallback_ids : t.fallback_ids,
-          thumbnail: resolvedData.thumbnail || t.thumbnail,
-          duration_text: finalDur
-        }
-      })
-      return changed ? { ...prev, tracks: nextTracks } : prev
-    })
-    setCurrentTrack((cur) => {
-      if (!cur) return cur
-      const isMatch =
-        (cur.video_id && cur.video_id === (resolvedData.video_id || track.video_id)) ||
-        (cur.title === track.title && cur.artist === track.artist)
-      if (!isMatch) return cur
-      const finalDur = resolvedDurText || (badDurs.has(cur.duration_text) ? '' : cur.duration_text)
-      const newVid = resolvedData.video_id || cur.video_id
-      if (cur.video_id === newVid && cur.duration_text === finalDur && cur.thumbnail) {
-        return cur
-      }
-      return {
-        ...cur,
-        video_id: newVid,
-        fallback_ids: resolvedData.fallback_ids?.length ? resolvedData.fallback_ids : cur.fallback_ids,
-        thumbnail: resolvedData.thumbnail || cur.thumbnail,
-        duration_text: finalDur
-      }
-    })
-  }
-
-  const handlePushToSafari = async (track) => {
-    if (!track) return
-    const targetUrl = track.url || (track.video_id ? `https://www.youtube.com/watch?v=${track.video_id}` : (currentTrack?.video_id ? `https://www.youtube.com/watch?v=${currentTrack.video_id}` : ''))
-    if (!targetUrl) return
-
-    if (!hasBackend() || isNativeApp()) {
-      openExternalUrl(targetUrl)
-      showNotify(`Opening in browser...`, 'info')
-      return
-    }
-
-    try {
-      await fetch(`${getApiBase()}/safari/open`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ destination: 'custom', custom_url: targetUrl })
-      })
-      showNotify(`Opened "${track.title}" in Safari`, 'info')
-    } catch (e) {
-      openExternalUrl(targetUrl)
-      showNotify(`Opened in browser`, 'info')
-    }
-  }
-
-  const handleSafariControl = async (action) => {
-    try {
-      const res = await fetch(`${getApiBase()}/safari/control`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
-      })
-      const data = await res.json()
-      if (data.status !== 'success') {
-        showNotify(data.message || 'Safari control unavailable', 'warning')
-      }
-      setTimeout(checkNowPlaying, 400)
-    } catch (e) {
-      showNotify(`Safari error: ${e.message}`, 'error')
-    }
-  }
-
-  // =====================================================================
-  // v8: library, history, collections, search, downloads
-  // =====================================================================
-  const downloadedIds = useMemo(() => new Set(offlineTracks.map((t) => t.video_id).filter(Boolean)), [offlineTracks])
-
-  useEffect(() => saveStorage('upbeat_library_v1', savedCollections), [savedCollections])
-  useEffect(() => saveStorage('upbeat_mixes_v1', recentMixes), [recentMixes])
-  useEffect(() => saveStorage('upbeat_history_v1', playHistory), [playHistory])
-  useEffect(() => saveStorage('upbeat_recents_v1', recents), [recents])
-  useEffect(() => saveStorage('upbeat_recent_searches_v1', recentSearches), [recentSearches])
-  useEffect(() => saveStorage('upbeat_right_panel_v1', rightPanelOpen), [rightPanelOpen])
-
-  // Android Auto: send saved collections and recent AI mixes to the car service ("Your Mixes")
-  useEffect(() => {
-    const bridge = typeof window !== 'undefined' ? window.UpBeatNative : null
-    if (!bridge || typeof bridge.syncMixes !== 'function') return
-    const seen = new Set()
-    const list = [...savedCollections, ...recentMixes]
-      .filter((c) => c?.tracks?.length && !seen.has(c.id) && seen.add(c.id))
-      .slice(0, 12)
-      .map((c) => ({
-        title: c.title,
-        subtitle: c.kind === 'mix' ? 'AI mix' : `${c.tracks.length} songs`,
-        kind: c.kind,
-        tracks: c.tracks.slice(0, 50).map((t) => ({ title: t.title, artist: t.artist, video_id: t.video_id, thumbnail: t.thumbnail }))
-      }))
-    try {
-      bridge.syncMixes(JSON.stringify(list))
-    } catch {}
-  }, [savedCollections, recentMixes])
-
-  // Remember what was actually played (for History and Jump back in)
-  useEffect(() => {
-    if (!isPlaying || !currentTrack || (!currentTrack.video_id && !currentTrack.title)) return
-    setPlayHistory((prev) => [slimTrack(currentTrack), ...prev.filter((t) => !sameTrack(t, currentTrack))].slice(0, 100))
-  }, [currentTrack?.video_id, currentTrack?.title, isPlaying])
-
-  const snapshot = (c) => ({
-    id: c.id,
-    kind: c.kind,
-    title: c.title,
-    subtitle: c.subtitle || '',
-    prompt: c.prompt || '',
-    cover: c.cover || '',
-    tracks: (c.tracks || []).slice(0, 200).map(slimTrack),
-    createdAt: c.createdAt || Date.now()
-  })
-
-  const recordMix = (mix) => {
-    setRecentMixes((prev) => [snapshot(mix), ...prev.filter((m) => m.id !== mix.id)].slice(0, 20))
-  }
-
-  const recordRecent = (c) => {
-    if (!c?.id || c.id.startsWith('mix_pending')) return
-    const entry =
-      c.kind === 'liked'
-        ? { key: 'liked', kind: 'liked', title: 'Liked songs' }
-        : {
-            key: c.id,
-            kind: c.kind,
-            title: c.title,
-            cover: c.cover || '',
-            tracks: (c.tracks || []).slice(0, 4).map(slimTrack),
-            track: c.tracks?.[0] ? slimTrack(c.tracks[0]) : null,
-            collection: { ...snapshot(c), tracks: (c.tracks || []).slice(0, 80).map(slimTrack) }
-          }
-    setRecents((prev) => [entry, ...prev.filter((r) => r.key !== entry.key)].slice(0, 12))
-  }
-
-  // Show a collection that is already loaded
-  const showCollection = (c, { record = true } = {}) => {
-    collectionTokenRef.current++
-    setCollectionLoading(false)
-    setPlaylist(c)
-    if (record) recordRecent(c)
-    navigate('/collection')
-  }
-
-  // Open a collection page right away and fill it when its songs arrive
-  const loadCollection = async (base, loader) => {
-    const token = ++collectionTokenRef.current
-    setPlaylist({ ...base, tracks: [] })
-    setCollectionLoading(true)
-    navigate('/collection')
-    try {
-      const raw = await loader()
-      if (token !== collectionTokenRef.current) return
-      const tracks = (raw || []).filter(isValidMusicTrack)
-      const full = { ...base, tracks }
-      setPlaylist(full)
-      if (tracks.length) recordRecent(full)
-    } catch (e) {
-      if (token === collectionTokenRef.current) showNotify(`Couldn't load "${base.title}"`, 'error')
-    } finally {
-      if (token === collectionTokenRef.current) setCollectionLoading(false)
-    }
-  }
-
-  const playList = (tracks, { shuffle = false, from = null } = {}) => {
-    const list = (tracks || []).filter(Boolean)
-    if (!list.length) return
-    if (shuffle) {
-      const shuffled = fisherYatesShuffle(list)
-      originalContextRef.current = [...list]
-      setActivePlaybackContext(shuffled)
-      setIsShuffle(true)
-      setCurrentTrack(shuffled[0])
-      setCurrentTrackIdx(0)
-      setIsPlaying(true)
-      if (playbackMode === 'safari') handlePushToSafari(shuffled[0])
-    } else {
-      setIsShuffle(false)
-      originalContextRef.current = null
-      if (sameTrack(currentTrack, list[0])) {
-        setActivePlaybackContext(list)
-        setCurrentTrackIdx(0)
-        setIsPlaying(true)
-      } else {
-        handlePlayTrack(list[0], 0, list)
-      }
-    }
-    setPlayingFrom(from)
-  }
-
   const blockBase = (block) => ({
     id: `block_${block.id}`,
     kind: block.tier === 1 ? 'chart' : 'foryou',
@@ -2423,92 +1019,6 @@ export default function App() {
     const energy = tweak === 'More energy' ? Math.min(100, energyLevel + 20) : tweak === 'Calmer' ? Math.max(0, energyLevel - 25) : energyLevel
     handleGenerate(`${base}. Variation: ${tweak.toLowerCase()}.`, undefined, energy, { displayPrompt: `${base} · ${tweak.toLowerCase()}` })
   }
-
-  // ---- library ---------------------------------------------------------
-  const isSavedId = (id) => savedCollections.some((c) => c.id === id)
-
-  const toggleSave = (c) => {
-    if (!c?.id || c.id.startsWith('mix_pending')) return
-    if (isSavedId(c.id)) {
-      const before = savedCollections
-      setSavedCollections((list) => list.filter((x) => x.id !== c.id))
-      showNotify('Removed from your library', 'info', { label: 'Undo', onClick: () => setSavedCollections(before) })
-    } else {
-      setSavedCollections((list) => [{ ...snapshot(c), savedAt: Date.now() }, ...list])
-      showNotify('Saved to your library', 'success')
-    }
-  }
-
-  const createPlaylist = (name, pendingTrack) => {
-    const item = { id: `user_${Date.now()}`, kind: 'user', title: name, subtitle: '', tracks: pendingTrack ? [slimTrack(pendingTrack)] : [], createdAt: Date.now() }
-    setSavedCollections((list) => [item, ...list])
-    if (pendingTrack) showNotify(`Added to ${name}`, 'success')
-    else showCollection(item, { record: false })
-  }
-
-  const addTrackToPlaylist = (pl, track) => {
-    if (!pl || !track) return
-    setSavedCollections((list) => list.map((c) => (c.id === pl.id ? { ...c, tracks: [...(c.tracks || []), slimTrack(track)] } : c)))
-    showNotify(`Added to ${pl.title}`, 'success')
-  }
-
-  const removeFromPlaylist = (id, index) => {
-    setSavedCollections((list) => list.map((c) => (c.id === id ? { ...c, tracks: c.tracks.filter((_, i) => i !== index) } : c)))
-  }
-
-  const deletePlaylist = (c) => {
-    const before = savedCollections
-    setSavedCollections((list) => list.filter((x) => x.id !== c.id))
-    goBack('/library')
-    showNotify(`Deleted "${c.title}"`, 'info', { label: 'Undo', onClick: () => setSavedCollections(before) })
-  }
-
-  // ---- downloads ---------------------------------------------------------
-  const downloadTrack = async (track) => {
-    if (!track?.video_id) return
-    if (downloadedIds.has(track.video_id)) return showNotify('Already downloaded', 'info')
-    showNotify(`Downloading "${track.title}"…`, 'info')
-    try {
-      await saveTrackOffline(track)
-      showNotify(`"${track.title}" is ready offline`, 'success')
-    } catch (e) {
-      showNotify(`Download failed: ${e?.message || 'try again'}`, 'error')
-    }
-  }
-
-  const downloadAll = async (c) => {
-    const todo = (c?.tracks || []).filter((t) => t.video_id && !downloadedIds.has(t.video_id))
-    if (!todo.length) return
-    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done: 0, total: todo.length } }))
-    let done = 0
-    let failed = 0
-    for (const t of todo) {
-      try {
-        await saveTrackOffline(t)
-      } catch {
-        failed++
-      }
-      done++
-      setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done, total: todo.length } }))
-    }
-    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: false, done, total: todo.length } }))
-    showNotify(failed ? `Downloaded ${done - failed} of ${todo.length} songs` : `"${c.title}" is ready offline`, failed ? 'error' : 'success')
-  }
-
-  const deleteDownload = async (track) => {
-    try {
-      await deleteOfflineTrack(track.video_id)
-      showNotify('Download removed', 'info')
-    } catch {}
-  }
-
-  const clearDownloads = async () => {
-    try {
-      await clearAllOfflineTracks()
-      showNotify('All downloads deleted', 'info')
-    } catch {}
-  }
-
   const shareCollection = async (c) => {
     const lines = (c.tracks || []).slice(0, 15).map((t, i) => `${i + 1}. ${t.title} — ${t.artist}`)
     const text = `${c.title}${c.prompt ? ` (“${c.prompt}”)` : ''}\n\n${lines.join('\n')}\n\nMade with UpBeat`
@@ -2527,30 +1037,6 @@ export default function App() {
       showNotify("Couldn't share right now", 'error')
     }
   }
-
-  // ---- friends / jam -------------------------------------------------------
-  const openFriends = () => {
-    setInitialJamSection('friends')
-    setIsJamModalOpen(true)
-  }
-
-  const listenAlong = async (friend) => {
-    if (!friend) return
-    if (friend.activeJamCode) {
-      const ok = await jamManager.joinJam(friend.activeJamCode, googleUser)
-      if (ok) showNotify(`Listening along with ${friend.name}`, 'success')
-    } else if (friend.currentTrack) {
-      handlePlayTrack(friend.currentTrack, 0, [friend.currentTrack])
-      setPlayingFrom({ id: null, title: `${friend.name}'s pick` })
-    }
-  }
-
-  const startJamWith = (c) => {
-    playList(c.tracks, { from: { id: c.id, title: c.title } })
-    setInitialJamSection('')
-    setIsJamModalOpen(true)
-  }
-
   // ---- what the collection page shows ---------------------------------------
   const shownCollection = useMemo(() => {
     if (route.path === '/liked') return { id: 'liked', kind: 'liked', title: 'Liked songs', tracks: favorites }
@@ -2585,20 +1071,15 @@ export default function App() {
     else setPlayingFrom(null)
   }
 
-  const upNext = useMemo(() => {
-    const ctx = activePlaybackContext || []
-    const idx = ctx.findIndex((t) => sameTrack(t, currentTrack))
-    const rest = idx >= 0 ? ctx.slice(idx + 1) : []
-    return [...queue, ...rest].slice(0, 60)
-  }, [activePlaybackContext, currentTrack, queue])
-
   const appCtx = {
     currentTrack,
     isPlaying,
+    repeatMode,
     isFav: isTrackFavorite,
     downloadedIds,
     playTrack: ctxPlayTrack,
     toggleFav: handleToggleFavorite,
+    toggleLoopSong,
     playNext: handlePlayNext,
     addToQueue: handleAddToQueue,
     openAddToPlaylist: (t) => setAddToPlaylistTrack(t),
@@ -2688,6 +1169,9 @@ export default function App() {
       } else if (e.code === 'Space' && !typing && tag !== 'button' && tag !== 'a' && !mod) {
         e.preventDefault()
         handleTogglePlay()
+      } else if (!mod && !typing && tag !== 'button' && tag !== 'a' && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        toggleLoopSong()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -3089,7 +1573,9 @@ export default function App() {
                   onToggleSidebar={() => setLeftNavOpen((v) => !v)}
                 />
               </div>
-              {renderView()}
+              <Suspense fallback={<div className="p-8 text-t2 text-sm">Loading…</div>}>
+                {renderView()}
+              </Suspense>
             </main>
             {rightPanelOpen && (currentTrack || friends.length > 0) && (
               <RightPanel
@@ -3112,7 +1598,9 @@ export default function App() {
         ) : (
           <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: topInset }}>
             <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-h-0 ub-ambient-surface overflow-y-auto overflow-x-hidden overscroll-contain">
-              {renderView()}
+              <Suspense fallback={<div className="p-8 text-t2 text-sm">Loading…</div>}>
+                {renderView()}
+              </Suspense>
             </main>
           </div>
         )}
@@ -3170,6 +1658,10 @@ export default function App() {
             isShuffle={isShuffle}
             setIsShuffle={setIsShuffle}
             onToggleShuffle={handleToggleShuffle}
+            repeatMode={repeatMode}
+            setRepeatMode={setRepeatMode}
+            onCycleRepeat={cycleRepeatMode}
+            onToggleLoopSong={toggleLoopSong}
             onUserSeek={handleUserSeek}
           />
         </div>
@@ -3194,7 +1686,9 @@ export default function App() {
           hideWidget
         />
 
-        <JamModal
+        {isJamModalOpen && (
+          <Suspense fallback={null}>
+            <JamModal
           isOpen={isJamModalOpen}
           onClose={() => {
             setIsJamModalOpen(false)
@@ -3211,9 +1705,13 @@ export default function App() {
           initialSection={initialJamSection}
           onPlayTrack={handlePlayTrack}
           onNotify={(msg, type) => showNotify(msg, type || 'info')}
-        />
+            />
+          </Suspense>
+        )}
 
-        <QueueDrawer
+        {isQueueOpen && (
+          <Suspense fallback={null}>
+            <QueueDrawer
           isOpen={isQueueOpen}
           onClose={() => setIsQueueOpen(false)}
           queue={queue}
@@ -3229,9 +1727,13 @@ export default function App() {
           onClearQueue={handleClearQueue}
           onAddToQueue={handleAddToQueue}
           upcomingTracks={upNext.slice(queue.length)}
-        />
+            />
+          </Suspense>
+        )}
 
-        <GoogleAuthModal
+        {showGoogleModal && (
+          <Suspense fallback={null}>
+            <GoogleAuthModal
           isOpen={showGoogleModal}
           onClose={() => setShowGoogleModal(false)}
           googleUser={googleUser}
@@ -3239,23 +1741,31 @@ export default function App() {
           onLogout={handleGoogleLogout}
           onSyncYouTubeLikes={() => handleSyncGoogleYouTubeLikes()}
           isSyncingLikes={isSyncingLikes}
-        />
+            />
+          </Suspense>
+        )}
 
-        <ProfileEditModal
+        {isProfileEditOpen && (
+          <Suspense fallback={null}>
+            <ProfileEditModal
           isOpen={isProfileEditOpen}
           onClose={() => setIsProfileEditOpen(false)}
           user={googleUser}
           onSave={handleSaveProfile}
           onNotify={showNotify}
-        />
+            />
+          </Suspense>
+        )}
 
         {showOnboarding && (
-          <Onboarding
+          <Suspense fallback={null}>
+            <Onboarding
             busy={onboardingBusy}
             onSkip={skipOnboarding}
             onFinish={(picks) => finishOnboarding(picks)}
             onConnect={(picks) => finishOnboarding(picks, { connect: true })}
-          />
+            />
+          </Suspense>
         )}
 
         <AddToPlaylistSheet

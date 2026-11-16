@@ -61,6 +61,16 @@ export default function HomeView({
     }
   }, [])
 
+  // Persist active Home discovery blocks so Android Auto mirrors Made For You & Daily Top Charts
+  useEffect(() => {
+    try {
+      if (Array.isArray(blocks) && blocks.length) {
+        localStorage.setItem('upbeat_aa_discovery_blocks_v1', JSON.stringify(blocks))
+        window.dispatchEvent(new CustomEvent('upbeat-discovery-blocks-updated'))
+      }
+    } catch {}
+  }, [blocks])
+
   // "For you" live refresh / rotation function
   const refreshForYou = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true)

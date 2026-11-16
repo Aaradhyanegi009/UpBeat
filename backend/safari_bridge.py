@@ -1,9 +1,13 @@
 import json
+import os
 import subprocess
 import time
 from typing import Dict, List, Optional, Any
 
 _TABS_CACHE: Dict[str, Any] = {"ts": 0.0, "tabs": [], "now_playing": None}
+_FILTERS_PATH = os.path.join(os.path.dirname(__file__), "music_filters.json")
+with open(_FILTERS_PATH, "r", encoding="utf-8") as _f:
+    _SAFARI_FILTER_RULES: Dict[str, Any] = json.load(_f)
 
 
 def run_applescript(script: str, timeout: float = 4.0) -> str:
@@ -118,9 +122,9 @@ def open_safari_url(url: str, activate: bool = True) -> Dict[str, Any]:
     return {"status": "ok", "url": url}
 
 
-def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
-    """Extracts songs / videos / playlists from the specified Safari tab."""
-    extraction_js = """
+def _build_safari_extraction_js() -> str:
+    """Builds the in-page Safari extractor JS with synced canonical music filter rules."""
+    extraction_js = r"""
     (function() {
         const url = window.location.href;
         const isMusic = url.includes('music.youtube.com');
@@ -152,30 +156,26 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
             if (cleanTitle.includes('Private video') || cleanTitle.includes('Deleted video')) return;
             if (/^\d+:\d+$/.test(cleanTitle)) return;
 
+            const filterRules = __FILTER_RULES__;
+            const comedyRe = new RegExp(filterRules.patterns.comedy_podcast, 'i');
+            const devotionalRe = new RegExp(filterRules.patterns.devotional_religious, 'i');
+            const nonMusicGeneralRe = new RegExp(filterRules.patterns.non_music_general, 'i');
+            const nonMusicAcRe = new RegExp(filterRules.patterns.non_music_academic_and_creator, 'i');
+            const artistNumRe = new RegExp(filterRules.invalid_artist_numeric_pattern, 'i');
+            const artistGenRe = new RegExp(filterRules.invalid_artist_generic_pattern, 'i');
+            const videoIdRe = new RegExp(filterRules.video_id_pattern);
+
             // Strict 11-char videoId check
-            if (videoId && !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return;
+            if (videoId && !videoIdRe.test(videoId)) return;
 
             // Reject non-music content and view counts as artist
             let cleanArtist = (artist || '').replace(/\s+/g, ' ').trim();
-            if (/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(cleanArtist) ||
-                /^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$/i.test(cleanArtist)) {
+            if (artistNumRe.test(cleanArtist) || artistGenRe.test(cleanArtist)) {
                 cleanArtist = '';
             }
 
-            const nonMusicCheck = (cleanTitle + ' ' + cleanArtist).toLowerCase();
-
-            // Block Stand-Up Comedy, Podcasts, Skits & Talks
-            if (/\b(stand\s*up|standup|comedy|comedian|samay\s*raina|zakir\s*khan|abhishek\s*upmanyu|bassi|anubhav\s*singh|munawar|harsh\s*gujral|biswa|kanan|kenny\s*sebastian|latent|india's\s*got\s*latent|roast|crowd\s*work|open\s*mic|funny|joke|jokes|laugh|skit|parody|podcast|interview|episode|ep\s*\d+|talk\s*show|storytime|reaction|review|vlogs?|vlog|unboxing)\b/i.test(nonMusicCheck)) {
-                return;
-            }
-
-            // Block Devotional, Religious & Spiritual Audio
-            if (/\b(bhajan|aarti|chalisa|mantra|stotra|stotram|shloka|hanuman|shiv|shiva|krishna|ram\s*bhajan|ganesh|durga|mata|kirtan|satsang|devotional|bhakti|gurbani|shabad|qawwali|naat|tilawat|t-series\s*bhakti|sanskar|aastha|spiritual|meditation\s*chant|om\s*namah)\b/i.test(nonMusicCheck)) {
-                return;
-            }
-
-            // Block Gaming, Tutorials, Lectures & Shorts
-            if (/\b(minecraft|gameplay|walkthrough|let's\s*play|bgmi|pubg|valorant|stream|highlights|tutorial|lecture|course|gate|jee|neet|dsa|leetcode|codeforces|coding|programming|how\s*to|explained|documentary|news|breaking|shorts|#shorts|status|whatsapp\s*status|ringtone|teaser|trailer|making\s*of|behind\s*the\s*scenes|full\s*movie|scene|laplace|calculus)\b/i.test(nonMusicCheck)) {
+            const nonMusicCheck = cleanTitle + ' ' + cleanArtist;
+            if (comedyRe.test(nonMusicCheck) || devotionalRe.test(nonMusicCheck) || nonMusicGeneralRe.test(nonMusicCheck) || nonMusicAcRe.test(nonMusicCheck)) {
                 return;
             }
 
@@ -235,7 +235,12 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
         });
     })();
     """
-    raw = run_safari_js_in_tab(window_idx, tab_idx, extraction_js)
+    return extraction_js.replace("__FILTER_RULES__", json.dumps(_SAFARI_FILTER_RULES))
+
+
+def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
+    """Extracts songs / videos / playlists from the specified Safari tab."""
+    raw = run_safari_js_in_tab(window_idx, tab_idx, _build_safari_extraction_js())
     try:
         return json.loads(raw)
     except Exception as e:

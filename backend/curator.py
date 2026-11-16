@@ -158,12 +158,12 @@ def _call_gemini_rest(model_id: str, prompt: str, timeout: float = 20.0) -> Dict
 def generate_fast_with_fallback(prompt: str, preferred_model: str = "gemini-4-argon") -> Dict[str, Any]:
     """
     Calls preferred_model first; if rate-limited or unavailable, falls back through
-    active un-rate-limited Gemini models (gemini-4-argon 1s fastest, gemini-3.8-flash,
-    gemini-3.1-flash-lite, gemini-3.5-flash-lite, flash-lite-latest) before touching Gemma 4.
+    active un-rate-limited Gemini models (gemini-4-argon 1s fastest, gemini-3.1-flash-lite,
+    gemini-3.5-flash-lite, flash-lite-latest, gemini-3-flash-preview, gemini-2.5-flash)
+    before touching Gemma 4.
     """
     fallback_pool = [
         "gemini-4-argon",
-        "gemini-3.8-flash",
         "gemini-3.1-flash-lite",
         "gemini-3.5-flash-lite",
         "gemini-flash-lite-latest",
@@ -192,7 +192,7 @@ def generate_fast_with_fallback(prompt: str, preferred_model: str = "gemini-4-ar
         for attempt_num in range(max_tries):
             t0 = time.time()
             try:
-                res = _call_gemini_rest(model_id, prompt, timeout=20.0)
+                res = _call_gemini_rest(model_id, prompt, timeout=14.0)
                 latency_ms = int((time.time() - t0) * 1000)
                 attempts.append({
                     "model": model_id,
@@ -269,7 +269,7 @@ def _is_specific_entity_query(mood_prompt: str) -> bool:
     return len(p.split()) <= 4
 
 
-def analyze_taste_dna(tracks: List[Dict[str, Any]], model_name: str = "gemini-3.8-flash") -> Dict[str, Any]:
+def analyze_taste_dna(tracks: List[Dict[str, Any]], model_name: str = "gemini-4-argon") -> Dict[str, Any]:
     """Analyzes user's listening history and hearted favorites to build their Taste Profile."""
     favs = get_favorites()
     if not tracks and not favs:
@@ -330,7 +330,7 @@ def curate_playlist(
     mood_prompt: str = "Focused late night session",
     energy_level: int = 78,
     count: int = 8,
-    model_name: str = "gemini-3.8-flash",
+    model_name: str = "gemini-4-argon",
 ) -> Dict[str, Any]:
     """
     Generates a semantically coherent playlist grounded in live YouTube Music search results.

@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.5.1)
+# 🎵 UpBeat (v7.6.1)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,15 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ## ⚡ Features & Highlights
+
+### ✨ AI Curator & Search-to-Mix Hotfix (v7.6.1)
+- **Restored Responsive AI Curation & AI Search Mixes (`App.jsx`)**: Fixed the missing `collectionTokenRef` / `setCollectionLoading` hook bindings so **Create -> Make my mix**, **Search -> Make a mix from “…”**, and **Tweak mix** trigger immediately with proper loading state and navigation.
+- **Fast-Path Gemini Defaults & Timeout Resilience (`geminiClient.js`, `geminiCurator.js`, `curator.py`)**: Switched defaults to `gemini-4-argon`, removed `gemini-3.8-flash` from automatic fallback so timed-out endpoints never hang requests, added `14s` abort timeouts, hardened prose/fence JSON parsing, and added YouTube Web search fallback in `searchYouTubeStandalone`.
+
+### 🔁 Single-Song Loop, Curated Direct Search & Android Auto Redesign (v7.6.0)
+- **1-Tap Single-Song Loop (`repeatMode === 'one'`)**: Dedicated Loop Song (`Repeat1`) toggle across the Desktop PlayerBar (`L` shortcut), Mobile Mini-Player, Full-Screen Now Playing controls & overflow menu, track `⋯` context menus, and Android Auto Now Playing custom actions — with hardened dual-deck `tick()` protection so looped songs repeat seamlessly.
+- **Vibe-Matched & Redundancy-Free Direct Search**: Direct non-AI song search now locks exact matches (e.g. `"Sapphire"` -> *Sapphire by Ed Sheeran* at `#1`), eliminates unrequested remixes, slowed/reverb, 8D, nightcore, karaoke, and duplicate uploads (collapsed cleanly into `fallback_ids`), and curates tracks by the primary artist plus `RDAMVM` Watch Radio vibe matches.
+- **Android Auto `v7.6.0` UI/UX Overhaul**: Restyled `UpBeatArtProvider` & `UpBeatMediaService` to match UpBeat's Obsidian Dark (`#0A0A0B`) + Crimson Rose (`#F43F5E`) identity with a 4-tab layout (**For You**, **Playlists**, **Top Charts**, **Library**), synced phone playlists/charts/moods, Play All & Shuffle Play actions, full `MediaSession` queue sync, and Now Playing Loop/Like/Shuffle/Automix actions.
 
 ### 🛡️ Pure Music Sanitization & Horizontal Playlist Sliders (v7.5.1)
 - **Ironclad Music Filtering**: Rejects stand-up comedy (Aakash Gupta, Zakir Khan, Latent), devotional/bhajan tracks (Sampoorna Ganesh Aarti, Dawn of Serenity, Krishna), educational lectures, and kids music across backend and standalone client.

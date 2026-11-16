@@ -1,71 +1,146 @@
-import concurrent.futures
-import os
-import re
+"""UpBeat Music Studio FastAPI entry point composing modular API routers."""
+
 import json
-import time
-import unicodedata
-import urllib.parse
-from typing import Dict, List, Any, Optional
-import requests as ext_requests
-from fastapi import FastAPI, HTTPException, Request
+import os
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
 try:
-    from safari_bridge import (
-        list_safari_tabs,
-        open_safari_url,
-        extract_all_safari_yt_tracks,
-        get_safari_now_playing,
-        control_safari,
-        get_safari_youtube_profile,
-    )
     from curator import analyze_taste_dna, curate_playlist
-    from youtube_search import (
-        resolve_tracks_batch,
-        search_youtube_single,
-        get_audio_stream_url,
-        _resolve_cloud_fallback_audio,
-        direct_search_youtube_music,
-        browse_youtube_music_playlist,
-        format_seconds,
-        is_valid_music_track,
-    )
     from favorites_store import get_favorites, toggle_favorite
-except ImportError:
-    from backend.safari_bridge import (
-        list_safari_tabs,
-        open_safari_url,
+    from routers.music import (
+        CurateRequest,
+        ResolveBatchRequest,
+        TasteDnaRequest,
+        router as music_router,
+    )
+    from routers.offline import (
+        DOWNLOADS_DIR,
+        DOWNLOADS_META_FILE,
+        FavoriteTrackRequest,
+        IS_VERCEL,
+        router as offline_router,
+    )
+    from routers.safari import (
+        SafariControlRequest,
+        SafariExtractRequest,
+        SafariOpenRequest,
+        router as safari_router,
+    )
+    from routers.social import (
+        JamRoomSendRequest,
+        PROFILE_FILE,
+        SocialPollRequest,
+        SocialSendRequest,
+        _JAM_ROOMS,
+        _SOCIAL_MAILBOX,
+        _SOCIAL_PRESENCE,
+        router as social_router,
+    )
+    from safari_bridge import (
+        control_safari,
         extract_all_safari_yt_tracks,
         get_safari_now_playing,
-        control_safari,
         get_safari_youtube_profile,
+        list_safari_tabs,
+        open_safari_url,
     )
-    from backend.curator import analyze_taste_dna, curate_playlist
-    from backend.youtube_search import (
+    from youtube_search import (
+        _resolve_cloud_fallback_audio,
+        browse_youtube_music_playlist,
+        direct_search_youtube_music,
+        format_seconds,
+        get_audio_stream_url,
+        is_valid_music_track,
         resolve_tracks_batch,
         search_youtube_single,
-        get_audio_stream_url,
-        _resolve_cloud_fallback_audio,
-        direct_search_youtube_music,
-        browse_youtube_music_playlist,
-        format_seconds,
-        is_valid_music_track,
     )
+except ImportError:
+    from backend.curator import analyze_taste_dna, curate_playlist
     from backend.favorites_store import get_favorites, toggle_favorite
+    from backend.routers.music import (
+        CurateRequest,
+        ResolveBatchRequest,
+        TasteDnaRequest,
+        router as music_router,
+    )
+    from backend.routers.offline import (
+        DOWNLOADS_DIR,
+        DOWNLOADS_META_FILE,
+        FavoriteTrackRequest,
+        IS_VERCEL,
+        router as offline_router,
+    )
+    from backend.routers.safari import (
+        SafariControlRequest,
+        SafariExtractRequest,
+        SafariOpenRequest,
+        router as safari_router,
+    )
+    from backend.routers.social import (
+        JamRoomSendRequest,
+        PROFILE_FILE,
+        SocialPollRequest,
+        SocialSendRequest,
+        _JAM_ROOMS,
+        _SOCIAL_MAILBOX,
+        _SOCIAL_PRESENCE,
+        router as social_router,
+    )
+    from backend.safari_bridge import (
+        control_safari,
+        extract_all_safari_yt_tracks,
+        get_safari_now_playing,
+        get_safari_youtube_profile,
+        list_safari_tabs,
+        open_safari_url,
+    )
+    from backend.youtube_search import (
+        _resolve_cloud_fallback_audio,
+        browse_youtube_music_playlist,
+        direct_search_youtube_music,
+        format_seconds,
+        get_audio_stream_url,
+        is_valid_music_track,
+        resolve_tracks_batch,
+        search_youtube_single,
+    )
+
+
+def _resolve_app_version() -> str:
+    """Reads canonical app version from synced music_filters.json or root package.json."""
+    filters_path = os.path.join(os.path.dirname(__file__), "music_filters.json")
+    try:
+        with open(filters_path, "r", encoding="utf-8") as f:
+            ver = json.load(f).get("app_version")
+            if ver:
+                return str(ver)
+    except Exception:
+        pass
+    pkg_path = os.path.join(os.path.dirname(__file__), "..", "package.json")
+    try:
+        with open(pkg_path, "r", encoding="utf-8") as f:
+            ver = json.load(f).get("version")
+            if ver:
+                return str(ver)
+    except Exception:
+        pass
+    return "7.6.1"
+
+
+APP_VERSION = _resolve_app_version()
 
 app = FastAPI(
     title="UpBeat Music API",
-    version="7.3.1",
-    description="UpBeat v7.3.1 - 30-Minute Stable Refresh Cycle, Native Swift NSOpenPanel Profile Photo Picker & Restored Mobile Settings"
+    version=APP_VERSION,
+    description=f"UpBeat v{APP_VERSION} - Modular Music Studio Backend",
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -73,7 +148,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def ensure_api_prefix(request: Request, call_next):
-    # Only rewrite stripped /api prefixes when running inside Vercel Multi-Services
+    """Normalizes stripped /api prefixes when deployed inside Vercel Multi-Services."""
     if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
         path = request.scope.get("path", "")
         if path and not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc"):
@@ -81,1096 +156,10 @@ async def ensure_api_prefix(request: Request, call_next):
     return await call_next(request)
 
 
-class SafariOpenRequest(BaseModel):
-    destination: str = Field("yt_liked", description="music, music_liked, yt_liked, yt_history, custom")
-    custom_url: Optional[str] = None
-
-
-class SafariExtractRequest(BaseModel):
-    window_idx: Optional[int] = None
-    tab_idx: Optional[int] = None
-
-
-class SafariControlRequest(BaseModel):
-    action: str = Field("play_pause", description="play_pause, next, prev")
-    window_idx: Optional[int] = None
-    tab_idx: Optional[int] = None
-
-
-class CurateRequest(BaseModel):
-    seed_tracks: List[Dict[str, Any]] = Field(default_factory=list)
-    mood_prompt: str = Field("Focused late night session")
-    energy_level: int = Field(78, ge=0, le=100)
-    count: int = Field(20, ge=3, le=50)
-    model_name: str = Field("gemini-4-argon")
-
-
-class TasteDnaRequest(BaseModel):
-    tracks: List[Dict[str, Any]] = Field(default_factory=list)
-    model_name: str = Field("gemini-4-argon")
-
-
-@app.get("/api/status")
-def get_status():
-    return {
-        "status": "online",
-        "app": "UpBeat",
-        "models": [
-            {"id": "gemini-4-argon", "name": "Gemini 4 Argon (⚡ 1s Fastest)", "recommended": True},
-            {"id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash (Active)", "recommended": False},
-            {"id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite (2s Fast)", "recommended": False},
-            {"id": "gemini-3.5-flash-lite", "name": "Gemini 3.5 Flash Lite (Active)", "recommended": False},
-            {"id": "gemini-flash-lite-latest", "name": "Gemini Flash Lite Latest", "recommended": False},
-            {"id": "gemini-3-flash-preview", "name": "Gemini 3 Flash Preview", "recommended": False},
-            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "recommended": False},
-            {"id": "gemma-4-26b-a4b-it", "name": "Gemma 4 26B MoE", "recommended": False},
-        ],
-    }
-
-
-@app.get("/api/safari/tabs")
-def get_safari_tabs():
-    tabs = list_safari_tabs(use_cache=True)
-    yt_tabs = [t for t in tabs if t.get("is_yt")]
-    return {
-        "tabs": tabs,
-        "yt_tabs": yt_tabs,
-        "has_yt": len(yt_tabs) > 0,
-    }
-
-
-@app.post("/api/safari/open")
-def open_in_safari(req: SafariOpenRequest):
-    url_map = {
-        "music": "https://music.youtube.com",
-        "music_liked": "https://music.youtube.com/playlist?list=LM",
-        "yt_liked": "https://www.youtube.com/playlist?list=LL",
-        "yt_history": "https://www.youtube.com/feed/history",
-    }
-    target_url = req.custom_url or url_map.get(req.destination, "https://www.youtube.com/playlist?list=LL")
-    return open_safari_url(target_url)
-
-
-@app.post("/api/safari/extract")
-def extract_safari_data(req: SafariExtractRequest):
-    result = extract_all_safari_yt_tracks(req.window_idx, req.tab_idx)
-    if result.get("error") and not result.get("tracks"):
-        raise HTTPException(
-            status_code=404,
-            detail=result["error"],
-        )
-    return result
-
-
-@app.get("/api/safari/now-playing")
-def get_now_playing():
-    np = get_safari_now_playing()
-    return {"now_playing": np}
-
-
-@app.get("/api/safari/profile")
-def get_safari_profile():
-    return get_safari_youtube_profile()
-
-
-
-@app.post("/api/safari/control")
-def send_control(req: SafariControlRequest):
-    return control_safari(req.action, req.window_idx, req.tab_idx)
-
-
-@app.post("/api/taste-dna")
-def get_taste_profile(req: TasteDnaRequest):
-    return analyze_taste_dna(req.tracks, model_name=req.model_name)
-
-
-@app.post("/api/curate")
-def generate_playlist(req: CurateRequest):
-    try:
-        # Auto-pull from Safari if seed_tracks is empty and Safari has YT open
-        seeds = [t for t in (req.seed_tracks or []) if is_valid_music_track(t)]
-        if not seeds:
-            extracted = extract_all_safari_yt_tracks()
-            seeds = [t for t in extracted.get("tracks", []) if is_valid_music_track(t)]
-
-        playlist_data = curate_playlist(
-            seed_tracks=seeds,
-            mood_prompt=req.mood_prompt,
-            energy_level=req.energy_level,
-            count=req.count,
-            model_name=req.model_name,
-        )
-
-        tracks = playlist_data.get("tracks", [])
-        if tracks:
-            playlist_data["tracks"] = resolve_tracks_batch(tracks)
-
-        return playlist_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/search")
-def search_track(q: str):
-    res = search_youtube_single(q)
-    if not res:
-        raise HTTPException(status_code=404, detail="Track not found")
-    return res
-
-
-@app.get("/api/direct-search")
-def direct_search_endpoint(q: str, mode: str = "auto"):
-    """Zero-token direct YouTube Music lookup for both prepared playlists and songs."""
-    return direct_search_youtube_music(q, mode=mode)
-
-
-@app.get("/api/playlist-browse")
-def playlist_browse_endpoint(browse_id: str, title: str = "", subtitle: str = ""):
-    """Fetches tracks inside a prepared YouTube Music playlist (0 AI tokens)."""
-    tracks = browse_youtube_music_playlist(browse_id, playlist_title=title, playlist_subtitle=subtitle)
-    return {
-        "browse_id": browse_id,
-        "title": title,
-        "subtitle": subtitle,
-        "tracks": tracks,
-    }
-
-
-class ResolveBatchRequest(BaseModel):
-    tracks: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-@app.post("/api/resolve-batch")
-def resolve_batch_endpoint(req: ResolveBatchRequest):
-    return {"tracks": resolve_tracks_batch(req.tracks)}
-
-
-class FavoriteTrackRequest(BaseModel):
-    track: Dict[str, Any]
-
-
-@app.get("/api/favorites")
-def list_favorites():
-    return {"favorites": get_favorites()}
-
-
-@app.post("/api/favorites/toggle")
-def toggle_favorite_endpoint(req: FavoriteTrackRequest):
-    return toggle_favorite(req.track)
-
-
-@app.post("/api/innertube")
-async def innertube_proxy_endpoint(request: Request):
-    try:
-        data = await request.json()
-        endpoint = data.get("endpoint", "")
-        body = data.get("body", {})
-        service = data.get("service", "music")
-        host = "https://www.youtube.com" if service == "youtube" else "https://music.youtube.com"
-        target_url = f"{host}/youtubei/v1/{endpoint}?prettyPrint=false"
-
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-            "Referer": host,
-        }
-        resp = ext_requests.post(target_url, json=body, headers=headers, timeout=15)
-        return Response(content=resp.content, status_code=resp.status_code, media_type="application/json")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/audio-info/{video_id}")
-def audio_info_endpoint(video_id: str, title: str = "", artist: str = "", expected_duration: int = 0):
-    info = get_audio_stream_url(video_id, title=title, artist=artist, expected_duration=expected_duration)
-    if not info or not info.get("url"):
-        raise HTTPException(status_code=404, detail="Audio stream unavailable")
-    dur_sec = int(info.get("duration") or 0)
-    resolved_id = info.get("video_id") or video_id
-    q_params = []
-    if title:
-        q_params.append(f"title={urllib.parse.quote(title)}")
-    if artist:
-        q_params.append(f"artist={urllib.parse.quote(artist)}")
-    if expected_duration:
-        q_params.append(f"expected_duration={expected_duration}")
-    qs = f"?{'&'.join(q_params)}" if q_params else ""
-    return {
-        "video_id": resolved_id,
-        "resolved_video_id": resolved_id,
-        "original_video_id": video_id,
-        "duration": dur_sec,
-        "duration_text": format_seconds(dur_sec),
-        "url": f"/api/audio/{video_id}{qs}",
-        "title": info.get("title", ""),
-        "artist": info.get("uploader", ""),
-    }
-
-
-IS_VERCEL = bool(os.environ.get("VERCEL")) or not os.access(os.path.dirname(__file__), os.W_OK)
-DOWNLOADS_DIR = "/tmp/upbeat_downloads" if IS_VERCEL else os.path.join(os.path.dirname(__file__), "data", "downloads")
-DOWNLOADS_META_FILE = "/tmp/upbeat_downloads.json" if IS_VERCEL else os.path.join(os.path.dirname(__file__), "data", "downloads.json")
-try:
-    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-except OSError:
-    pass
-
-
-def _load_downloads_meta() -> List[Dict[str, Any]]:
-    if not os.path.exists(DOWNLOADS_META_FILE):
-        return []
-    try:
-        with open(DOWNLOADS_META_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def _save_download_meta(track_info: Dict[str, Any]):
-    items = _load_downloads_meta()
-    items = [x for x in items if x.get("video_id") != track_info.get("video_id")]
-    items.insert(0, track_info)
-    try:
-        with open(DOWNLOADS_META_FILE, "w", encoding="utf-8") as f:
-            json.dump(items, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving download metadata: {e}")
-
-
-def _delete_download_meta(video_id: str):
-    items = _load_downloads_meta()
-    items = [x for x in items if x.get("video_id") != video_id]
-    try:
-        with open(DOWNLOADS_META_FILE, "w", encoding="utf-8") as f:
-            json.dump(items, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error deleting download metadata: {e}")
-
-
-def _stream_local_file(filepath: str, start: int = 0, end: Optional[int] = None, chunk_size: int = 65536):
-    with open(filepath, "rb") as f:
-        f.seek(start)
-        pos = start
-        while end is None or pos <= end:
-            read_len = min(chunk_size, end - pos + 1) if end is not None else chunk_size
-            data = f.read(read_len)
-            if not data:
-                break
-            pos += len(data)
-            yield data
-
-
-_STREAM_HTTP_SESSION = ext_requests.Session()
-_STREAM_HTTP_SESSION.mount(
-    "https://",
-    ext_requests.adapters.HTTPAdapter(pool_connections=16, pool_maxsize=16, max_retries=2),
-)
-_STREAM_CHUNK_BYTES = 1024 * 1024  # 1 MB bounded ranges for stable streaming
-
-
-def _materialize_segments_to_file(segment_urls: List[str], local_path: str, ua: str = "Mozilla/5.0") -> bool:
-    """Fetches fMP4 (.m4a) segments concurrently and writes a unified .m4a file to local_path."""
-    if not segment_urls:
-        return False
-    temp_path = f"{local_path}.seg_{int(time.time() * 1000)}"
-
-    def _fetch_seg(u: str) -> bytes:
-        r = _STREAM_HTTP_SESSION.get(u, headers={"User-Agent": ua}, timeout=10)
-        return r.content if r.status_code in (200, 206) else b""
-
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-            chunks = list(ex.map(_fetch_seg, segment_urls))
-        data = b"".join(chunks)
-        if len(data) > 20000:
-            with open(temp_path, "wb") as f:
-                f.write(data)
-            os.replace(temp_path, local_path)
-            return True
-    except Exception as e:
-        print(f"Error materializing fMP4 segments to {local_path}: {e}")
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
-    return False
-
-
-@app.api_route("/api/audio/{video_id}", methods=["GET", "HEAD"])
-def stream_audio_endpoint(video_id: str, request: Request, title: str = "", artist: str = "", expected_duration: int = 0):
-    """
-    Streams the exact official audio track (m4a/mp4).
-    If the track has been downloaded locally, streams instantly from disk with zero network latency.
-    Otherwise fetches upstream from YouTube in bounded 1 MB Range chunks.
-    """
-    local_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.m4a")
-    if not os.path.exists(local_path):
-        info_check = get_audio_stream_url(video_id, title=title, artist=artist, expected_duration=expected_duration)
-        if info_check and info_check.get("segment_urls"):
-            _materialize_segments_to_file(
-                info_check["segment_urls"], local_path, info_check.get("ua", "Mozilla/5.0")
-            )
-
-    if os.path.exists(local_path):
-        file_size = os.path.getsize(local_path)
-        if (expected_duration > 60 and file_size < 800000) or file_size < 50000:
-            try:
-                os.remove(local_path)
-            except OSError:
-                pass
-        else:
-            range_header = request.headers.get("range") or request.headers.get("Range")
-        start = 0
-        end = file_size - 1
-        is_partial = False
-
-        if range_header and range_header.strip().lower().startswith("bytes="):
-            is_partial = True
-            spec = range_header.strip()[6:].split(",")[0].strip()
-            parts = spec.split("-", 1)
-            if parts[0]:
-                start = int(parts[0])
-                if len(parts) > 1 and parts[1]:
-                    end = int(parts[1])
-            elif len(parts) > 1 and parts[1]:
-                suffix = int(parts[1])
-                start = max(0, file_size - suffix)
-
-        end = min(end, file_size - 1)
-        content_len = max(0, end - start + 1)
-        status_code = 206 if (is_partial or file_size > 0) else 200
-
-        headers = {
-            "Accept-Ranges": "bytes",
-            "Content-Length": str(content_len),
-            "Content-Type": "audio/mp4",
-            "Cache-Control": "public, max-age=86400",
-            "X-From-Offline-Cache": "true",
-        }
-        if status_code == 206:
-            headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
-
-        if request.method == "HEAD":
-            return Response(status_code=status_code, headers=headers)
-
-        return StreamingResponse(
-            _stream_local_file(local_path, start, end),
-            status_code=status_code,
-            media_type="audio/mp4",
-            headers=headers,
-        )
-
-    info = get_audio_stream_url(video_id, title=title, artist=artist, expected_duration=expected_duration)
-    if not info or not info.get("url"):
-        raise HTTPException(status_code=404, detail="Audio stream unavailable")
-
-    stream_url = info["url"]
-    ua = info.get(
-        "ua",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-    )
-    total_size = int(info.get("clen") or 0)
-
-    # If total_size wasn't in metadata, probe the first 2 bytes to discover Content-Range total
-    if total_size <= 0:
-        probe = _STREAM_HTTP_SESSION.get(
-            stream_url,
-            headers={"User-Agent": ua, "Range": "bytes=0-1"},
-            stream=True,
-            timeout=10,
-        )
-        cr = probe.headers.get("Content-Range", "")
-        probe.close()
-        if "/" in cr:
-            try:
-                total_size = int(cr.split("/")[-1])
-                info["clen"] = total_size
-            except ValueError:
-                total_size = 0
-
-    range_header = request.headers.get("range") or request.headers.get("Range")
-    start = 0
-    end = (total_size - 1) if total_size > 0 else None
-    is_partial = False
-
-    if range_header and range_header.strip().lower().startswith("bytes="):
-        is_partial = True
-        spec = range_header.strip()[6:].split(",")[0].strip()
-        parts = spec.split("-", 1)
-        if parts[0]:
-            start = int(parts[0])
-            if len(parts) > 1 and parts[1]:
-                end = int(parts[1])
-        elif len(parts) > 1 and parts[1] and total_size > 0:
-            suffix = int(parts[1])
-            start = max(0, total_size - suffix)
-            end = total_size - 1
-
-    if total_size > 0 and (end is None or end >= total_size):
-        end = total_size - 1
-
-    resp_headers = {
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=3600",
-    }
-    if info.get("duration"):
-        resp_headers["X-Track-Duration"] = str(info["duration"])
-    status_code = 206 if (is_partial or total_size > 0) else 200
-    if total_size > 0 and end is not None:
-        content_len = max(0, end - start + 1)
-        resp_headers["Content-Length"] = str(content_len)
-        if status_code == 206:
-            resp_headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
-
-    if request.method == "HEAD":
-        return Response(
-            content=b"",
-            status_code=status_code,
-            media_type=info.get("mime", "audio/mp4"),
-            headers=resp_headers,
-        )
-
-    def _iter_chunks():
-        pos = start
-        target_end = end
-        while target_end is None or pos <= target_end:
-            chunk_end = (
-                min(pos + _STREAM_CHUNK_BYTES - 1, target_end)
-                if target_end is not None
-                else (pos + _STREAM_CHUNK_BYTES - 1)
-            )
-            r = _STREAM_HTTP_SESSION.get(
-                stream_url,
-                headers={"User-Agent": ua, "Range": f"bytes={pos}-{chunk_end}"},
-                stream=True,
-                timeout=15,
-            )
-            try:
-                if r.status_code not in (200, 206):
-                    break
-                received = 0
-                for piece in r.iter_content(chunk_size=65536):
-                    if piece:
-                        received += len(piece)
-                        yield piece
-                if received == 0:
-                    break
-                pos += received
-                if target_end is None and received < _STREAM_CHUNK_BYTES:
-                    break
-            finally:
-                r.close()
-
-    return StreamingResponse(
-        _iter_chunks(),
-        status_code=status_code,
-        media_type=info.get("mime", "audio/mp4"),
-        headers=resp_headers,
-    )
-
-
-def _make_content_disposition(filename: str) -> str:
-    """
-    Constructs an RFC 6266 / RFC 5987 compliant Content-Disposition header.
-    Guarantees the legacy 'filename=' parameter is 100% ASCII-safe (preventing
-    Starlette latin-1 UnicodeEncodeErrors on apostrophes/unicode), while providing
-    full Unicode fidelity via 'filename*=UTF-8\'\'...' for all modern browsers.
-    """
-    replacements = {
-        "\u2018": "'", "\u2019": "'",
-        "\u201c": '"', "\u201d": '"',
-        "\u2013": "-", "\u2014": "-",
-        "\u2026": "...",
-    }
-    ascii_cand = filename
-    for orig, rep in replacements.items():
-        ascii_cand = ascii_cand.replace(orig, rep)
-
-    ascii_clean = (
-        unicodedata.normalize("NFKD", ascii_cand)
-        .encode("ascii", "ignore")
-        .decode("ascii")
-    )
-    ascii_clean = re.sub(r'[\\/*?:"<>|;]', "", ascii_clean).strip() or "Track.m4a"
-    if not ascii_clean.endswith(".m4a"):
-        ascii_clean += ".m4a"
-
-    encoded_filename = urllib.parse.quote(filename, encoding="utf-8")
-    return f'attachment; filename="{ascii_clean}"; filename*=UTF-8\'\'{encoded_filename}'
-
-
-@app.api_route("/api/download/{video_id}", methods=["GET", "HEAD"])
-def download_audio_endpoint(
-    video_id: str,
-    request: Request,
-    title: Optional[str] = None,
-    artist: Optional[str] = None,
-):
-    """
-    Downloads high-quality m4a audio file directly with a clean filename
-    and proper Content-Disposition: attachment header.
-    Caches the audio file in data/downloads/ for instant offline playback.
-    """
-    # Sanitize video_id in case it was passed as full URL or with extra query params
-    if "v=" in video_id:
-        video_id = video_id.split("v=")[1].split("&")[0].split("/")[0]
-    elif "youtu.be/" in video_id:
-        video_id = video_id.split("youtu.be/")[1].split("?")[0].split("/")[0]
-    elif "/" in video_id:
-        video_id = video_id.split("/")[-1].split("?")[0]
-    video_id = video_id.split("&")[0].split("?")[0].strip()
-
-    local_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.m4a")
-
-    raw_title = (title or "Track").strip()
-    raw_artist = (artist or "").strip()
-    clean_title = re.sub(r'[\\/*?:"<>|]', "", raw_title).strip() or "Track"
-    clean_artist = re.sub(r'[\\/*?:"<>|]', "", raw_artist).strip()
-    if clean_artist and clean_artist.lower() not in clean_title.lower():
-        filename = f"{clean_artist} - {clean_title}.m4a"
-    else:
-        filename = f"{clean_title}.m4a"
-
-    # 1. If file is already cached on disk, serve directly from disk
-    if os.path.exists(local_path):
-        file_size = os.path.getsize(local_path)
-        if file_size < 50000:
-            try:
-                os.remove(local_path)
-            except OSError:
-                pass
-        else:
-            resp_headers = {
-            "Content-Disposition": _make_content_disposition(filename),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=86400",
-            "Content-Length": str(file_size),
-            "X-From-Offline-Cache": "true",
-        }
-        if request.method == "HEAD":
-            return Response(status_code=200, media_type="audio/mp4", headers=resp_headers)
-
-        return StreamingResponse(
-            _stream_local_file(local_path, 0, file_size - 1),
-            status_code=200,
-            media_type="audio/mp4",
-            headers=resp_headers,
-        )
-
-    # 2. Otherwise fetch from YouTube stream and cache to disk
-    info = get_audio_stream_url(video_id, title=title or "", artist=artist or "")
-    if not info or not info.get("url"):
-        raise HTTPException(status_code=404, detail="Audio stream unavailable for download")
-
-    if not title:
-        raw_title = (info.get("title") or "Track").strip()
-        clean_title = re.sub(r'[\\/*?:"<>|]', "", raw_title).strip() or "Track"
-    if not artist:
-        raw_artist = (info.get("uploader") or "").strip()
-        clean_artist = re.sub(r'[\\/*?:"<>|]', "", raw_artist).strip()
-
-    if clean_artist and clean_artist.lower() not in clean_title.lower():
-        filename = f"{clean_artist} - {clean_title}.m4a"
-    else:
-        filename = f"{clean_title}.m4a"
-
-    # If the stream is a segmented fMP4 (.m4a), materialize it concurrently and serve directly
-    if info.get("segment_urls"):
-        if _materialize_segments_to_file(
-            info["segment_urls"], local_path, info.get("ua", "Mozilla/5.0")
-        ):
-            file_size = os.path.getsize(local_path)
-            _save_download_meta({
-                "video_id": video_id,
-                "title": clean_title,
-                "artist": clean_artist,
-                "filename": filename,
-                "size": file_size,
-                "duration": info.get("duration") or 0,
-                "downloaded_at": int(time.time()),
-            })
-            resp_headers = {
-                "Content-Disposition": _make_content_disposition(filename),
-                "Accept-Ranges": "bytes",
-                "Cache-Control": "public, max-age=86400",
-                "Content-Length": str(file_size),
-            }
-            if request.method == "HEAD":
-                return Response(status_code=200, media_type="audio/mp4", headers=resp_headers)
-            return StreamingResponse(
-                _stream_local_file(local_path, 0, file_size - 1),
-                status_code=200,
-                media_type="audio/mp4",
-                headers=resp_headers,
-            )
-
-    stream_url = info["url"]
-    ua = info.get(
-        "ua",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-    )
-    total_size = int(info.get("clen") or 0)
-
-    resp_headers = {
-        "Content-Disposition": _make_content_disposition(filename),
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=3600",
-    }
-    if total_size > 0:
-        resp_headers["Content-Length"] = str(total_size)
-
-    if request.method == "HEAD":
-        return Response(
-            status_code=200,
-            media_type=info.get("mime", "audio/mp4"),
-            headers=resp_headers,
-        )
-
-    temp_path = f"{local_path}.part_{int(time.time())}"
-
-    def _iter_download_and_cache():
-        pos = 0
-        target_end = (total_size - 1) if total_size > 0 else None
-        file_writer = None
-        try:
-            file_writer = open(temp_path, "wb")
-        except Exception as e:
-            print(f"Warning: unable to create local cache file {temp_path}: {e}")
-
-        try:
-            while target_end is None or pos <= target_end:
-                chunk_end = (
-                    min(pos + _STREAM_CHUNK_BYTES - 1, target_end)
-                    if target_end is not None
-                    else (pos + _STREAM_CHUNK_BYTES - 1)
-                )
-                r = _STREAM_HTTP_SESSION.get(
-                    stream_url,
-                    headers={"User-Agent": ua, "Range": f"bytes={pos}-{chunk_end}"},
-                    stream=True,
-                    timeout=20,
-                )
-                try:
-                    if r.status_code == 200:
-                        # Full content returned directly
-                        for piece in r.iter_content(chunk_size=65536):
-                            if piece:
-                                if file_writer:
-                                    file_writer.write(piece)
-                                yield piece
-                        break
-                    elif r.status_code == 206:
-                        received = 0
-                        for piece in r.iter_content(chunk_size=65536):
-                            if piece:
-                                received += len(piece)
-                                if file_writer:
-                                    file_writer.write(piece)
-                                yield piece
-                        if received == 0:
-                            break
-                        pos += received
-                        if target_end is None and received < _STREAM_CHUNK_BYTES:
-                            break
-                    else:
-                        break
-                finally:
-                    r.close()
-
-            # Successfully completed streaming: close and atomically save
-            if file_writer:
-                file_writer.close()
-                file_writer = None
-                if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
-                    os.replace(temp_path, local_path)
-                    _save_download_meta({
-                        "video_id": video_id,
-                        "title": clean_title,
-                        "artist": clean_artist,
-                        "filename": filename,
-                        "size": os.path.getsize(local_path),
-                        "duration": info.get("duration") or 0,
-                        "downloaded_at": int(time.time()),
-                    })
-        finally:
-            if file_writer:
-                try:
-                    file_writer.close()
-                except Exception:
-                    pass
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
-
-    return StreamingResponse(
-        _iter_download_and_cache(),
-        status_code=200,
-        media_type=info.get("mime", "audio/mp4"),
-        headers=resp_headers,
-    )
-
-
-@app.get("/api/offline/tracks")
-def get_offline_tracks_endpoint():
-    """
-    Returns list of all tracks cached locally on backend disk.
-    """
-    meta_list = _load_downloads_meta()
-    valid_items = []
-    for item in meta_list:
-        vid = item.get("video_id")
-        filepath = os.path.join(DOWNLOADS_DIR, f"{vid}.m4a")
-        if os.path.exists(filepath):
-            item["size"] = os.path.getsize(filepath)
-            valid_items.append(item)
-    return {"tracks": valid_items}
-
-
-@app.delete("/api/offline/tracks/{video_id}")
-def delete_offline_track_endpoint(video_id: str):
-    """
-    Deletes an offline cached track from backend disk.
-    """
-    filepath = os.path.join(DOWNLOADS_DIR, f"{video_id}.m4a")
-    if os.path.exists(filepath):
-        try:
-            os.remove(filepath)
-        except Exception as e:
-            print(f"Error removing cached file {filepath}: {e}")
-    _delete_download_meta(video_id)
-    return {"status": "ok", "deleted": video_id}
-
-
-@app.api_route("/api/open-downloads", methods=["GET", "POST"])
-def open_downloads_folder_endpoint():
-    """
-    Opens the dedicated UpBeat downloads folder in macOS Finder.
-    """
-    downloads_path = os.path.expanduser("~/Downloads/UpBeat")
-    os.makedirs(downloads_path, exist_ok=True)
-    if os.name == "posix":
-        import subprocess
-        subprocess.Popen(["open", downloads_path])
-    return {"status": "ok", "path": downloads_path}
-
-
-@app.get("/api/lyrics")
-def search_lyrics_endpoint(q: str = "", track_name: str = "", artist_name: str = ""):
-    """
-    Server-side proxy for LRCLIB time-synced lyrics search.
-    """
-    headers = {"User-Agent": "UpBeat/7.0.3 (https://upbeat.app)"}
-    params: Dict[str, str] = {}
-    if q:
-        params["q"] = q
-    if track_name:
-        params["track_name"] = track_name
-    if artist_name:
-        params["artist_name"] = artist_name
-    if not params:
-        return []
-    try:
-        r = ext_requests.get("https://lrclib.net/api/search", params=params, headers=headers, timeout=8)
-        if r.status_code == 200:
-            return r.json()
-    except Exception as e:
-        print(f"Lyrics proxy error: {e}")
-    return []
-
-
-# ==============================================================================
-# REAL-TIME JAM & FRIENDS SOCIAL RELAY ENDPOINTS (v7.0.3)
-# ==============================================================================
-_SOCIAL_MAILBOX: Dict[str, List[Dict[str, Any]]] = {}
-_SOCIAL_PRESENCE: Dict[str, Dict[str, Any]] = {}
-_JAM_ROOMS: Dict[str, List[Dict[str, Any]]] = {}
-
-
-class SocialSendRequest(BaseModel):
-    targetFriendCode: str
-    packet: Dict[str, Any]
-
-
-class SocialPollRequest(BaseModel):
-    friendCode: str
-    summary: Optional[Dict[str, Any]] = None
-    friendCodes: List[str] = []
-    since: int = 0
-
-
-class JamRoomSendRequest(BaseModel):
-    roomCode: str
-    packet: Dict[str, Any]
-
-
-@app.post("/api/jam/social/send")
-def jam_social_send_endpoint(req: SocialSendRequest):
-    now_ms = int(time.time() * 1000)
-    target = (req.targetFriendCode or "").strip().upper()
-    if not target:
-        return {"ok": False}
-
-    pkt = dict(req.packet or {})
-    pkt["_serverTs"] = now_ms
-    sender = pkt.get("from")
-    if isinstance(sender, dict) and sender.get("friendCode"):
-        s_code = str(sender["friendCode"]).strip().upper()
-        _SOCIAL_PRESENCE[s_code] = {**sender, "lastSeen": now_ms}
-
-    box = _SOCIAL_MAILBOX.setdefault(target, [])
-    # Prune messages older than 12 hours
-    cutoff = now_ms - (12 * 3600 * 1000)
-    box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
-
-    pkt_id = pkt.get("_packetId")
-    if not pkt_id or not any(m.get("_packetId") == pkt_id for m in box):
-        box.append(pkt)
-        if len(box) > 150:
-            del box[:-150]
-
-    return {"ok": True, "serverTs": now_ms}
-
-
-@app.post("/api/jam/social/poll")
-def jam_social_poll_endpoint(req: SocialPollRequest):
-    now_ms = int(time.time() * 1000)
-    my_code = (req.friendCode or "").strip().upper()
-    if my_code and isinstance(req.summary, dict):
-        _SOCIAL_PRESENCE[my_code] = {**req.summary, "friendCode": my_code, "lastSeen": now_ms}
-
-    box = _SOCIAL_MAILBOX.get(my_code, [])
-    since_ts = int(req.since or 0)
-    packets = [m for m in box if m.get("_serverTs", 0) > since_ts]
-
-    presence_list = []
-    for fc in (req.friendCodes or []):
-        clean_fc = str(fc).strip().upper()
-        pres = _SOCIAL_PRESENCE.get(clean_fc)
-        if pres and (now_ms - pres.get("lastSeen", 0) < 45000):
-            presence_list.append({**pres, "online": True})
-
-    return {
-        "ok": True,
-        "serverTs": now_ms,
-        "inbox": packets,
-        "packets": packets,
-        "friends": presence_list,
-        "presence": presence_list
-    }
-
-
-@app.get("/api/social")
-def edge_social_get_endpoint(id: str = "", friendCode: str = "", friends: str = "", since: int = 0):
-    now_ms = int(time.time() * 1000)
-    my_code = (id or friendCode or "").strip().upper()
-    if my_code and not my_code.startswith("UP-") and len(my_code) == 6:
-        my_code = f"UP-{my_code}"
-
-    if my_code and my_code in _SOCIAL_PRESENCE:
-        _SOCIAL_PRESENCE[my_code]["lastSeen"] = now_ms
-
-    box = _SOCIAL_MAILBOX.get(my_code, [])
-    cutoff = now_ms - (15 * 60 * 1000)
-    box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
-    packets = [m for m in box if m.get("_serverTs", 0) > int(since or 0)]
-
-    friend_codes = [f.strip().upper() for f in (friends or "").split(",") if f.strip()]
-    presence_list = []
-    for fc in friend_codes:
-        clean_fc = f"UP-{fc}" if not fc.startswith("UP-") and len(fc) == 6 else fc
-        pres = _SOCIAL_PRESENCE.get(clean_fc)
-        if pres and (now_ms - pres.get("lastSeen", 0) < 45000):
-            presence_list.append({**pres, "friendCode": clean_fc, "online": True})
-
-    return {
-        "ok": True,
-        "serverTs": now_ms,
-        "inbox": packets,
-        "packets": packets,
-        "friends": presence_list,
-        "presence": presence_list
-    }
-
-
-@app.post("/api/social")
-def edge_social_post_endpoint(body: Dict[str, Any]):
-    now_ms = int(time.time() * 1000)
-    action = body.get("action") or ("push" if (body.get("toId") or body.get("targetFriendCode")) else "poll")
-
-    if action == "push":
-        target = str(body.get("toId") or body.get("targetFriendCode") or "").strip().upper()
-        if target and not target.startswith("UP-") and len(target) == 6:
-            target = f"UP-{target}"
-        pkt = dict(body.get("packet") or {})
-        pkt["_serverTs"] = now_ms
-        sender = pkt.get("from") or body.get("summary") or body.get("profile")
-        if isinstance(sender, dict) and sender.get("friendCode"):
-            s_code = str(sender["friendCode"]).strip().upper()
-            _SOCIAL_PRESENCE[s_code] = {**sender, "friendCode": s_code, "lastSeen": now_ms}
-
-        if target and pkt:
-            box = _SOCIAL_MAILBOX.setdefault(target, [])
-            cutoff = now_ms - (15 * 60 * 1000)
-            box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
-            dedup_id = pkt.get("msgId") or pkt.get("_packetId")
-            if not dedup_id or not any((m.get("msgId") or m.get("_packetId")) == dedup_id for m in box):
-                box.append(pkt)
-                if len(box) > 150:
-                    del box[:-150]
-        return {"ok": True, "serverTs": now_ms}
-
-    my_code = str(body.get("id") or body.get("friendCode") or "").strip().upper()
-    summary = body.get("summary") or body.get("profile")
-    if my_code and isinstance(summary, dict):
-        _SOCIAL_PRESENCE[my_code] = {**summary, "friendCode": my_code, "lastSeen": now_ms}
-
-    box = _SOCIAL_MAILBOX.get(my_code, [])
-    since_ts = int(body.get("since") or 0)
-    packets = [m for m in box if m.get("_serverTs", 0) > since_ts]
-
-    raw_friends = body.get("friends") or body.get("friendCodes") or []
-    presence_list = []
-    for fc in raw_friends:
-        clean_fc = str(fc).strip().upper()
-        pres = _SOCIAL_PRESENCE.get(clean_fc)
-        if pres and (now_ms - pres.get("lastSeen", 0) < 45000):
-            presence_list.append({**pres, "friendCode": clean_fc, "online": True})
-
-    return {
-        "ok": True,
-        "serverTs": now_ms,
-        "inbox": packets,
-        "packets": packets,
-        "friends": presence_list,
-        "presence": presence_list
-    }
-
-
-@app.post("/api/jam/room/send")
-def jam_room_send_endpoint(req: JamRoomSendRequest):
-    now_ms = int(time.time() * 1000)
-    room = (req.roomCode or "").strip().upper()
-    if not room:
-        return {"ok": False}
-
-    pkt = dict(req.packet or {})
-    pkt["_serverTs"] = now_ms
-
-    events = _JAM_ROOMS.setdefault(room, [])
-    cutoff = now_ms - (2 * 3600 * 1000)
-    events[:] = [e for e in events if e.get("_serverTs", 0) > cutoff]
-
-    pkt_id = pkt.get("_packetId")
-    if not pkt_id or not any(e.get("_packetId") == pkt_id for e in events):
-        events.append(pkt)
-        if len(events) > 200:
-            del events[:-200]
-
-    return {"ok": True, "serverTs": now_ms}
-
-
-@app.get("/api/jam/room/poll")
-def jam_room_poll_endpoint(roomCode: str = "", since: int = 0):
-    now_ms = int(time.time() * 1000)
-    room = (roomCode or "").strip().upper()
-    events = _JAM_ROOMS.get(room, [])
-    packets = [e for e in events if e.get("_serverTs", 0) > since]
-    return {
-        "ok": True,
-        "serverTs": now_ms,
-        "packets": packets
-    }
-
-
-# ==============================================================================
-# USER PROFILE & NATIVE PHOTO PICKER ENDPOINTS (v7.3.0)
-# ==============================================================================
-PROFILE_FILE = os.path.join(DOWNLOADS_DIR, "user_profile.json")
-
-
-@app.get("/api/profile")
-def get_user_profile_endpoint():
-    if os.path.exists(PROFILE_FILE):
-        try:
-            with open(PROFILE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-
-@app.post("/api/profile")
-async def save_user_profile_endpoint(request: Request):
-    try:
-        payload = await request.json()
-        if isinstance(payload, dict):
-            with open(PROFILE_FILE, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False)
-            return {"ok": True, "profile": payload}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-    return {"ok": False}
-
-
-@app.post("/api/profile/pick-photo")
-def pick_profile_photo_native_endpoint():
-    """
-    Opens a native macOS file chooser dialog via osascript and returns a
-    downscaled 320x320 JPEG base64 data URL (supporting PNG, JPG, HEIC, WEBP, etc.).
-    """
-    import base64
-    import subprocess
-    import tempfile
-
-    script = (
-        'tell application "System Events"\n'
-        '  activate\n'
-        '  set f to choose file of type {"public.image"} with prompt "Select a profile photo for UpBeat:"\n'
-        '  return POSIX path of f\n'
-        'end tell'
-    )
-    try:
-        proc = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if proc.returncode != 0:
-            return {"ok": False, "cancelled": True}
-        chosen_path = (proc.stdout or "").strip()
-        if not chosen_path or not os.path.exists(chosen_path):
-            return {"ok": False, "cancelled": True}
-
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp_jpg = tmp.name
-
-        try:
-            # Use macOS sips to convert any image (including HEIC/PNG/TIFF) to max 320px JPEG
-            sips_proc = subprocess.run(
-                ["sips", "-s", "format", "jpeg", "-s", "formatOptions", "85", "-Z", "320", chosen_path, "--out", tmp_jpg],
-                capture_output=True,
-                timeout=15,
-            )
-            target_file = tmp_jpg if (sips_proc.returncode == 0 and os.path.exists(tmp_jpg) and os.path.getsize(tmp_jpg) > 0) else chosen_path
-            with open(target_file, "rb") as img_f:
-                raw_bytes = img_f.read()
-            b64 = base64.b64encode(raw_bytes).decode("ascii")
-            mime = "image/jpeg" if target_file == tmp_jpg else "image/png"
-            return {"ok": True, "dataUrl": f"data:{mime};base64,{b64}"}
-        finally:
-            if os.path.exists(tmp_jpg):
-                try:
-                    os.remove(tmp_jpg)
-                except Exception:
-                    pass
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
+app.include_router(safari_router)
+app.include_router(music_router)
+app.include_router(offline_router)
+app.include_router(social_router)
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 if os.path.exists(frontend_dist):

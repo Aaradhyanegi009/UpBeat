@@ -58,6 +58,8 @@ function NowPlayingView({
   onToggleShuffle,
   repeatMode,
   setRepeatMode,
+  onCycleRepeat,
+  onToggleLoopSong,
   volume,
   setVolume,
   isMuted,
@@ -242,6 +244,11 @@ function NowPlayingView({
             buttonSize={44}
             className="!text-white/90"
             items={[
+              {
+                label: repeatMode === 'one' ? 'Turn off song loop' : 'Loop this song',
+                icon: Repeat1,
+                onClick: () => (onToggleLoopSong ? onToggleLoopSong() : setRepeatMode?.((m) => (m === 'one' ? 'off' : 'one')))
+              },
               onAddToPlaylist && { label: 'Add to playlist…', icon: ListPlus, onClick: () => onAddToPlaylist(track) },
               onGoToArtist && track.artist && { label: `Go to ${firstArtist(track.artist)}`, icon: User, onClick: () => onGoToArtist(firstArtist(track.artist)) },
               onStartRadio && { label: 'Start radio', icon: Radio, onClick: () => onStartRadio(track) },
@@ -415,11 +422,11 @@ function NowPlayingView({
         </button>
 
         <button
-          onClick={() => setRepeatMode && setRepeatMode((prev) => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'))}
+          onClick={() => (onCycleRepeat ? onCycleRepeat() : setRepeatMode && setRepeatMode((prev) => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')))}
           className={`relative w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-            repeatMode && repeatMode !== 'off' ? 'text-white' : 'text-white/60 hover:text-white'
+            repeatMode === 'one' ? 'text-accent' : repeatMode === 'all' ? 'text-white' : 'text-white/60 hover:text-white'
           }`}
-          title={repeatMode === 'one' ? 'Repeat one' : repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}
+          title={repeatMode === 'one' ? 'Looping song (1)' : repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}
           aria-label={repeatMode === 'one' ? 'Repeat one' : repeatMode === 'all' ? 'Repeat all' : 'Repeat off'}
         >
           {repeatMode === 'one' ? <Repeat1 className="w-[22px] h-[22px]" /> : <Repeat className="w-[22px] h-[22px]" />}
@@ -427,8 +434,23 @@ function NowPlayingView({
         </button>
       </div>
 
-      {/* Bottom row: Jam, Lyrics, Download, Sleep (+ volume on wide screens) */}
-      <div className="px-8 pb-safe pb-5 pt-1 sm:pb-7 shrink-0 flex items-center justify-between text-white/80 max-w-lg mx-auto w-full z-10">
+      {/* Bottom row: Loop Song, Jam, Lyrics, Download, Sleep (+ volume on wide screens) */}
+      <div className="px-6 sm:px-8 pb-safe pb-5 pt-1 sm:pb-7 shrink-0 flex items-center justify-between text-white/80 max-w-lg mx-auto w-full z-10">
+        <button
+          type="button"
+          onClick={() => (onToggleLoopSong ? onToggleLoopSong() : setRepeatMode?.((m) => (m === 'one' ? 'off' : 'one')))}
+          disabled={!track}
+          title={repeatMode === 'one' ? 'Looping this song' : 'Loop this song'}
+          aria-label={repeatMode === 'one' ? 'Disable song loop' : 'Loop this song'}
+          aria-pressed={repeatMode === 'one'}
+          className={`h-9 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-30 ${
+            repeatMode === 'one' ? 'bg-accent/20 text-accent ring-1 ring-accent/40' : 'hover:bg-white/10 text-white/80'
+          }`}
+        >
+          <Repeat1 className="w-4 h-4" />
+          <span>{repeatMode === 'one' ? 'Looping' : 'Loop'}</span>
+        </button>
+
         {onOpenJam && (
           <button
             type="button"

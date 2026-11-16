@@ -166,8 +166,8 @@ export default function SearchView({
             <div className={`transition-opacity ${isStale || searching ? 'opacity-60' : ''}`}>
               {(filter === 'all' || filter === 'songs') && songs.length > 0 && (
                 <>
-                  <SectionHeader title="Songs" action={filter === 'all' && songs.length > 5 ? 'See all' : null} onAction={() => setFilter('songs')} />
-                  {(filter === 'all' ? songs.slice(0, 5) : songs).map((t, i) => (
+                  <SectionHeader title="Songs" action={filter === 'all' && songs.length > 10 ? 'See all' : null} onAction={() => setFilter('songs')} />
+                  {(filter === 'all' ? songs.slice(0, 10) : songs).map((t, i) => (
                     <SongRow key={`${t.video_id}-${i}`} track={t} list={songs} index={i} />
                   ))}
                 </>
