@@ -1,20 +1,25 @@
 import json
 import os
 import re
+import threading
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 import requests
 
 try:
     from favorites_store import get_favorites
     from youtube_search import search_youtube_music_catalog
+    from yt.innertube_client import canonical_artist_name, canonical_song_title
 except ImportError:
     from backend.favorites_store import get_favorites
     from backend.youtube_search import search_youtube_music_catalog
+    from backend.yt.innertube_client import canonical_artist_name, canonical_song_title
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../../.env"))
-load_dotenv(".env")
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(_REPO_ROOT, ".env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+load_dotenv()
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
@@ -22,6 +27,9 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 _HTTP = requests.Session()
+_COOLDOWN_LOCK = threading.Lock()
+_MODEL_COOLDOWNS: Dict[str, float] = {}
+MODEL_429_COOLDOWN_SEC = 60.0
 
 # Model alias mapping for endpoints that require specific backend identifiers
 MODEL_ALIASES: Dict[str, str] = {
@@ -36,26 +44,70 @@ LOW_THINKING_MODELS = {"gemini-3.8-flash", "gemini-3.7-flash"}
 ZERO_BUDGET_MODELS = {"gemini-2.5-flash", "gemini-robotics-er-2-preview"}
 
 
+def _resolve_key(module_val: str, env_name: str) -> str:
+    return (os.environ.get(env_name) or module_val or "").strip()
+
+
+def _is_model_in_cooldown(endpoint: str, now: Optional[float] = None) -> bool:
+    cur = time.time() if now is None else now
+    with _COOLDOWN_LOCK:
+        until = _MODEL_COOLDOWNS.get(endpoint, 0.0)
+        if until <= cur:
+            _MODEL_COOLDOWNS.pop(endpoint, None)
+            return False
+        return True
+
+
+def _mark_model_cooldown(endpoint: str, duration_sec: float = MODEL_429_COOLDOWN_SEC) -> None:
+    with _COOLDOWN_LOCK:
+        _MODEL_COOLDOWNS[endpoint] = time.time() + duration_sec
+
+
+def clear_model_cooldowns() -> None:
+    with _COOLDOWN_LOCK:
+        _MODEL_COOLDOWNS.clear()
+
+
 def clean_json_response(raw_text: str) -> Any:
-    """Strips markdown code blocks and parses JSON."""
-    cleaned = raw_text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    return json.loads(cleaned.strip())
+    """Strips markdown code fences and extracts JSON even when wrapped in prose."""
+    cleaned = str(raw_text or "").strip()
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned, flags=re.IGNORECASE)
+    if fence:
+        cleaned = fence.group(1).strip()
+    else:
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        obj_start = cleaned.find("{")
+        arr_start = cleaned.find("[")
+        candidates = [i for i in (obj_start, arr_start) if i != -1]
+        if candidates:
+            start = min(candidates)
+            end_char = "]" if start == arr_start else "}"
+            end = cleaned.rfind(end_char)
+            if end > start:
+                return json.loads(cleaned[start : end + 1])
+        raise
 
 
 def _human_error_reason(err_str: str, model_id: str) -> str:
+    if "GEMINI_API_KEY" in err_str:
+        return "GEMINI_API_KEY not configured"
     if "503" in err_str:
         return f"High server demand (HTTP 503) on {model_id}"
     if "429" in err_str:
         return f"Free-tier daily quota reached (HTTP 429) on {model_id}"
     if "404" in err_str:
         return f"Endpoint unavailable (HTTP 404) for {model_id}"
-    if "Read timed out" in err_str or "Timeout" in err_str:
+    if "Read timed out" in err_str or "Timeout" in err_str or "timed out" in err_str:
         return f"Response timeout on {model_id}"
     return f"Transient error on {model_id}"
 
@@ -63,22 +115,25 @@ def _human_error_reason(err_str: str, model_id: str) -> str:
 def _call_openai_compatible(provider_model: str, prompt: str, timeout: float = 18.0) -> Dict[str, Any]:
     """Calls Groq, OpenRouter, or OpenAI endpoints when configured."""
     if provider_model.startswith("groq/"):
-        if not GROQ_API_KEY:
+        key = _resolve_key(GROQ_API_KEY, "GROQ_API_KEY")
+        if not key:
             raise RuntimeError("HTTP 404 (GROQ_API_KEY not set)")
         url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+        headers = {"Authorization": f"Bearer {key}"}
         actual_model = provider_model.split("/", 1)[1]
     elif provider_model.startswith("openrouter/"):
-        if not OPENROUTER_API_KEY:
+        key = _resolve_key(OPENROUTER_API_KEY, "OPENROUTER_API_KEY")
+        if not key:
             raise RuntimeError("HTTP 404 (OPENROUTER_API_KEY not set)")
         url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}"}
+        headers = {"Authorization": f"Bearer {key}"}
         actual_model = provider_model.split("/", 1)[1]
     elif provider_model.startswith("openai/"):
-        if not OPENAI_API_KEY:
+        key = _resolve_key(OPENAI_API_KEY, "OPENAI_API_KEY")
+        if not key:
             raise RuntimeError("HTTP 404 (OPENAI_API_KEY not set)")
         url = "https://api.openai.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+        headers = {"Authorization": f"Bearer {key}"}
         actual_model = provider_model.split("/", 1)[1]
     else:
         raise RuntimeError(f"Unknown provider for {provider_model}")
@@ -106,12 +161,16 @@ def _call_openai_compatible(provider_model: str, prompt: str, timeout: float = 1
 
 
 def _call_gemini_rest(model_id: str, prompt: str, timeout: float = 20.0) -> Dict[str, Any]:
-    """Calls Gemini REST endpoint with model-appropriate thinkingConfig for low latency."""
+    """Calls Gemini REST endpoint via x-goog-api-key header with model-appropriate thinkingConfig."""
     if "/" in model_id:
         return _call_openai_compatible(model_id, prompt, timeout=timeout)
 
+    api_key = _resolve_key(GEMINI_API_KEY, "GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY not configured")
+
     actual_endpoint = MODEL_ALIASES.get(model_id, model_id)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{actual_endpoint}:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{actual_endpoint}:generateContent"
 
     gen_config: Dict[str, Any] = {
         "temperature": 0.55,
@@ -131,7 +190,15 @@ def _call_gemini_rest(model_id: str, prompt: str, timeout: float = 20.0) -> Dict
         "generationConfig": gen_config,
     }
 
-    resp = _HTTP.post(url, json=payload, timeout=timeout)
+    resp = _HTTP.post(
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key,
+        },
+        json=payload,
+        timeout=timeout,
+    )
     if resp.status_code != 200:
         raise RuntimeError(f"HTTP {resp.status_code}")
 
@@ -157,10 +224,8 @@ def _call_gemini_rest(model_id: str, prompt: str, timeout: float = 20.0) -> Dict
 
 def generate_fast_with_fallback(prompt: str, preferred_model: str = "gemini-4-argon") -> Dict[str, Any]:
     """
-    Calls preferred_model first; if rate-limited or unavailable, falls back through
-    active un-rate-limited Gemini models (gemini-4-argon 1s fastest, gemini-3.1-flash-lite,
-    gemini-3.5-flash-lite, flash-lite-latest, gemini-3-flash-preview, gemini-2.5-flash)
-    before touching Gemma 4.
+    Calls preferred_model first; skips models in 60s 429 cooldown and falls back
+    through active Gemini / OpenAI-compatible endpoints.
     """
     fallback_pool = [
         "gemini-4-argon",
@@ -171,23 +236,32 @@ def generate_fast_with_fallback(prompt: str, preferred_model: str = "gemini-4-ar
         "gemini-2.5-flash",
         "gemma-4-26b-a4b-it",
     ]
-    if GROQ_API_KEY:
+    if _resolve_key(GROQ_API_KEY, "GROQ_API_KEY"):
         fallback_pool.insert(0, "groq/llama-3.3-70b-versatile")
-    if OPENROUTER_API_KEY:
+    if _resolve_key(OPENROUTER_API_KEY, "OPENROUTER_API_KEY"):
         fallback_pool.insert(0, "openrouter/google/gemini-2.5-flash")
 
-    candidates = [preferred_model]
+    ordered_candidates = [preferred_model]
     seen_endpoints = {MODEL_ALIASES.get(preferred_model, preferred_model)}
     for m in fallback_pool:
         ep = MODEL_ALIASES.get(m, m)
         if ep not in seen_endpoints:
             seen_endpoints.add(ep)
-            candidates.append(m)
+            ordered_candidates.append(m)
+
+    healthy_candidates = [
+        m for m in ordered_candidates if not _is_model_in_cooldown(MODEL_ALIASES.get(m, m))
+    ]
+    candidates = healthy_candidates or ordered_candidates
 
     attempts: List[Dict[str, Any]] = []
     primary_failure_reason = ""
+    gemini_key_missing = False
 
     for idx, model_id in enumerate(candidates):
+        if gemini_key_missing and "/" not in model_id:
+            continue
+        endpoint = MODEL_ALIASES.get(model_id, model_id)
         max_tries = 2 if idx == 0 else 1
         for attempt_num in range(max_tries):
             t0 = time.time()
@@ -201,10 +275,10 @@ def generate_fast_with_fallback(prompt: str, preferred_model: str = "gemini-4-ar
                 })
                 res["requested_model"] = preferred_model
                 res["used_model"] = model_id
-                res["is_fallback"] = idx > 0
+                res["is_fallback"] = (model_id != preferred_model)
                 res["latency_ms"] = latency_ms
                 res["model_attempts"] = attempts
-                if idx > 0:
+                if model_id != preferred_model:
                     res["fallback_reason"] = primary_failure_reason or f"{preferred_model} unavailable"
                     res["fallback_note"] = f"{res['fallback_reason']} -> generated by {model_id}"
                 else:
@@ -221,14 +295,43 @@ def generate_fast_with_fallback(prompt: str, preferred_model: str = "gemini-4-ar
                     "reason": human_reason,
                     "latency_ms": latency_ms,
                 })
-                if idx == 0:
+                if "GEMINI_API_KEY not configured" in err_str:
+                    gemini_key_missing = True
+                if "429" in err_str:
+                    _mark_model_cooldown(endpoint)
+                if idx == 0 and not primary_failure_reason:
                     primary_failure_reason = human_reason
-                    if "503" in err_str and attempt_num == 0:
-                        time.sleep(0.4)
-                        continue
+                if idx == 0 and "503" in err_str and attempt_num == 0:
+                    time.sleep(0.4)
+                    continue
                 break
 
     raise RuntimeError(f"All model endpoints failed ({primary_failure_reason})")
+
+
+_SPECIFIC_ENTITY_RE = re.compile(
+    r"\b(?:"
+    r"monogatari|bakemonogatari|nisemonogatari|kizumonogatari|owarimonogatari|"
+    r"attack\s+on\s+titan|aot|shingeki|sawano|ramayan|adipurush|mahabharat|"
+    r"bleach|naruto|one\s+piece|evangelion|chainsaw\s+man|jujutsu\s+kaisen|"
+    r"cyberpunk|interstellar|hans\s+zimmer|ghibli|joe\s+hisaishi|steins\s*;?\s*gate|"
+    r"death\s+note|code\s+geass|bocchi|frieren|nier|persona"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_GENERIC_MOOD_WORDS_RE = re.compile(
+    r"\b(?:"
+    r"focused\s+late[- ]night|late[- ]night|dark\s+synthwave|ambient\s+downtempo|"
+    r"deep\s+problem\s+solving|curate\s+a\s+fresh\s+playlist|coding\s+session|"
+    r"study|workout|gym|chill|relax|sleep|focus|focusing|drive|driving|rainy|"
+    r"morning|evening|night|party|energetic|upbeat|sad|happy|melancholy|"
+    r"ambient|lofi|lo-?fi|synthwave|downtempo|electronic|acoustic|indie|"
+    r"jazz|pop|rock|hip[- ]hop|r&b|metal|classical|bollywood|hindi|punjabi|"
+    r"vibe|vibes|mood|playlist|mix|beats|session|energy|songs|music|tracks"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 def _is_specific_entity_query(mood_prompt: str) -> bool:
@@ -238,34 +341,12 @@ def _is_specific_entity_query(mood_prompt: str) -> bool:
     must NOT pollute the results with unrelated shows).
     """
     p = mood_prompt.strip().lower()
-    generic_mood_phrases = [
-        "focused late-night",
-        "focused late night",
-        "dark synthwave",
-        "ambient downtempo",
-        "deep problem solving",
-        "study",
-        "workout",
-        "chill",
-        "relax",
-        "sleep",
-        "coding session",
-        "curate a fresh playlist",
-    ]
-    # If the user names a specific franchise/artist even alongside style words, treat as specific
-    specific_markers = [
-        "monogatari", "bakemonogatari", "nisemonogatari", "kizumonogatari", "owarimonogatari",
-        "attack on titan", "aot", "shingeki", "sawano", "ramayan", "adipurush", "mahabharat",
-        "bleach", "naruto", "one piece", "evangelion", "chainsaw man", "jujutsu kaisen",
-        "cyberpunk", "interstellar", "hans zimmer", "ghibli", "joe hisaishi", "steins gate",
-        "death note", "code geass", "bocchi", "frieren", "nier", "persona", "ost", "song",
-        "bests", "best of", "openings", "endings", "album", "movie",
-    ]
-    if any(m in p for m in specific_markers):
-        return True
-    if any(g in p for g in generic_mood_phrases):
+    if not p:
         return False
-    # Short queries (1-4 words) like "daft punk", "radwimps", "yoasobi" are almost always entity searches
+    if _SPECIFIC_ENTITY_RE.search(p):
+        return True
+    if _GENERIC_MOOD_WORDS_RE.search(p):
+        return False
     return len(p.split()) <= 4
 
 
@@ -312,7 +393,7 @@ Return ONLY a JSON object with this exact schema:
     except Exception as e:
         return {
             "archetype": "Custom Profile",
-            "primary_genres": ["Anime Soundtrack", "Electronic", "J-Rock", "Alternative"],
+            "primary_genres": ["Electronic", "Indie", "Pop", "Alternative"],
             "sonic_attributes": {
                 "tempo": "120-136 BPM",
                 "electronic_balance": 70,
@@ -320,9 +401,53 @@ Return ONLY a JSON object with this exact schema:
                 "energy": 72,
             },
             "top_artists": list({t.get("artist", "") for t in (favs + tracks)[:6] if t.get("artist")})[:4],
-            "summary": "Profile synthesized from your saved favorites and Safari session.",
+            "summary": "Profile synthesized from your saved favorites and listening session.",
             "error": str(e),
         }
+
+
+def _hydrate_tracks_from_catalog(raw_tracks: List[Dict[str, Any]], yt_catalog: List[Dict[str, str]]) -> None:
+    """Preserves video_id and duration_text from yt_catalog matches to skip redundant searches."""
+    if not raw_tracks or not yt_catalog:
+        return
+
+    by_title_artist: Dict[tuple, Dict[str, str]] = {}
+    by_title: Dict[str, List[Dict[str, str]]] = {}
+
+    for item in yt_catalog:
+        vid = (item.get("video_id") or "").strip()
+        if len(vid) != 11:
+            continue
+        t_key = canonical_song_title(item.get("title") or "")
+        a_key = canonical_artist_name(item.get("artist") or "")
+        if not t_key:
+            continue
+        by_title_artist[(t_key, a_key)] = item
+        by_title.setdefault(t_key, []).append(item)
+
+    for tr in raw_tracks:
+        if tr.get("video_id") and len(str(tr["video_id"])) == 11:
+            continue
+        t_key = canonical_song_title(tr.get("title") or "")
+        a_key = canonical_artist_name(tr.get("artist") or "")
+        if not t_key:
+            continue
+
+        matched = by_title_artist.get((t_key, a_key))
+        if not matched:
+            candidates = by_title.get(t_key, [])
+            for cand in candidates:
+                c_artist = canonical_artist_name(cand.get("artist") or "")
+                if not a_key or not c_artist or a_key in c_artist or c_artist in a_key:
+                    matched = cand
+                    break
+            if not matched and len(candidates) == 1:
+                matched = candidates[0]
+
+        if matched:
+            tr["video_id"] = matched["video_id"]
+            if matched.get("duration_text") and not tr.get("duration_text"):
+                tr["duration_text"] = matched["duration_text"]
 
 
 def curate_playlist(
@@ -343,12 +468,13 @@ def curate_playlist(
     yt_catalog = search_youtube_music_catalog(mood_prompt, max_items=12)
     yt_catalog_block = ""
     if yt_catalog:
-        yt_catalog_block = "Verified YouTube Music Tracks Matching Query (Use as ground-truth reference where appropriate):\n" + "\n".join(
-            [f"- \"{c['title']}\" by {c['artist']}" for c in yt_catalog]
-        ) + "\n\n"
+        yt_catalog_block = (
+            "Verified YouTube Music Tracks Matching Query (Use as ground-truth reference where appropriate):\n"
+            + "\n".join([f"- \"{c['title']}\" by {c['artist']}" for c in yt_catalog])
+            + "\n\n"
+        )
 
-    # Only include Safari history / unrelated favorites when the prompt is a general mood/activity query!
-    # Never pollute a specific franchise/artist search (like "monogatari bests") with unrelated anime from Safari!
+    # Only include Safari history / unrelated favorites when the prompt is a general mood/activity query
     context_block = ""
     if not is_specific:
         favs = get_favorites()
@@ -365,8 +491,8 @@ def curate_playlist(
         relevance_instructions = f"""1. STRICT ENTITY LOCK (CRITICAL — NO OFF-TOPIC TRACKS ALLOWED):
    - The user is searching specifically for: "{mood_prompt}".
    - ALL {count} tracks (100% of the playlist) MUST belong directly to the exact series, franchise, anime, movie, game, or artist requested in "{mood_prompt}".
-   - NEVER include songs from other anime, other movies, or unrelated franchises (for example, if the prompt is "monogatari bests", EVERY SINGLE TRACK must be an authentic song/OP/ED/OST from the Monogatari Series — NEVER include Attack on Titan, Ghibli, or other unrelated shows!).
-   - Do NOT invent or hallucinate fake song titles. Use real, canonical track titles (e.g., for Monogatari: "Renai Circulation", "Platinum Disco", "Staple Stable", "Mousou Express", "Kimi no Shiranai Monogatari", "Kogarashi Sentiment", "Mathemagics", "Kaerimichi", "Sugar Sweet Nightmare", "Ambivalent World", "Dark Cherry Mystery", "Senjougahara Tore", "Hyouri", "fast love").
+   - NEVER include songs from other anime, other movies, or unrelated franchises.
+   - Do NOT invent or hallucinate fake song titles. Use real, canonical track titles.
    - Set "match_tier" within that exact universe:
      * "Direct Match": Flagship iconic vocal openings, endings, or main songs from "{mood_prompt}" (at least {max(count - 2, 5)} tracks).
      * "Close Fit": Official OST instrumentals, character songs, or B-sides from the EXACT SAME franchise/artist.
@@ -416,6 +542,7 @@ Return ONLY a valid JSON object matching this exact schema:
     tier_order = {"Direct Match": 0, "Close Fit": 1, "Exploratory": 2}
     raw_tracks = res.get("tracks", [])
     if isinstance(raw_tracks, list):
+        _hydrate_tracks_from_catalog(raw_tracks, yt_catalog)
         for t in raw_tracks:
             if t.get("match_tier") not in tier_order:
                 t["match_tier"] = "Direct Match"

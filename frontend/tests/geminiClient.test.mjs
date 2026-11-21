@@ -99,3 +99,33 @@ test('generateWithDirectGemini retries on non-key HTTP 400 and aborts early on i
     resetStorage()
   }
 })
+
+test('generateWithDirectGemini sends API key via x-goog-api-key header instead of ?key= query string', async () => {
+  resetStorage()
+  const testKey = 'AIzaHeaderOnlyTestKey123'
+  setStoredApiKey(testKey)
+  const prevFetch = globalThis.fetch
+  const captured = []
+
+  globalThis.fetch = async (url, opts = {}) => {
+    captured.push({ url: String(url), headers: opts.headers || {} })
+    return new Response(
+      JSON.stringify({
+        candidates: [{ content: { parts: [{ text: '{"playlist_title":"Header Mix","tracks":[{"title":"Starboy","artist":"The Weeknd"}]}' }] } }]
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    )
+  }
+
+  try {
+    const res = await generateWithDirectGemini('header test', 'gemini-2.5-flash', { timeoutMs: 1000 })
+    assert.equal(res.playlist_title, 'Header Mix')
+    assert.equal(captured.length, 1)
+    assert.equal(captured[0].url.includes('?key='), false)
+    assert.equal(captured[0].url.includes(testKey), false)
+    assert.equal(captured[0].headers['x-goog-api-key'], testKey)
+  } finally {
+    globalThis.fetch = prevFetch
+    resetStorage()
+  }
+})

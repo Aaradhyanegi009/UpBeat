@@ -14,6 +14,9 @@ const EVENT_NAME = 'upbeat_offline_change'
 
 let _dbPromise = null
 const _blobUrlCache = new Map()
+const MAX_BLOB_URL_CACHE = 8
+const AUDIO_FETCH_TIMEOUT_MS = 25000
+const IMAGE_FETCH_TIMEOUT_MS = 8000
 
 /**
  * Opens and initializes the IndexedDB database
@@ -160,8 +163,10 @@ export async function getDownloadedVideoIds() {
  */
 async function cacheImageAsDataUrl(imgUrl) {
   if (!imgUrl) return ''
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS) : null
   try {
-    const res = await fetch(imgUrl, { mode: 'cors' })
+    const res = await fetch(imgUrl, { mode: 'cors', signal: controller ? controller.signal : undefined })
     if (!res.ok) return imgUrl
     const blob = await res.blob()
     return new Promise((resolve) => {
@@ -172,6 +177,8 @@ async function cacheImageAsDataUrl(imgUrl) {
     })
   } catch {
     return imgUrl
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 
@@ -209,7 +216,7 @@ export async function saveTrackOffline(track, onProgress = null) {
 
   // Direct YouTube audio stream resolver
   try {
-    const src = await getAudioSource(vid)
+    const src = await getAudioSource(vid, track)
     const directUrl = typeof src === 'string' ? src : src?.url
     if (directUrl && !candidateUrls.includes(directUrl)) {
       candidateUrls.push(directUrl)
@@ -227,7 +234,7 @@ export async function saveTrackOffline(track, onProgress = null) {
     }
   }
 
-  // 2. Fetch the audio as Blob with multi-tier fallback
+  // 2. Fetch the audio as Blob with multi-tier fallback + AbortController timeout
   if (onProgress) onProgress(10)
   let audioBlob = null
   let lastErr = null
@@ -235,8 +242,10 @@ export async function saveTrackOffline(track, onProgress = null) {
   for (let i = 0; i < candidateUrls.length; i++) {
     const url = candidateUrls[i]
     if (onProgress) onProgress(10 + Math.round((i / candidateUrls.length) * 35))
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+    const timer = controller ? setTimeout(() => controller.abort(), AUDIO_FETCH_TIMEOUT_MS) : null
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, controller ? { signal: controller.signal } : undefined)
       if (res.ok) {
         const blob = await res.blob()
         if (blob && blob.size > 20000) {
@@ -248,6 +257,8 @@ export async function saveTrackOffline(track, onProgress = null) {
       }
     } catch (e) {
       lastErr = e
+    } finally {
+      if (timer) clearTimeout(timer)
     }
   }
 
@@ -354,12 +365,15 @@ export async function clearAllOfflineTracks() {
 }
 
 /**
- * Returns an instant Blob URL for offline playback
+ * Returns an instant Blob URL for offline playback (bounded LRU cache)
  */
 export async function createOfflineAudioUrl(videoId) {
   if (!videoId) return null
   if (_blobUrlCache.has(videoId)) {
-    return _blobUrlCache.get(videoId)
+    const cachedUrl = _blobUrlCache.get(videoId)
+    _blobUrlCache.delete(videoId)
+    _blobUrlCache.set(videoId, cachedUrl)
+    return cachedUrl
   }
 
   const track = await getOfflineTrack(videoId)
@@ -369,6 +383,12 @@ export async function createOfflineAudioUrl(videoId) {
   const blob = track.blob.type && track.blob.type.startsWith('audio/')
     ? track.blob
     : new Blob([track.blob], { type: track.mimeType || 'audio/mp4' })
+
+  while (_blobUrlCache.size >= MAX_BLOB_URL_CACHE) {
+    const oldestKey = _blobUrlCache.keys().next().value
+    if (!oldestKey) break
+    revokeCachedAudioUrl(oldestKey)
+  }
 
   const url = URL.createObjectURL(blob)
   _blobUrlCache.set(videoId, url)
@@ -380,7 +400,9 @@ export async function createOfflineAudioUrl(videoId) {
  */
 export function revokeCachedAudioUrl(videoId) {
   if (_blobUrlCache.has(videoId)) {
-    URL.revokeObjectURL(_blobUrlCache.get(videoId))
+    try {
+      URL.revokeObjectURL(_blobUrlCache.get(videoId))
+    } catch {}
     _blobUrlCache.delete(videoId)
   }
 }

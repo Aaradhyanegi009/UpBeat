@@ -15,27 +15,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     var speechRecognitionTask: SFSpeechRecognitionTask?
     let serverURL = URL(string: "http://127.0.0.1:8000")!
     let workspacePath: String = {
-        let defaultPath = "/Users/aaradhya/Documents/Programming/random"
-        if FileManager.default.fileExists(atPath: "\(defaultPath)/backend/main.py") {
-            return defaultPath
-        }
         let bundleParent = Bundle.main.bundleURL.deletingLastPathComponent().path
         if FileManager.default.fileExists(atPath: "\(bundleParent)/backend/main.py") {
             return bundleParent
         }
-        return defaultPath
+        let cwd = FileManager.default.currentDirectoryPath
+        if FileManager.default.fileExists(atPath: "\(cwd)/backend/main.py") {
+            return cwd
+        }
+        let defaultPath = "/Users/aaradhya/Documents/Programming/random"
+        if FileManager.default.fileExists(atPath: "\(defaultPath)/backend/main.py") {
+            return defaultPath
+        }
+        return bundleParent
     }()
     let appVersion: String = {
         if let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String, !ver.isEmpty {
             return ver
         }
-        return "7.6.1"
+        return "7.6.2"
     }()
     let githubRepo = "AaradhyaNegi009/UpBeat"
 
     var updateTimer: Timer?
     var isUpdating = false
     var backgroundActivity: NSObjectProtocol?
+    var pendingDeepLinks: [String] = []
+    var isMainAppLoaded = false
+    var hasInstalledSpeechTap = false
+    var cachedArtworkUrl = ""
+    var cachedArtworkImage: NSImage?
 
     var statusItem: NSStatusItem!
     var playPauseMenuItem: NSMenuItem!
@@ -201,7 +210,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         }
     }
 
-    func updateNowPlayingInfo(title: String, artist: String, duration: Double, currentTime: Double, isPlaying: Bool) {
+    private func jsLiteral(_ value: String) -> String {
+        if let data = try? JSONSerialization.data(withJSONObject: [value]),
+           let json = String(data: data, encoding: .utf8),
+           json.count >= 2 {
+            return String(json.dropFirst().dropLast())
+        }
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+        return "\"\(escaped)\""
+    }
+
+    private func isAllowedArtworkHost(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        let host = (url.host ?? "").lowercased()
+        if scheme == "http" && (host == "127.0.0.1" || host == "localhost") {
+            return true
+        }
+        guard scheme == "https" else { return false }
+        let allowedHosts: Set<String> = [
+            "i.ytimg.com",
+            "i1.ytimg.com",
+            "yt3.ggpht.com",
+            "lh3.googleusercontent.com"
+        ]
+        return allowedHosts.contains(host)
+    }
+
+    func updateNowPlayingInfo(title: String, artist: String, thumbnailUrl: String, duration: Double, currentTime: Double, isPlaying: Bool) {
         var info = [String: Any]()
         info[MPMediaItemPropertyTitle] = title
         info[MPMediaItemPropertyArtist] = artist.isEmpty ? "UpBeat" : artist
@@ -211,6 +250,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         }
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+
+        if !thumbnailUrl.isEmpty, thumbnailUrl == cachedArtworkUrl, let img = cachedArtworkImage {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
+        } else if !thumbnailUrl.isEmpty,
+                  thumbnailUrl != cachedArtworkUrl,
+                  let artURL = URL(string: thumbnailUrl),
+                  isAllowedArtworkHost(artURL) {
+            cachedArtworkUrl = thumbnailUrl
+            cachedArtworkImage = nil
+            var artReq = URLRequest(url: artURL)
+            artReq.timeoutInterval = 4.0
+            URLSession.shared.dataTask(with: artReq) { [weak self] data, response, _ in
+                guard let self = self,
+                      let http = response as? HTTPURLResponse,
+                      http.statusCode == 200,
+                      let d = data,
+                      let img = NSImage(data: d) else { return }
+                DispatchQueue.main.async {
+                    guard self.cachedArtworkUrl == thumbnailUrl else { return }
+                    self.cachedArtworkImage = img
+                    var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? info
+                    currentInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
+                    MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
+                }
+            }.resume()
+        }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
@@ -247,6 +312,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         let isPlaying = (body["isPlaying"] as? Bool) ?? false
         let title = (body["title"] as? String) ?? "UpBeat"
         let artist = (body["artist"] as? String) ?? ""
+        let thumbnail = (body["thumbnail"] as? String) ?? ""
         let duration = (body["duration"] as? Double) ?? 0
         let currentTime = (body["currentTime"] as? Double) ?? 0
 
@@ -270,6 +336,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             self.updateNowPlayingInfo(
                 title: title,
                 artist: artist,
+                thumbnailUrl: thumbnail,
                 duration: duration,
                 currentTime: currentTime,
                 isPlaying: isPlaying
@@ -293,14 +360,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         return true
     }
 
+    private func isAllowedDeepLink(_ url: URL) -> Bool {
+        let scheme = url.scheme?.lowercased() ?? ""
+        if scheme == "upbeat" {
+            return true
+        }
+        if scheme == "http" || scheme == "https" {
+            let str = url.absoluteString
+            return str.contains("addFriend=") || str.contains("jam=")
+        }
+        return false
+    }
+
+    func queueDeepLink(_ url: URL) {
+        guard isAllowedDeepLink(url) else { return }
+        let urlString = url.absoluteString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !urlString.isEmpty else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.pendingDeepLinks.append(urlString)
+            if self.isMainAppLoaded {
+                self.flushPendingDeepLinks(attempt: 0)
+            }
+        }
+    }
+
+    func flushPendingDeepLinks(attempt: Int = 0) {
+        guard isMainAppLoaded, !pendingDeepLinks.isEmpty, webView != nil else { return }
+        let batch = pendingDeepLinks
+        var js = "(function() { var root = document.getElementById('root'); if (!root || root.childElementCount === 0) return 'retry';"
+        for link in batch {
+            js += " window.dispatchEvent(new CustomEvent('upbeat-deep-link', { detail: \(jsLiteral(link)) }));"
+        }
+        js += " return 'ok'; })();"
+
+        webView.evaluateJavaScript(js) { [weak self] result, _ in
+            guard let self = self else { return }
+            if let status = result as? String, status == "ok" {
+                self.pendingDeepLinks.removeFirst(min(batch.count, self.pendingDeepLinks.count))
+            } else if attempt < 30 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                    self?.flushPendingDeepLinks(attempt: attempt + 1)
+                }
+            }
+        }
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            let urlString = url.absoluteString
-            let escaped = urlString.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
-            let js = "window.dispatchEvent(new CustomEvent('upbeat-deep-link', { detail: '\(escaped)' }));"
-            DispatchQueue.main.async { [weak self] in
-                self?.webView?.evaluateJavaScript(js, completionHandler: nil)
-            }
+            queueDeepLink(url)
         }
     }
 
@@ -402,6 +510,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         runSelfUpdate(userTriggered: true)
     }
 
+    private func runProcessWithTimeout(
+        executable: String,
+        arguments: [String],
+        currentDirectory: String,
+        timeoutSeconds: TimeInterval,
+        environmentOverrides: [String: String] = [:]
+    ) -> (status: Int32, output: String, timedOut: Bool) {
+        let proc = Process()
+        let pipe = Pipe()
+        proc.executableURL = URL(fileURLWithPath: executable)
+        proc.arguments = arguments
+        proc.currentDirectoryURL = URL(fileURLWithPath: currentDirectory)
+        var env = ProcessInfo.processInfo.environment
+        for (k, v) in environmentOverrides {
+            env[k] = v
+        }
+        proc.environment = env
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+
+        let sem = DispatchSemaphore(value: 0)
+        proc.terminationHandler = { _ in
+            sem.signal()
+        }
+
+        do {
+            try proc.run()
+        } catch {
+            return (-1, "", false)
+        }
+
+        let waitResult = sem.wait(timeout: .now() + timeoutSeconds)
+        if waitResult == .timedOut {
+            proc.terminate()
+            _ = sem.wait(timeout: .now() + 1.0)
+            return (-1, "", true)
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (proc.terminationStatus, out, false)
+    }
+
     func checkForUpdates(silent: Bool) {
         if isUpdating { return }
 
@@ -411,30 +562,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             var hasGitUpdate = false
             var latestGitMsg = ""
 
-            // 1. Check local git repo if available
+            // 1. Check local git repo if available (bounded with timeouts & non-interactive env)
             let gitPath = "\(self.workspacePath)/.git"
             if FileManager.default.fileExists(atPath: gitPath) {
-                let fetchProc = Process()
-                fetchProc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-                fetchProc.arguments = ["fetch", "origin", "main"]
-                fetchProc.currentDirectoryURL = URL(fileURLWithPath: self.workspacePath)
-                try? fetchProc.run()
-                fetchProc.waitUntilExit()
+                let fetchRes = self.runProcessWithTimeout(
+                    executable: "/usr/bin/git",
+                    arguments: ["fetch", "origin", "main"],
+                    currentDirectory: self.workspacePath,
+                    timeoutSeconds: 12.0,
+                    environmentOverrides: ["GIT_TERMINAL_PROMPT": "0"]
+                )
 
-                let diffProc = Process()
-                let diffPipe = Pipe()
-                diffProc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-                diffProc.arguments = ["log", "HEAD..origin/main", "--oneline", "-n", "3"]
-                diffProc.currentDirectoryURL = URL(fileURLWithPath: self.workspacePath)
-                diffProc.standardOutput = diffPipe
-                try? diffProc.run()
-                diffProc.waitUntilExit()
-
-                let diffData = diffPipe.fileHandleForReading.readDataToEndOfFile()
-                let diffOut = String(data: diffData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if !diffOut.isEmpty {
-                    hasGitUpdate = true
-                    latestGitMsg = diffOut
+                if !fetchRes.timedOut && fetchRes.status == 0 {
+                    let diffRes = self.runProcessWithTimeout(
+                        executable: "/usr/bin/git",
+                        arguments: ["log", "HEAD..origin/main", "--oneline", "-n", "3"],
+                        currentDirectory: self.workspacePath,
+                        timeoutSeconds: 5.0,
+                        environmentOverrides: ["GIT_TERMINAL_PROMPT": "0"]
+                    )
+                    if !diffRes.timedOut && diffRes.status == 0 && !diffRes.output.isEmpty {
+                        hasGitUpdate = true
+                        latestGitMsg = diffRes.output
+                    }
                 }
             }
 
@@ -503,6 +653,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         return false
     }
 
+    func relaunchApp() {
+        let bundlePath = Bundle.main.bundleURL.path
+        let launcher = Process()
+        launcher.executableURL = URL(fileURLWithPath: "/bin/sh")
+        launcher.arguments = ["-c", "sleep 0.5 && open -n \"$1\"", "_", bundlePath]
+        try? launcher.run()
+        NSApplication.shared.terminate(nil)
+    }
+
     func runSelfUpdate(userTriggered: Bool) {
         if isUpdating { return }
         isUpdating = true
@@ -543,12 +702,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                 DispatchQueue.main.async {
                     self.isUpdating = false
                     if success {
-                        self.webView.reload()
                         let finishAlert = NSAlert()
                         finishAlert.messageText = "UpBeat Updated Successfully"
-                        finishAlert.informativeText = "The latest UpBeat version has been compiled and the studio has reloaded."
-                        finishAlert.addButton(withTitle: "Great")
-                        finishAlert.runModal()
+                        finishAlert.informativeText = "The latest UpBeat native app and frontend have been compiled. Restart UpBeat now to load the updated binary."
+                        finishAlert.addButton(withTitle: "Restart Now")
+                        finishAlert.addButton(withTitle: "Later")
+                        if finishAlert.runModal() == .alertFirstButtonReturn {
+                            self.relaunchApp()
+                        } else {
+                            self.webView.reload()
+                        }
                     } else {
                         let errData = pipe.fileHandleForReading.readDataToEndOfFile()
                         let errText = String(data: errData, encoding: .utf8) ?? "Unknown error"
@@ -726,6 +889,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         </body>
         </html>
         """
+        isMainAppLoaded = false
         webView.loadHTMLString(splashHTML, baseURL: nil)
     }
 
@@ -783,10 +947,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
         if FileManager.default.fileExists(atPath: venvUvicorn) {
             proc.executableURL = URL(fileURLWithPath: venvUvicorn)
-            proc.arguments = ["backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
-        } else {
+            proc.arguments = ["backend.main:app", "--host", "127.0.0.1", "--port", "8000"]
+        } else if FileManager.default.fileExists(atPath: venvPython) {
             proc.executableURL = URL(fileURLWithPath: venvPython)
-            proc.arguments = ["-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+            proc.arguments = ["-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000"]
+        } else if FileManager.default.fileExists(atPath: "\(workspacePath)/backend/main.py") {
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            proc.arguments = ["python3", "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000"]
+        } else {
+            DispatchQueue.main.async {
+                self.webView.evaluateJavaScript("setStatus('Local UpBeat backend not found', true, \(self.jsLiteral("Missing backend at \(self.workspacePath)")))")
+            }
+            return
         }
         proc.currentDirectoryURL = URL(fileURLWithPath: workspacePath)
 
@@ -823,10 +995,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             } else {
                 DispatchQueue.main.async {
                     let errDetail = error?.localizedDescription ?? "Port 8000 not responding"
-                    self.webView.evaluateJavaScript("setStatus('Unable to connect to UpBeat Engine', true, '\(errDetail)')")
+                    self.webView.evaluateJavaScript("setStatus('Unable to connect to UpBeat Engine', true, \(self.jsLiteral(errDetail)))")
                 }
             }
         }.resume()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let url = webView.url,
+              let host = url.host?.lowercased(),
+              host == "127.0.0.1" || host == "localhost" else {
+            return
+        }
+        isMainAppLoaded = true
+        flushPendingDeepLinks(attempt: 0)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -923,7 +1105,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
     @available(macOS 12.0, *)
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        decisionHandler(.grant)
+        let host = origin.host.lowercased()
+        if host == "127.0.0.1" || host == "localhost" {
+            decisionHandler(.grant)
+        } else {
+            decisionHandler(.deny)
+        }
     }
 
     func startNativeSpeechRecognition(lang: String = "en-US") {
@@ -934,7 +1121,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                 guard let self = self else { return }
                 guard authStatus == .authorized else {
                     let errStr = authStatus == .denied ? "Speech recognition permission denied" : "Speech recognition unavailable"
-                    let js = "window.onUpBeatSpeechError && window.onUpBeatSpeechError('\(errStr)');"
+                    let js = "window.onUpBeatSpeechError && window.onUpBeatSpeechError(\(self.jsLiteral(errStr)));"
                     self.webView.evaluateJavaScript(js, completionHandler: nil)
                     return
                 }
@@ -965,16 +1152,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         let audioEngine = AVAudioEngine()
         self.speechAudioEngine = audioEngine
 
+        let inputNode = audioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        guard recordingFormat.channelCount > 0, recordingFormat.sampleRate > 0 else {
+            let js = "window.onUpBeatSpeechError && window.onUpBeatSpeechError('No audio input device available');"
+            self.webView.evaluateJavaScript(js, completionHandler: nil)
+            stopNativeSpeechRecognition()
+            return
+        }
+
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         self.speechRecognitionRequest = request
 
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
             request.append(buffer)
         }
+        hasInstalledSpeechTap = true
 
         audioEngine.prepare()
         do {
@@ -991,9 +1185,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         self.speechRecognitionTask = recognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self = self else { return }
             if let r = result {
-                let text = r.bestTranscription.formattedString.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'").replacingOccurrences(of: "\n", with: " ")
+                let text = r.bestTranscription.formattedString.replacingOccurrences(of: "\n", with: " ")
                 let isFinal = r.isFinal
-                let js = "window.onUpBeatSpeechResult && window.onUpBeatSpeechResult('\(text)', \(isFinal));"
+                let js = "window.onUpBeatSpeechResult && window.onUpBeatSpeechResult(\(self.jsLiteral(text)), \(isFinal));"
                 DispatchQueue.main.async {
                     self.webView.evaluateJavaScript(js, completionHandler: nil)
                 }
@@ -1008,7 +1202,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
     func stopNativeSpeechRecognition() {
         speechAudioEngine?.stop()
-        speechAudioEngine?.inputNode.removeTap(onBus: 0)
+        if hasInstalledSpeechTap {
+            speechAudioEngine?.inputNode.removeTap(onBus: 0)
+            hasInstalledSpeechTap = false
+        }
         speechRecognitionRequest?.endAudio()
         speechRecognitionTask?.cancel()
         speechRecognitionTask = nil
@@ -1025,13 +1222,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         panel.canChooseFiles = true
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        if #available(macOS 11.0, *) {
-            panel.allowedContentTypes = [.image]
-        } else {
-            panel.allowedFileTypes = ["png", "jpg", "jpeg", "webp", "gif", "heic", "heif", "tiff", "bmp", "svg"]
-        }
-        panel.message = "Choose a profile picture for UpBeat"
-        panel.prompt = "Select Photo"
+        panel.message = "Choose a file for UpBeat"
+        panel.prompt = "Select"
         panel.level = .modalPanel
         NSApp.activate(ignoringOtherApps: true)
 
@@ -1050,16 +1242,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                 // Let WKWebView handle in-app download
                 return nil
             }
-            NSWorkspace.shared.open(url)
+            let scheme = url.scheme?.lowercased() ?? ""
+            if scheme == "upbeat" {
+                queueDeepLink(url)
+            } else if scheme == "http" || scheme == "https" {
+                NSWorkspace.shared.open(url)
+            }
         }
         return nil
     }
 
     @available(macOS 11.3, *)
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, preferences: WKWebpagePreferences, decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
-        if let url = navigationAction.request.url, url.path.contains("/download/") {
-            decisionHandler(.download, preferences)
-            return
+        if let url = navigationAction.request.url {
+            let scheme = url.scheme?.lowercased() ?? ""
+            if scheme == "upbeat" {
+                queueDeepLink(url)
+                decisionHandler(.cancel, preferences)
+                return
+            }
+            let allowedSchemes: Set<String> = ["http", "https", "about", "blob", "data"]
+            if !allowedSchemes.contains(scheme) {
+                decisionHandler(.cancel, preferences)
+                return
+            }
+            if url.path.contains("/download/") {
+                decisionHandler(.download, preferences)
+                return
+            }
         }
         decisionHandler(.allow, preferences)
     }
@@ -1096,7 +1306,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         let ext = dest.pathExtension
         let base = dest.deletingPathExtension().lastPathComponent
         while FileManager.default.fileExists(atPath: finalDest.path) {
-            finalDest = upbeatDownloadsDir.appendingPathComponent("\(base) (\(counter)).\(ext)")
+            let candidateName = ext.isEmpty ? "\(base) (\(counter))" : "\(base) (\(counter)).\(ext)"
+            finalDest = upbeatDownloadsDir.appendingPathComponent(candidateName)
             counter += 1
         }
         completionHandler(finalDest)

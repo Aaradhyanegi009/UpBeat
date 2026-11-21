@@ -30,29 +30,7 @@ export function useCompanionSync({
   const [isSyncing, setIsSyncing] = useState(false)
   const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [isSyncingLikes, setIsSyncingLikes] = useState(false)
-  const [googleUser, setGoogleUser] = useState(() => {
-    const user = loadStorage('upbeat_google_user', null)
-    if (user) {
-      const userEmail = (user.email || '').toLowerCase()
-      const userName = (user.name || '').toLowerCase()
-      if (userEmail.includes('negi') || userEmail.includes('divyansh') || userName.includes('negi') || userName.includes('divyansh')) {
-        try {
-          localStorage.removeItem('upbeat_google_user')
-          localStorage.removeItem('upbeat_last_google_email')
-          localStorage.removeItem('upbeat_last_google_name')
-        } catch {}
-        return null
-      }
-    }
-    if (user && user.picture && user.picture.includes('yt3.ggpht.com/ZHW03BCR5_1wypqdYcayGib5T')) {
-      const sanitized = { ...user, picture: '' }
-      try {
-        localStorage.setItem('upbeat_google_user', JSON.stringify(sanitized))
-      } catch {}
-      return sanitized
-    }
-    return user
-  })
+  const [googleUser, setGoogleUser] = useState(() => loadStorage('upbeat_google_user', null))
 
   useEffect(() => {
     try {

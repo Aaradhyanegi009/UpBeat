@@ -1,6 +1,5 @@
 # Ignore everything in parent workspace except UpBeat project files
 /*
-!/gitignore
 !/.gitignore
 !/README.md
 !/CHANGELOG.md
@@ -33,4 +32,8 @@ backend/data/downloads/*.m4a
 backend/data/downloads/*.part*
 **/__pycache__/
 **/*.pyc
+# Signing keys & secrets (never commit keystores)
+*.keystore
+*.jks
+**/.DS_Store
 .DS_Store

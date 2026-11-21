@@ -131,7 +131,7 @@ export class RoomController {
     )
 
     // Retry JAM_HELLO after 1.2s in case host was still initializing
-    setTimeout(() => {
+    this.mgr.scheduleTimer(() => {
       if (this.mgr.state.active && this.mgr.state.role === 'guest') {
         this.mgr.sendToHost(
           {
@@ -149,7 +149,7 @@ export class RoomController {
       const peer = new this.mgr.PeerClass(PEER_OPTIONS)
       this.mgr.peer = peer
 
-      const connectTimeout = setTimeout(() => {
+      const connectTimeout = this.mgr.scheduleTimer(() => {
         if (
           this.mgr.state.active &&
           this.mgr.state.status === 'CONNECTING' &&
@@ -170,7 +170,11 @@ export class RoomController {
         this.mgr.hostConn = conn
 
         conn.on('open', () => {
-          clearTimeout(connectTimeout)
+          this.mgr.clearTimer(connectTimeout)
+          if (this.mgr.hostDisconnectTimer) {
+            this.mgr.clearTimer(this.mgr.hostDisconnectTimer)
+            this.mgr.hostDisconnectTimer = null
+          }
           this.mgr.updateState({ status: 'CONNECTED', error: null })
           this.mgr.sendToHost(
             {
@@ -186,7 +190,11 @@ export class RoomController {
         })
 
         conn.on('data', (data) => {
-          clearTimeout(connectTimeout)
+          this.mgr.clearTimer(connectTimeout)
+          if (this.mgr.hostDisconnectTimer) {
+            this.mgr.clearTimer(this.mgr.hostDisconnectTimer)
+            this.mgr.hostDisconnectTimer = null
+          }
           if (this.mgr.state.status !== 'CONNECTED') {
             this.mgr.updateState({ status: 'CONNECTED', error: null })
           }
@@ -194,8 +202,34 @@ export class RoomController {
         })
 
         conn.on('close', () => {
-          if (this.mgr.state.active && this.mgr.state.role === 'guest' && !hasBackend()) {
-            // Only leave if not connected via relay
+          this.mgr.clearTimer(connectTimeout)
+          if (this.mgr.hostConn === conn) {
+            this.mgr.hostConn = null
+          }
+          if (this.mgr.state.active && this.mgr.state.role === 'guest') {
+            const hasRelay = hasBackend() || Boolean(this.mgr.roomEventSource)
+            if (!hasRelay) {
+              if (this.mgr.eventHandlers.onNotify) {
+                this.mgr.eventHandlers.onNotify('Host disconnected from Jam', 'info')
+              }
+              this.mgr.leaveJam(true)
+              return
+            }
+            const closedAt = Date.now()
+            this.mgr.updateState({ status: 'CONNECTING' })
+            if (this.mgr.hostDisconnectTimer) {
+              this.mgr.clearTimer(this.mgr.hostDisconnectTimer)
+            }
+            this.mgr.hostDisconnectTimer = this.mgr.scheduleTimer(() => {
+              this.mgr.hostDisconnectTimer = null
+              const hostAliveOverRelay = this.mgr.hostConn?.open || (this.mgr.lastHostPacketAt || 0) > closedAt
+              if (this.mgr.state.active && this.mgr.state.role === 'guest' && !hostAliveOverRelay) {
+                if (this.mgr.eventHandlers.onNotify) {
+                  this.mgr.eventHandlers.onNotify('Host disconnected from Jam', 'info')
+                }
+                this.mgr.leaveJam(true)
+              }
+            }, 6000)
           }
         })
       })
@@ -203,7 +237,7 @@ export class RoomController {
       peer.on('error', (err) => {
         if (err?.type === 'peer-unavailable') {
           // Wait for cloud/backend relay before declaring error
-          setTimeout(() => {
+          this.mgr.scheduleTimer(() => {
             if (
               this.mgr.state.active &&
               this.mgr.state.status !== 'CONNECTED' &&
@@ -270,6 +304,10 @@ export class RoomController {
     if (this.mgr.pingInterval) {
       clearInterval(this.mgr.pingInterval)
       this.mgr.pingInterval = null
+    }
+    if (this.mgr.hostDisconnectTimer) {
+      this.mgr.clearTimer(this.mgr.hostDisconnectTimer)
+      this.mgr.hostDisconnectTimer = null
     }
   }
 
@@ -366,7 +404,7 @@ export class RoomController {
 
       // Immediate 0ms dispatch + 120ms confirmation double-tap so no guest ever misses Pause/Play
       this.mgr.broadcastFromHost(buildPacket(), { useCloud: true })
-      setTimeout(() => {
+      this.mgr.scheduleTimer(() => {
         if (this.mgr.state.active && this.mgr.state.role === 'host') {
           this.mgr.broadcastFromHost(buildPacket(), { useCloud: true })
         }
@@ -507,6 +545,7 @@ export class RoomController {
 
       case 'JAM_PARTICIPANTS': {
         if (this.mgr.state.role === 'guest' && Array.isArray(data.participants)) {
+          this.mgr.lastHostPacketAt = Date.now()
           const wasConnecting = this.mgr.state.status !== 'CONNECTED'
           const cleanList = data.participants.map((p) => ({
             ...p,
@@ -552,7 +591,7 @@ export class RoomController {
               conn.send(pong)
             } catch {}
           } else {
-            this.mgr.broadcastFromHost(pong, { useCloud: false })
+            this.mgr.broadcastFromHost(pong, { useCloud: true })
           }
         }
         break
@@ -563,6 +602,7 @@ export class RoomController {
           this.mgr.state.role === 'guest' &&
           (!data.targetId || data.targetId === this.mgr.getSelfParticipantId())
         ) {
+          this.mgr.lastHostPacketAt = Date.now()
           const t4 = Date.now()
           const rtt = Math.max(2, t4 - data.t1 - (data.t3 - data.t2))
           const offset = Math.round((data.t2 - data.t1 + (data.t3 - t4)) / 2)
@@ -580,6 +620,7 @@ export class RoomController {
 
       case 'JAM_PLAY_STATE': {
         if (this.mgr.state.role === 'guest') {
+          this.mgr.lastHostPacketAt = Date.now()
           const pktTs = Number(data.hostTimestamp || data.timestamp) || Date.now()
           if (this.mgr.lastPlayStateTimestamp && pktTs < this.mgr.lastPlayStateTimestamp - 50) {
             return
@@ -606,6 +647,7 @@ export class RoomController {
 
       case 'JAM_SYNC': {
         if (this.mgr.state.role === 'guest') {
+          this.mgr.lastHostPacketAt = Date.now()
           if (typeof data.seq === 'number') {
             if (this.mgr.lastAppliedSeq > 0 && data.seq < this.mgr.lastAppliedSeq) {
               return
@@ -673,7 +715,7 @@ export class RoomController {
             { useCloud: true },
             cleanAddedBy.id
           )
-          setTimeout(() => this.mgr.broadcastSyncNow(null, { useCloud: true }), 150)
+          this.mgr.scheduleTimer(() => this.mgr.broadcastSyncNow(null, { useCloud: true }), 150)
         } else if (this.mgr.state.role === 'guest') {
           if (cleanAddedBy.id && cleanAddedBy.id === this.mgr.getSelfParticipantId()) {
             return
@@ -773,7 +815,7 @@ export class RoomController {
         this.mgr.broadcastPlayState(action === 'PLAY', payload.currentTime, payload.track)
       }
       this.mgr.broadcastFromHost(packet, { useCloud: true })
-      setTimeout(() => this.mgr.broadcastSyncNow(null, { useCloud: true }), 80)
+      this.mgr.scheduleTimer(() => this.mgr.broadcastSyncNow(null, { useCloud: true }), 80)
     } else {
       this.mgr.sendToHost(packet, { useCloud: true })
     }
@@ -798,20 +840,25 @@ export class RoomController {
     }
     if (this.mgr.state.role === 'host') {
       this.mgr.broadcastFromHost(packet, { useCloud: true })
-      setTimeout(() => this.mgr.broadcastSyncNow(null, { useCloud: true }), 100)
+      this.mgr.scheduleTimer(() => this.mgr.broadcastSyncNow(null, { useCloud: true }), 100)
     } else {
       this.mgr.sendToHost(packet, { useCloud: true })
     }
   }
 
-  sendReaction(reactionType = 'vibe') {
+  sendReaction(reactionType = '🔥') {
     if (!this.mgr.state.active) return
     const id = `rx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    const emojiVal =
+      typeof reactionType === 'object'
+        ? (reactionType?.emoji || reactionType?.reaction || '🔥')
+        : (reactionType || '🔥')
     const packet = {
       type: 'JAM_REACTION',
       id,
       _packetId: id,
-      reaction: reactionType,
+      emoji: emojiVal,
+      reaction: emojiVal,
       senderId: this.mgr.getSelfParticipantId(),
       senderName: this.mgr.userProfile?.name || 'You',
       senderAvatar: ''

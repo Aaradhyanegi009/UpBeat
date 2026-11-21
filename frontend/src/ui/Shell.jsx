@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings, PanelLeftClose } from 'lucide-react'
+import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Avatar, IconButton, LikedTile, Collage, Chip } from './primitives'
 import { SearchField } from '../views/SearchView'
 import { useMediaQuery } from './router'
@@ -228,6 +228,11 @@ export function TopBar({
 
   return (
     <div className="flex items-center gap-3 px-7 py-4">
+      {!sidebarOpen && onToggleSidebar && (
+        <IconButton label="Open sidebar (⌘B)" variant="filled" size={36} onClick={onToggleSidebar}>
+          <PanelLeftOpen className="w-5 h-5" />
+        </IconButton>
+      )}
       <IconButton label="Back" variant="filled" size={36} onClick={() => window.history.back()}>
         <ChevronLeft className="w-5 h-5" />
       </IconButton>

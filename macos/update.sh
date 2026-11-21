@@ -34,9 +34,15 @@ if [ -d "frontend" ]; then
     cd "$DIR"
 fi
 
-# Recompile native macOS Swift binary
+# Recompile native macOS Swift binary for host architecture
 echo "Recompiling native macOS app..."
-swiftc -O -target arm64-apple-macos12.0 "$DIR/macos/UpBeatApp.swift" -o "$DIR/UpBeat.app/Contents/MacOS/UpBeat" -framework Cocoa -framework WebKit -framework Speech -framework AVFoundation
+ARCH="$(uname -m)"
+if [ "$ARCH" = "x86_64" ]; then
+    TARGET_TRIPLE="x86_64-apple-macos12.0"
+else
+    TARGET_TRIPLE="arm64-apple-macos12.0"
+fi
+swiftc -O -target "$TARGET_TRIPLE" "$DIR/macos/UpBeatApp.swift" -o "$DIR/UpBeat.app/Contents/MacOS/UpBeat" -framework Cocoa -framework WebKit -framework Speech -framework AVFoundation -framework MediaPlayer -framework UniformTypeIdentifiers
 cp "$DIR/macos/UpBeat.icns" "$DIR/UpBeat.app/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 cp "$DIR/macos/Info.plist" "$DIR/UpBeat.app/Contents/Info.plist" 2>/dev/null || true
 

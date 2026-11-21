@@ -46,19 +46,16 @@ export default function GoogleAuthModal({
     try { return localStorage.getItem('upbeat_google_client_id') || '' } catch { return '' }
   })
   const [customAccessToken, setCustomAccessToken] = useState('')
-  // Old builds pre-filled one developer's name/email for everyone; ignore those values.
   const [customEmail, setCustomEmail] = useState(() => {
     try {
-      const v = localStorage.getItem('upbeat_last_google_email') || ''
-      return /divyanshnegi009/i.test(v) ? '' : v
+      return localStorage.getItem('upbeat_last_google_email') || ''
     } catch {
       return ''
     }
   })
   const [customName, setCustomName] = useState(() => {
     try {
-      const v = localStorage.getItem('upbeat_last_google_name') || ''
-      return /divyansh negi/i.test(v) ? '' : v
+      return localStorage.getItem('upbeat_last_google_name') || ''
     } catch {
       return ''
     }
@@ -69,16 +66,6 @@ export default function GoogleAuthModal({
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [isSyncingProfile, setIsSyncingProfile] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-
-  // Clean any stale hardcoded personal developer email/name on mount
-  useEffect(() => {
-    try {
-      const storedEmail = localStorage.getItem('upbeat_last_google_email') || ''
-      const storedName = localStorage.getItem('upbeat_last_google_name') || ''
-      if (/divyansh|negi/i.test(storedEmail)) localStorage.removeItem('upbeat_last_google_email')
-      if (/divyansh|negi/i.test(storedName)) localStorage.removeItem('upbeat_last_google_name')
-    } catch {}
-  }, [])
 
   // Try to sync authentic avatar from active Safari YouTube Music session
   useEffect(() => {

@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.6.1)
+# 🎵 UpBeat (v7.6.2)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,10 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ## ⚡ Features & Highlights
+
+### 🛡️ Security Hardening, Playback Stability & Cross-Platform Reliability (v7.6.2)
+- **Security & Signing Hardening**: Replaced wildcard CORS on FastAPI and Electron microservers with strict localhost/LAN/Capacitor origins; sanitized Safari AppleScript URL/action inputs; enforced strict 11-char YouTube ID path containment on `/api/audio` & `/api/download`; allowlisted `/api/innertube` endpoints; migrated Gemini API keys from URL query params to `x-goog-api-key` headers; removed tracked Android keystore credentials from git; disabled `allowBackup` and `showWhenLocked`; and enforced fail-closed SHA-256 verification in OTA updates (`otaUpdater.js`).
+- **Playback, Discovery & Backend Reliability**: Isolated Deck A/B playback across Watch video and Android Auto resume; unblocked the 1s sleep timer; switched `YT.Player` callbacks and MediaSession handlers to live refs; honored `repeatMode === 'off'` at queue end; fixed YTM `RDAMVM` radio (`findNodes`), Rediscover storage keys, and post-onboarding refresh; narrowed `shared/music_filters.json` false positives (`"Dream On"`, `"November Rain"`, `"Alien Blues"`); fixed FastAPI `200`/`206`/`416` range handling, SPA fallback routing, `_fast_innertube_audio`-first local stream lookup, and atomic `.part_*` downloads; stabilized Electron on deterministic port `48173`; wired Android Auto queue sync & WebView delegation; and fixed CI release workflows.
 
 ### ✨ AI Curator & Search-to-Mix Hotfix (v7.6.1)
 - **Restored Responsive AI Curation & AI Search Mixes (`App.jsx`)**: Fixed the missing `collectionTokenRef` / `setCollectionLoading` hook bindings so **Create -> Make my mix**, **Search -> Make a mix from “…”**, and **Tweak mix** trigger immediately with proper loading state and navigation.
@@ -162,15 +166,15 @@ UpBeat/
 ├── android/          # Native Android App
 │   ├── app/src/main/java/com/aaradhya/upbeat/
 │   │   ├── MainActivity.java           # Capacitor Native Webview Shell
-│   │   └── UpBeatMediaService.java     # Android Auto & Background ExoPlayer Service
-│   └── app/build.gradle                # Android SDK 34, Keystore & Build Config
+│   │   └── UpBeatMediaService.java     # Android Auto & Background MediaPlayer Service
+│   └── app/build.gradle                # Android SDK 36 (minSdk 24), Release Signing & Build Config
 ├── macos/            # Native macOS App
 │   ├── UpBeatApp.swift                 # Native Swift + AppKit + WebKit wrapper
 │   └── Info.plist                      # macOS Bundle & App Permissions
 ├── electron/         # Native Windows Desktop App (Electron)
-│   ├── main.cjs                        # Windows Window, System Tray & Media Controls
+│   ├── main.cjs                        # Windows Window, System Tray & Scoped Media Shortcuts
 │   ├── preload.cjs                     # Native IPC Bridge
-│   ├── server.cjs                      # Embedded Zero-Config Audio Microserver
+│   ├── server.cjs                      # Embedded Zero-Config Microserver (Port 48173, Lyrics & Downloads)
 │   └── resources/                      # Windows Icons (icon.ico & icon.png)
 ├── api/              # Vercel Serverless Edge Functions (Web & iOS PWA)
 │   ├── innertube.js                    # High-speed Edge CORS proxy for YouTube Music
@@ -196,7 +200,9 @@ UpBeat/
 │   │   ├── otaUpdater.js               # Over-The-Air update manager
 │   │   └── standaloneApi.js            # Direct Innertube streaming & Gemini client
 └── .github/workflows/
-    └── build-android-apk.yml           # Automated CI/CD (APK build & OTA release)
+    ├── ci-tests.yml                    # Frontend, Backend, Electron, Android & macOS CI checks
+    ├── build-android-apk.yml           # Android Release/Debug APK & OTA Bundle CI/CD
+    └── build-windows.yml               # Windows Electron NSIS & Portable ZIP CI/CD
 ```
 
 ### How YouTube Streaming & Downloads Work
@@ -213,16 +219,18 @@ UpBeat/
 
 ### 1. Android
 - Download the latest **`UpBeat.apk`** from [GitHub Releases](https://github.com/AaradhyaNegi009/UpBeat/releases).
-- Install the APK on your phone (supports Android 8.0 through Android 15).
+- Install the APK on your phone (supports Android 7.0+ — `minSdk 24`, `targetSdk 36`).
 - Compatible with **Android Auto**: plug into your car display or launch via the Android Auto companion.
+- For signed release builds (`./gradlew assembleRelease`), supply `UPBEAT_KEYSTORE_FILE`, `UPBEAT_KEYSTORE_PASSWORD`, `UPBEAT_KEY_ALIAS`, and `UPBEAT_KEY_PASSWORD` via Gradle properties or environment variables (CI uses GitHub Secrets and falls back to `assembleDebug` when unset).
 
 ### 2. macOS Native App
 Download **`UpBeat-macOS.zip`** from [Releases](https://github.com/AaradhyaNegi009/UpBeat/releases), unzip, and drag `UpBeat.app` into `/Applications`.
 
-To compile manually:
+To compile manually (or run `./macos/update.sh`):
 ```bash
-swiftc -O -target arm64-apple-macos12.0 macos/UpBeatApp.swift \
-  -o UpBeat.app/Contents/MacOS/UpBeat -framework Cocoa -framework WebKit
+swiftc -O -target "$(uname -m)-apple-macos12.0" macos/UpBeatApp.swift \
+  -o UpBeat.app/Contents/MacOS/UpBeat \
+  -framework Cocoa -framework WebKit -framework Speech -framework AVFoundation -framework MediaPlayer -framework UniformTypeIdentifiers
 cp -R UpBeat.app /Applications/UpBeat.app
 open /Applications/UpBeat.app
 ```

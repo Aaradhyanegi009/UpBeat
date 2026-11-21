@@ -2,6 +2,9 @@ export const config = {
   runtime: 'edge',
 }
 
+const ALLOWED_ENDPOINTS = new Set(['search', 'browse', 'next', 'player'])
+const ALLOWED_SERVICES = new Set(['music', 'youtube'])
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -23,12 +26,48 @@ export default async function handler(req) {
     })
   }
 
+  let data
   try {
-    const data = await req.json()
-    const endpoint = data.endpoint || ''
-    const body = data.body || {}
-    const service = data.service || 'music'
+    data = await req.json()
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
+      status: 400,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
+  }
 
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return new Response(JSON.stringify({ error: 'Payload must be a JSON object' }), {
+      status: 400,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const endpoint = String(data.endpoint || '').trim()
+  if (!ALLOWED_ENDPOINTS.has(endpoint)) {
+    return new Response(JSON.stringify({ error: 'Unsupported Innertube endpoint' }), {
+      status: 400,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const service = String(data.service || 'music').trim()
+  if (!ALLOWED_SERVICES.has(service)) {
+    return new Response(JSON.stringify({ error: 'Unsupported Innertube service' }), {
+      status: 400,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const body = data.body === undefined ? {} : data.body
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return new Response(JSON.stringify({ error: 'Innertube request body must be a JSON object' }), {
+      status: 400,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
+  }
+
+  try {
     const host = service === 'youtube' ? 'https://www.youtube.com' : 'https://music.youtube.com'
     const targetUrl = `${host}/youtubei/v1/${endpoint}?prettyPrint=false`
 
@@ -41,6 +80,7 @@ export default async function handler(req) {
         Referer: host,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
     })
 
     const resData = await upstreamRes.text()
@@ -56,7 +96,7 @@ export default async function handler(req) {
     return new Response(
       JSON.stringify({ error: err.message || 'Innertube edge proxy error' }),
       {
-        status: 500,
+        status: 502,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       }
     )

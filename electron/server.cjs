@@ -1,15 +1,26 @@
 /**
  * UpBeat Windows Desktop Internal Microserver
  * Lightweight, zero-dependency Node.js HTTP server.
- * Serves the UpBeat frontend assets and proxies YouTube Music/Innertube
- * and high-performance audio streams directly on Windows.
+ * Serves the UpBeat frontend assets and proxies YouTube Music/Innertube,
+ * LRCLIB lyrics, downloads, and high-performance audio streams directly on Windows.
  */
 
 const http = require('http')
-const https = require('https')
 const fs = require('fs')
 const path = require('path')
+const { Readable } = require('stream')
 const { URL } = require('url')
+
+const DEFAULT_PORT = 48173
+const PORT_FALLBACK_COUNT = 3
+const VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/
+const ALLOWED_INNERTUBE_ENDPOINTS = new Set(['search', 'browse', 'next', 'player'])
+const ALLOWED_SERVICES = new Set(['music', 'youtube'])
+const MAX_JSON_BODY_BYTES = 1024 * 1024 // 1 MB
+const UPSTREAM_TIMEOUT_MS = 10000 // 10 seconds
+const MAX_STREAM_CACHE_SIZE = 200
+const MAX_SOCIAL_KEYS = 500
+const CACHE_TTL_MS = 45 * 60 * 1000
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -54,24 +65,200 @@ const IOS_PLAYER_CLIENT = {
   gl: 'US'
 }
 
+const DESKTOP_CHROME_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+
 const streamCache = new Map()
-const CACHE_TTL_MS = 45 * 60 * 1000
 const socialMailbox = new Map()
 const socialPresence = new Map()
 const jamRooms = new Map()
 
-async function resolveStreamUrl(videoId) {
-  if (!videoId || videoId.length !== 11) return null
+function isAllowedCorsOrigin(origin) {
+  if (!origin || typeof origin !== 'string') return false
+  const trimmed = origin.trim()
+  return (
+    /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(trimmed) ||
+    /^capacitor:\/\/localhost$/i.test(trimmed) ||
+    /^file:\/\//i.test(trimmed)
+  )
+}
 
-  const cached = streamCache.get(videoId)
-  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-    return cached
+function applyCorsHeaders(req, res) {
+  const origin = req.headers.origin
+  let allowed = true
+  if (origin) {
+    if (isAllowedCorsOrigin(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Vary', 'Origin')
+    } else {
+      allowed = false
+    }
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD, DELETE')
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, Accept')
+  res.setHeader(
+    'Access-Control-Expose-Headers',
+    'Content-Range, Content-Length, Accept-Ranges, Content-Disposition'
+  )
+  return allowed
+}
+
+function sendJson(res, statusCode, payload, { closeConnection = false } = {}) {
+  if (res.headersSent) return
+  const headers = { 'Content-Type': 'application/json; charset=utf-8' }
+  if (closeConnection || statusCode === 413) {
+    headers.Connection = 'close'
+  }
+  res.writeHead(statusCode, headers)
+  res.end(JSON.stringify(payload), () => {
+    if (closeConnection || statusCode === 413) {
+      try { res.socket?.destroySoon?.() } catch {}
+    }
+  })
+}
+
+function readJsonBody(req, maxBytes = MAX_JSON_BODY_BYTES) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    let totalBytes = 0
+    let finished = false
+
+    const fail = (statusCode, message) => {
+      if (finished) return
+      finished = true
+      reject(Object.assign(new Error(message), { statusCode }))
+    }
+
+    req.on('data', (chunk) => {
+      if (finished) return
+      totalBytes += chunk.length
+      if (totalBytes > maxBytes) {
+        chunks.length = 0
+        req.pause()
+        fail(413, 'Payload exceeds maximum allowed size (1MB)')
+        return
+      }
+      chunks.push(chunk)
+    })
+
+    req.on('end', () => {
+      if (finished) return
+      finished = true
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8')
+        const parsed = JSON.parse(raw || '{}')
+        resolve(parsed)
+      } catch {
+        reject(Object.assign(new Error('Invalid JSON payload'), { statusCode: 400 }))
+      }
+    })
+
+    req.on('error', (err) => {
+      fail(400, err?.message || 'Request stream error')
+    })
+  })
+}
+
+function writeJsonAtomic(filePath, data) {
+  const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}`
+  fs.writeFileSync(tmpPath, JSON.stringify(data), 'utf8')
+  fs.renameSync(tmpPath, filePath)
+}
+
+function isCacheEntryExpired(entry) {
+  if (!entry || !entry.streamUrl) return true
+  if (Date.now() - entry.ts >= CACHE_TTL_MS) return true
+  try {
+    const u = new URL(entry.streamUrl)
+    const exp = Number(u.searchParams.get('expire') || 0)
+    if (exp > 0 && Date.now() / 1000 >= exp - 60) {
+      return true
+    }
+  } catch {}
+  return false
+}
+
+function setStreamCacheEntry(videoId, entry) {
+  if (!videoId || !entry) return
+  if (streamCache.has(videoId)) {
+    streamCache.delete(videoId)
+  }
+  while (streamCache.size >= MAX_STREAM_CACHE_SIZE) {
+    const oldestKey = streamCache.keys().next().value
+    if (oldestKey === undefined) break
+    streamCache.delete(oldestKey)
+  }
+  streamCache.set(videoId, entry)
+}
+
+function boundMapSize(map, maxKeys = MAX_SOCIAL_KEYS) {
+  while (map.size > maxKeys) {
+    const oldest = map.keys().next().value
+    if (oldest === undefined) break
+    map.delete(oldest)
+  }
+}
+
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeoutMs = UPSTREAM_TIMEOUT_MS,
+  { abortAfterHeaders = false } = {}
+) {
+  const controller = new AbortController()
+  const externalSignal = options.signal
+  const onExternalAbort = () => controller.abort(externalSignal?.reason || new Error('Aborted'))
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort(externalSignal.reason)
+    } else {
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true })
+    }
+  }
+
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`Upstream timeout after ${timeoutMs}ms`))
+  }, timeoutMs)
+
+  try {
+    const resp = await fetch(url, { ...options, signal: controller.signal })
+    if (abortAfterHeaders) {
+      clearTimeout(timer)
+    }
+    return { resp, controller, cleanup: () => {
+      clearTimeout(timer)
+      if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort)
+    } }
+  } catch (err) {
+    clearTimeout(timer)
+    if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort)
+    throw err
+  }
+}
+
+async function resolveStreamUrl(videoId, { bypassCache = false } = {}) {
+  if (!videoId || !VIDEO_ID_REGEX.test(videoId)) return null
+
+  if (!bypassCache) {
+    const cached = streamCache.get(videoId)
+    if (cached && !isCacheEntryExpired(cached)) {
+      // Refresh LRU position
+      streamCache.delete(videoId)
+      streamCache.set(videoId, cached)
+      return cached
+    }
+    if (cached) {
+      streamCache.delete(videoId)
+    }
+  } else {
+    streamCache.delete(videoId)
   }
 
   const clients = [
     {
       client: ANDROID_VR_CLIENT,
-      userAgent: 'Mozilla/5.0 (Linux; Android 14; Quest 3 Build/UQ1A.240205.004) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.35.48.568434778 SamsungBrowser/4.0 Chrome/122.0.6261.119 Mobile VR Safari/537.36'
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Quest 3 Build/UQ1A.240205.004) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.35.48.568434778 SamsungBrowser/4.0 Chrome/122.0.6261.119 Mobile VR Safari/537.36'
     },
     {
       client: IOS_PLAYER_CLIENT,
@@ -80,20 +267,27 @@ async function resolveStreamUrl(videoId) {
   ]
 
   for (const { client, userAgent } of clients) {
+    let cleanup = () => {}
     try {
-      const resp = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': userAgent
+      const result = await fetchWithTimeout(
+        'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': userAgent
+          },
+          body: JSON.stringify({
+            context: { client },
+            videoId,
+            contentCheckOk: true,
+            racyCheckOk: true
+          })
         },
-        body: JSON.stringify({
-          context: { client },
-          videoId,
-          contentCheckOk: true,
-          racyCheckOk: true
-        })
-      })
+        UPSTREAM_TIMEOUT_MS
+      )
+      cleanup = result.cleanup
+      const resp = result.resp
 
       if (!resp.ok) continue
       const data = await resp.json()
@@ -117,22 +311,177 @@ async function resolveStreamUrl(videoId) {
           streamUrl: chosen.url,
           mimeType: chosen.mimeType ? chosen.mimeType.split(';')[0] : 'audio/mp4',
           contentLength: chosen.contentLength ? Number(chosen.contentLength) : null,
-          duration: Number(data?.videoDetails?.lengthSeconds || 0) || Math.round((chosen.approxDurationMs || 0) / 1000),
+          duration:
+            Number(data?.videoDetails?.lengthSeconds || 0) ||
+            Math.round((chosen.approxDurationMs || 0) / 1000),
           video_id: videoId,
           ts: Date.now()
         }
-        streamCache.set(videoId, entry)
+        setStreamCacheEntry(videoId, entry)
         return entry
       }
-    } catch {}
+    } catch {
+      // Try next player client
+    } finally {
+      cleanup()
+    }
   }
   return null
 }
 
+function sanitizeDownloadFilename(title, artist) {
+  const cleanTitle = String(title || 'Track')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\\/*?:"<>|]/g, '')
+    .trim() || 'Track'
+  const cleanArtist = String(artist || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\\/*?:"<>|]/g, '')
+    .trim()
+
+  if (cleanArtist && !cleanTitle.toLowerCase().includes(cleanArtist.toLowerCase())) {
+    return `${cleanArtist} - ${cleanTitle}.m4a`
+  }
+  return `${cleanTitle}.m4a`
+}
+
+function makeContentDisposition(filename) {
+  const clean = String(filename || 'track.m4a').replace(/[\r\n]/g, '')
+  const ascii = clean.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(clean)}`
+}
+
+async function proxyUpstreamMedia({ videoId, req, res, rangeHeader = null, extraHeaders = {}, errorAsJson = false }) {
+  const sendNotFound = (msg) => {
+    if (errorAsJson) sendJson(res, 404, { error: msg })
+    else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' })
+      res.end(msg)
+    }
+  }
+
+  let stream = await resolveStreamUrl(videoId)
+  if (!stream?.streamUrl) {
+    sendNotFound('Stream not found')
+    return
+  }
+
+  const clientAbortController = new AbortController()
+  const abortUpstream = () => {
+    if (!clientAbortController.signal.aborted) {
+      clientAbortController.abort(new Error('Client disconnected'))
+    }
+  }
+  req.on('aborted', abortUpstream)
+  res.on('close', () => {
+    if (!res.writableEnded) abortUpstream()
+  })
+
+  const openUpstream = async (targetStream) => {
+    const upstreamHeaders = { 'User-Agent': DESKTOP_CHROME_UA }
+    if (rangeHeader) {
+      upstreamHeaders['Range'] = rangeHeader
+    }
+    return fetchWithTimeout(
+      targetStream.streamUrl,
+      {
+        method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+        headers: upstreamHeaders,
+        signal: clientAbortController.signal
+      },
+      UPSTREAM_TIMEOUT_MS,
+      { abortAfterHeaders: true }
+    )
+  }
+
+  let handle = null
+  try {
+    handle = await openUpstream(stream)
+    if (handle.resp.status === 403 || handle.resp.status === 410) {
+      try { await handle.resp.body?.cancel?.() } catch {}
+      handle.cleanup()
+      streamCache.delete(videoId)
+
+      stream = await resolveStreamUrl(videoId, { bypassCache: true })
+      if (!stream?.streamUrl) {
+        sendNotFound('Audio stream expired and could not be refreshed')
+        return
+      }
+      handle = await openUpstream(stream)
+    }
+
+    const upstreamResp = handle.resp
+    const resHeaders = {
+      'Content-Type': upstreamResp.headers.get('content-type') || stream.mimeType || 'audio/mp4',
+      'Accept-Ranges': 'bytes',
+      ...extraHeaders
+    }
+
+    const cr = upstreamResp.headers.get('content-range')
+    if (cr) resHeaders['Content-Range'] = cr
+    const cl = upstreamResp.headers.get('content-length') || (stream.contentLength ? String(stream.contentLength) : '')
+    if (cl) resHeaders['Content-Length'] = cl
+
+    res.writeHead(upstreamResp.status, resHeaders)
+
+    if (req.method === 'HEAD') {
+      try { await upstreamResp.body?.cancel?.() } catch {}
+      handle.cleanup()
+      res.end()
+      return
+    }
+
+    if (upstreamResp.body) {
+      const nodeStream = Readable.fromWeb(upstreamResp.body)
+      const onDisconnect = () => {
+        nodeStream.destroy()
+      }
+      res.once('close', onDisconnect)
+      nodeStream.on('error', () => {
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'text/plain' })
+        }
+        if (!res.writableEnded) {
+          res.end()
+        }
+      })
+      nodeStream.on('end', () => {
+        res.removeListener('close', onDisconnect)
+        handle.cleanup()
+      })
+      nodeStream.on('close', () => {
+        res.removeListener('close', onDisconnect)
+        handle.cleanup()
+      })
+      nodeStream.pipe(res)
+    } else {
+      handle.cleanup()
+      res.end()
+    }
+  } catch (err) {
+    handle?.cleanup?.()
+    if (clientAbortController.signal.aborted) {
+      if (!res.writableEnded) res.end()
+      return
+    }
+    if (!res.headersSent) {
+      if (errorAsJson) {
+        sendJson(res, 502, { error: 'Upstream audio error' })
+      } else {
+        res.writeHead(502, { 'Content-Type': 'text/plain' })
+        res.end('Upstream audio error')
+      }
+    } else if (!res.writableEnded) {
+      res.end()
+    }
+  }
+}
+
 function startServer(options = {}) {
-  const staticDir = options.staticDir || path.join(__dirname, '../frontend/dist')
+  const staticDir = path.resolve(options.staticDir || path.join(__dirname, '../frontend/dist'))
+  const staticPrefix = staticDir.endsWith(path.sep) ? staticDir : `${staticDir}${path.sep}`
   const userDataDir = options.userDataDir || path.join(__dirname, 'userData')
-  const version = options.version || '7.3.1'
+  const version = options.version || '7.6.2'
 
   if (!fs.existsSync(userDataDir)) {
     try { fs.mkdirSync(userDataDir, { recursive: true }) } catch {}
@@ -142,14 +491,10 @@ function startServer(options = {}) {
   const profileFile = path.join(userDataDir, 'profile.json')
 
   const server = http.createServer(async (req, res) => {
-    // Enable CORS for all local requests
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD, DELETE')
-    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, Accept')
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges')
+    const corsAllowed = applyCorsHeaders(req, res)
 
     if (req.method === 'OPTIONS') {
-      res.writeHead(204)
+      res.writeHead(corsAllowed ? 204 : 403)
       res.end()
       return
     }
@@ -159,144 +504,192 @@ function startServer(options = {}) {
 
     // 1. /api/status
     if (pathname === '/api/status') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({
+      const addr = server.address()
+      sendJson(res, 200, {
         ok: true,
+        status: 'online',
+        app: 'UpBeat',
         version,
+        port: typeof addr === 'object' && addr ? addr.port : null,
         platform: process.platform,
         arch: process.arch,
-        engine: 'upbeat-electron-microserver'
-      }))
-      return
-    }
-
-    // 2. /api/innertube (Proxy to music.youtube.com / youtube.com)
-    if (pathname === '/api/innertube' && req.method === 'POST') {
-      let bodyData = ''
-      req.on('data', (chunk) => { bodyData += chunk })
-      req.on('end', async () => {
-        try {
-          const payload = JSON.parse(bodyData || '{}')
-          const endpoint = payload.endpoint || ''
-          const postBody = payload.body || {}
-          const service = payload.service || 'music'
-
-          const host = service === 'youtube' ? 'https://www.youtube.com' : 'https://music.youtube.com'
-          const targetUrl = `${host}/youtubei/v1/${endpoint}?prettyPrint=false`
-
-          const upstream = await fetch(targetUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-              Referer: host
-            },
-            body: JSON.stringify(postBody)
-          })
-
-          const data = await upstream.text()
-          res.writeHead(upstream.status, { 'Content-Type': 'application/json' })
-          res.end(data)
-        } catch (err) {
-          res.writeHead(500, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ error: err.message || 'Innertube proxy error' }))
+        engine: 'upbeat-electron-microserver',
+        capabilities: {
+          audio: true,
+          download: true,
+          lyrics: true,
+          innertube: true,
+          favorites: true,
+          profile: true,
+          jam: true,
+          curate: false
         }
       })
       return
     }
 
-    // 3. /api/audio-info/:id or /api/audio-info?id=...
-    if (pathname.startsWith('/api/audio-info')) {
-      let videoId = parsedUrl.searchParams.get('id') || parsedUrl.searchParams.get('video_id')
-      if (!videoId) {
-        const parts = pathname.split('/').filter(Boolean)
-        if (parts.length >= 2 && parts[1] !== 'audio-info') videoId = parts[1]
-        else if (parts.length >= 3) videoId = parts[2]
+    // 2. /api/innertube (Strict endpoint allowlist proxy to music.youtube.com / youtube.com)
+    if (pathname === '/api/innertube' && req.method === 'POST') {
+      let cleanup = () => {}
+      try {
+        const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+        const endpoint = String(payload?.endpoint || '').trim()
+        const postBody = payload?.body ?? {}
+        const service = String(payload?.service || 'music').trim()
+
+        if (!ALLOWED_INNERTUBE_ENDPOINTS.has(endpoint)) {
+          sendJson(res, 400, { error: 'Unsupported Innertube endpoint' })
+          return
+        }
+        if (!ALLOWED_SERVICES.has(service)) {
+          sendJson(res, 400, { error: 'Unsupported Innertube service' })
+          return
+        }
+        if (!postBody || typeof postBody !== 'object' || Array.isArray(postBody)) {
+          sendJson(res, 400, { error: 'Invalid Innertube request body' })
+          return
+        }
+
+        const host = service === 'youtube' ? 'https://www.youtube.com' : 'https://music.youtube.com'
+        const targetUrl = `${host}/youtubei/v1/${endpoint}?prettyPrint=false`
+
+        const result = await fetchWithTimeout(
+          targetUrl,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': DESKTOP_CHROME_UA,
+              Referer: host
+            },
+            body: JSON.stringify(postBody)
+          },
+          UPSTREAM_TIMEOUT_MS
+        )
+        cleanup = result.cleanup
+        const data = await result.resp.text()
+        res.writeHead(result.resp.status, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(data)
+      } catch (err) {
+        const code = err?.statusCode || 500
+        sendJson(res, code, { error: err?.message || 'Innertube proxy error' })
+      } finally {
+        cleanup()
+      }
+      return
+    }
+
+    // 2b. /api/lyrics (LRCLIB proxy parity route)
+    if (pathname === '/api/lyrics' && req.method === 'GET') {
+      const q = parsedUrl.searchParams.get('q') || ''
+      const trackName = parsedUrl.searchParams.get('track_name') || ''
+      const artistName = parsedUrl.searchParams.get('artist_name') || ''
+      const searchParams = new URLSearchParams()
+      if (q) searchParams.set('q', q)
+      if (trackName) searchParams.set('track_name', trackName)
+      if (artistName) searchParams.set('artist_name', artistName)
+
+      if (!searchParams.toString()) {
+        sendJson(res, 200, [])
+        return
       }
 
-      if (!videoId || videoId.length !== 11) {
-        res.writeHead(400, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Missing or invalid video ID' }))
+      let cleanup = () => {}
+      try {
+        const result = await fetchWithTimeout(
+          `https://lrclib.net/api/search?${searchParams.toString()}`,
+          {
+            method: 'GET',
+            headers: {
+              'User-Agent': `UpBeat/${version} (https://upbeat.app)`
+            }
+          },
+          UPSTREAM_TIMEOUT_MS
+        )
+        cleanup = result.cleanup
+        if (result.resp.ok) {
+          const lyricsData = await result.resp.json()
+          sendJson(res, 200, Array.isArray(lyricsData) ? lyricsData : [])
+          return
+        }
+      } catch {} finally {
+        cleanup()
+      }
+      sendJson(res, 200, [])
+      return
+    }
+
+    // 3. /api/audio-info/:id or /api/audio-info?id=...
+    if (pathname === '/api/audio-info' || pathname.startsWith('/api/audio-info/')) {
+      let videoId = parsedUrl.searchParams.get('id') || parsedUrl.searchParams.get('video_id') || ''
+      if (!videoId) {
+        const parts = pathname.split('/').filter(Boolean)
+        if (parts.length >= 3) videoId = parts[2]
+      }
+      videoId = String(videoId).trim()
+
+      if (!VIDEO_ID_REGEX.test(videoId)) {
+        sendJson(res, 400, { error: 'Missing or invalid video ID' })
         return
       }
 
       const stream = await resolveStreamUrl(videoId)
       if (stream) {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({
+        sendJson(res, 200, {
           ok: true,
           video_id: videoId,
           duration: stream.duration,
           mimeType: stream.mimeType,
           contentLength: stream.contentLength,
           url: `/api/audio/${videoId}`
-        }))
+        })
       } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: 'Audio stream unavailable' }))
+        sendJson(res, 404, { error: 'Audio stream unavailable' })
       }
       return
     }
 
-    // 4. /api/audio/:id
-    if (pathname.startsWith('/api/audio/')) {
-      const videoId = pathname.replace('/api/audio/', '').split('?')[0].trim()
-      if (!videoId || videoId.length !== 11) {
+    // 4. /api/audio/:id (GET/HEAD audio stream proxy with Range & 403 invalidation)
+    if (pathname.startsWith('/api/audio/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const videoId = pathname.slice('/api/audio/'.length).trim()
+      if (!VIDEO_ID_REGEX.test(videoId)) {
         res.writeHead(400, { 'Content-Type': 'text/plain' })
         res.end('Invalid video ID')
         return
       }
 
-      const stream = await resolveStreamUrl(videoId)
-      if (!stream?.streamUrl) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' })
-        res.end('Stream not found')
+      await proxyUpstreamMedia({
+        videoId,
+        req,
+        res,
+        rangeHeader: req.headers.range || null
+      })
+      return
+    }
+
+    // 4b. /api/download/:id (GET/HEAD direct .m4a attachment parity route)
+    if (pathname.startsWith('/api/download/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const videoId = pathname.slice('/api/download/'.length).trim()
+      if (!VIDEO_ID_REGEX.test(videoId)) {
+        sendJson(res, 400, { error: 'Invalid video ID' })
         return
       }
 
-      const rangeHeader = req.headers.range
-      const upstreamHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-      }
-      if (rangeHeader) {
-        upstreamHeaders['Range'] = rangeHeader
-      }
+      const title = parsedUrl.searchParams.get('title') || 'Track'
+      const artist = parsedUrl.searchParams.get('artist') || ''
+      const filename = sanitizeDownloadFilename(title, artist)
 
-      try {
-        const upstreamResp = await fetch(stream.streamUrl, {
-          method: req.method === 'HEAD' ? 'HEAD' : 'GET',
-          headers: upstreamHeaders
-        })
-
-        const resHeaders = {
-          'Content-Type': upstreamResp.headers.get('content-type') || stream.mimeType || 'audio/mp4',
-          'Accept-Ranges': 'bytes'
-        }
-
-        const cr = upstreamResp.headers.get('content-range')
-        if (cr) resHeaders['Content-Range'] = cr
-        const cl = upstreamResp.headers.get('content-length')
-        if (cl) resHeaders['Content-Length'] = cl
-
-        res.writeHead(upstreamResp.status, resHeaders)
-
-        if (req.method === 'HEAD') {
-          res.end()
-          return
-        }
-
-        if (upstreamResp.body) {
-          const { Readable } = require('stream')
-          Readable.fromWeb(upstreamResp.body).pipe(res)
-        } else {
-          res.end()
-        }
-      } catch (err) {
-        if (!res.headersSent) {
-          res.writeHead(502, { 'Content-Type': 'text/plain' })
-          res.end('Upstream audio error')
-        }
-      }
+      await proxyUpstreamMedia({
+        videoId,
+        req,
+        res,
+        rangeHeader: req.headers.range || null,
+        extraHeaders: {
+          'Content-Disposition': makeContentDisposition(filename),
+          'Cache-Control': 'public, max-age=3600'
+        },
+        errorAsJson: true
+      })
       return
     }
 
@@ -307,23 +700,25 @@ function startServer(options = {}) {
         try {
           if (fs.existsSync(favoritesFile)) data = fs.readFileSync(favoritesFile, 'utf8')
         } catch {}
-        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
         res.end(data || '[]')
         return
       }
       if (req.method === 'POST') {
-        let b = ''
-        req.on('data', (c) => { b += c })
-        req.on('end', () => {
-          try {
-            fs.writeFileSync(favoritesFile, b, 'utf8')
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ ok: true }))
-          } catch (e) {
-            res.writeHead(500, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ error: e.message }))
+        try {
+          const parsed = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+          const valid =
+            Array.isArray(parsed) ||
+            (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.favorites))
+          if (!valid) {
+            sendJson(res, 400, { error: 'Favorites payload must be a JSON array or { favorites: [] }' })
+            return
           }
-        })
+          writeJsonAtomic(favoritesFile, parsed)
+          sendJson(res, 200, { ok: true })
+        } catch (err) {
+          sendJson(res, err?.statusCode || 500, { error: err?.message || 'Failed to save favorites' })
+        }
         return
       }
     }
@@ -335,96 +730,101 @@ function startServer(options = {}) {
         try {
           if (fs.existsSync(profileFile)) data = fs.readFileSync(profileFile, 'utf8')
         } catch {}
-        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
         res.end(data || '{}')
         return
       }
       if (req.method === 'POST') {
-        let b = ''
-        req.on('data', (c) => { b += c })
-        req.on('end', () => {
-          try {
-            fs.writeFileSync(profileFile, b, 'utf8')
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ ok: true }))
-          } catch (e) {
-            res.writeHead(500, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ error: e.message }))
+        try {
+          const parsed = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            sendJson(res, 400, { error: 'Profile payload must be a JSON object' })
+            return
           }
-        })
+          writeJsonAtomic(profileFile, parsed)
+          sendJson(res, 200, { ok: true })
+        } catch (err) {
+          sendJson(res, err?.statusCode || 500, { error: err?.message || 'Failed to save profile' })
+        }
         return
       }
     }
 
-    // 6b. /api/jam/social/send & /api/jam/social/poll & /api/jam/room/send & /api/jam/room/poll
+    // 6b. /api/jam/social/send & /api/jam/social/poll & /api/social & /api/jam/room/*
     if (pathname === '/api/jam/social/send' && req.method === 'POST') {
-      let b = ''
-      req.on('data', (c) => { b += c })
-      req.on('end', () => {
-        try {
-          const payload = JSON.parse(b || '{}')
-          const nowMs = Date.now()
-          const target = String(payload.targetFriendCode || '').trim().toUpperCase()
-          if (target) {
-            const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
-            if (pkt.from && pkt.from.friendCode) {
-              const sCode = String(pkt.from.friendCode).trim().toUpperCase()
-              socialPresence.set(sCode, { ...pkt.from, lastSeen: nowMs })
-            }
-            const box = socialMailbox.get(target) || []
-            const cutoff = nowMs - 12 * 3600 * 1000
-            const filtered = box.filter((m) => (m._serverTs || 0) > cutoff)
-            if (!pkt._packetId || !filtered.some((m) => m._packetId === pkt._packetId)) {
-              filtered.push(pkt)
-              if (filtered.length > 150) filtered.splice(0, filtered.length - 150)
-            }
-            socialMailbox.set(target, filtered)
+      try {
+        const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+        const nowMs = Date.now()
+        const target = String(payload.targetFriendCode || '').trim().toUpperCase()
+        if (target) {
+          const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
+          if (pkt.from && pkt.from.friendCode) {
+            const sCode = String(pkt.from.friendCode).trim().toUpperCase()
+            socialPresence.set(sCode, { ...pkt.from, lastSeen: nowMs })
+            boundMapSize(socialPresence)
           }
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: true, serverTs: nowMs }))
-        } catch (e) {
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: false }))
+          const box = socialMailbox.get(target) || []
+          const cutoff = nowMs - 12 * 3600 * 1000
+          const filtered = box.filter((m) => (m._serverTs || 0) > cutoff)
+          if (!pkt._packetId || !filtered.some((m) => m._packetId === pkt._packetId)) {
+            filtered.push(pkt)
+            if (filtered.length > 150) filtered.splice(0, filtered.length - 150)
+          }
+          socialMailbox.set(target, filtered)
+          boundMapSize(socialMailbox)
         }
-      })
+        sendJson(res, 200, { ok: true, serverTs: nowMs })
+      } catch (err) {
+        sendJson(res, err?.statusCode === 413 ? 413 : 200, { ok: false, error: err?.message })
+      }
       return
     }
 
     if (pathname === '/api/jam/social/poll' && req.method === 'POST') {
-      let b = ''
-      req.on('data', (c) => { b += c })
-      req.on('end', () => {
-        try {
-          const payload = JSON.parse(b || '{}')
-          const nowMs = Date.now()
-          const myCode = String(payload.friendCode || '').trim().toUpperCase()
-          if (myCode && payload.summary && typeof payload.summary === 'object') {
-            socialPresence.set(myCode, { ...payload.summary, friendCode: myCode, lastSeen: nowMs })
-          }
-          const sinceTs = Number(payload.since || 0)
-          const box = socialMailbox.get(myCode) || []
-          const packets = box.filter((m) => (m._serverTs || 0) > sinceTs)
-          const presenceList = []
-          for (const fc of payload.friendCodes || []) {
-            const cleanFc = String(fc || '').trim().toUpperCase()
-            const pres = socialPresence.get(cleanFc)
-            if (pres && nowMs - (pres.lastSeen || 0) < 45000) {
-              presenceList.push({ ...pres, online: true })
-            }
-          }
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: true, serverTs: nowMs, inbox: packets, packets, friends: presenceList, presence: presenceList }))
-        } catch (e) {
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: false, inbox: [], packets: [], friends: [], presence: [] }))
+      try {
+        const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+        const nowMs = Date.now()
+        const myCode = String(payload.friendCode || '').trim().toUpperCase()
+        if (myCode && payload.summary && typeof payload.summary === 'object') {
+          socialPresence.set(myCode, { ...payload.summary, friendCode: myCode, lastSeen: nowMs })
+          boundMapSize(socialPresence)
         }
-      })
+        const sinceTs = Number(payload.since || 0)
+        const box = socialMailbox.get(myCode) || []
+        const packets = box.filter((m) => (m._serverTs || 0) > sinceTs)
+        const presenceList = []
+        for (const fc of payload.friendCodes || []) {
+          const cleanFc = String(fc || '').trim().toUpperCase()
+          const pres = socialPresence.get(cleanFc)
+          if (pres && nowMs - (pres.lastSeen || 0) < 45000) {
+            presenceList.push({ ...pres, online: true })
+          }
+        }
+        sendJson(res, 200, {
+          ok: true,
+          serverTs: nowMs,
+          inbox: packets,
+          packets,
+          friends: presenceList,
+          presence: presenceList
+        })
+      } catch (err) {
+        sendJson(res, err?.statusCode === 413 ? 413 : 200, {
+          ok: false,
+          inbox: [],
+          packets: [],
+          friends: [],
+          presence: []
+        })
+      }
       return
     }
 
     if (pathname === '/api/social' && req.method === 'GET') {
       const nowMs = Date.now()
-      const myCode = String(parsedUrl.searchParams.get('id') || parsedUrl.searchParams.get('friendCode') || '').trim().toUpperCase()
+      const myCode = String(parsedUrl.searchParams.get('id') || parsedUrl.searchParams.get('friendCode') || '')
+        .trim()
+        .toUpperCase()
       const sinceTs = Number(parsedUrl.searchParams.get('since') || 0)
       if (myCode && socialPresence.has(myCode)) {
         const cur = socialPresence.get(myCode)
@@ -433,7 +833,10 @@ function startServer(options = {}) {
       const box = socialMailbox.get(myCode) || []
       const cutoff = nowMs - 15 * 60 * 1000
       const validBox = box.filter((m) => (m._serverTs || 0) > cutoff)
-      socialMailbox.set(myCode, validBox)
+      if (myCode) {
+        socialMailbox.set(myCode, validBox)
+        boundMapSize(socialMailbox)
+      }
       const packets = validBox.filter((m) => (m._serverTs || 0) > sinceTs)
 
       const friendsParam = String(parsedUrl.searchParams.get('friends') || '')
@@ -445,93 +848,97 @@ function startServer(options = {}) {
           presenceList.push({ ...pres, friendCode: fc, online: true })
         }
       }
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ ok: true, serverTs: nowMs, inbox: packets, packets, friends: presenceList, presence: presenceList }))
+      sendJson(res, 200, {
+        ok: true,
+        serverTs: nowMs,
+        inbox: packets,
+        packets,
+        friends: presenceList,
+        presence: presenceList
+      })
       return
     }
 
     if (pathname === '/api/social' && req.method === 'POST') {
-      let b = ''
-      req.on('data', (c) => { b += c })
-      req.on('end', () => {
-        try {
-          const payload = JSON.parse(b || '{}')
-          const nowMs = Date.now()
-          const action = payload.action || (payload.toId || payload.targetFriendCode ? 'push' : 'poll')
-          if (action === 'push') {
-            const target = String(payload.toId || payload.targetFriendCode || '').trim().toUpperCase()
-            const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
-            if (pkt.from && pkt.from.friendCode) {
-              const sCode = String(pkt.from.friendCode).trim().toUpperCase()
-              socialPresence.set(sCode, { ...pkt.from, friendCode: sCode, lastSeen: nowMs })
-            }
-            if (target) {
-              const box = socialMailbox.get(target) || []
-              const cutoff = nowMs - 15 * 60 * 1000
-              const filtered = box.filter((m) => (m._serverTs || 0) > cutoff)
-              const dedupId = pkt.msgId || pkt._packetId
-              if (!dedupId || !filtered.some((m) => (m.msgId || m._packetId) === dedupId)) {
-                filtered.push(pkt)
-                if (filtered.length > 150) filtered.splice(0, filtered.length - 150)
-              }
-              socialMailbox.set(target, filtered)
-            }
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ ok: true, serverTs: nowMs }))
-            return
+      try {
+        const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+        const nowMs = Date.now()
+        const action = payload.action || (payload.toId || payload.targetFriendCode ? 'push' : 'poll')
+        if (action === 'push') {
+          const target = String(payload.toId || payload.targetFriendCode || '').trim().toUpperCase()
+          const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
+          if (pkt.from && pkt.from.friendCode) {
+            const sCode = String(pkt.from.friendCode).trim().toUpperCase()
+            socialPresence.set(sCode, { ...pkt.from, friendCode: sCode, lastSeen: nowMs })
+            boundMapSize(socialPresence)
           }
-          const myCode = String(payload.id || payload.friendCode || '').trim().toUpperCase()
-          const summary = payload.summary || payload.profile
-          if (myCode && summary && typeof summary === 'object') {
-            socialPresence.set(myCode, { ...summary, friendCode: myCode, lastSeen: nowMs })
-          }
-          const sinceTs = Number(payload.since || 0)
-          const box = socialMailbox.get(myCode) || []
-          const packets = box.filter((m) => (m._serverTs || 0) > sinceTs)
-          const presenceList = []
-          for (const fc of payload.friends || payload.friendCodes || []) {
-            const cleanFc = String(fc || '').trim().toUpperCase()
-            const pres = socialPresence.get(cleanFc)
-            if (pres && nowMs - (pres.lastSeen || 0) < 45000) {
-              presenceList.push({ ...pres, friendCode: cleanFc, online: true })
+          if (target) {
+            const box = socialMailbox.get(target) || []
+            const cutoff = nowMs - 15 * 60 * 1000
+            const filtered = box.filter((m) => (m._serverTs || 0) > cutoff)
+            const dedupId = pkt.msgId || pkt._packetId
+            if (!dedupId || !filtered.some((m) => (m.msgId || m._packetId) === dedupId)) {
+              filtered.push(pkt)
+              if (filtered.length > 150) filtered.splice(0, filtered.length - 150)
             }
+            socialMailbox.set(target, filtered)
+            boundMapSize(socialMailbox)
           }
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: true, serverTs: nowMs, inbox: packets, packets, friends: presenceList, presence: presenceList }))
-        } catch (e) {
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: false }))
+          sendJson(res, 200, { ok: true, serverTs: nowMs })
+          return
         }
-      })
+        const myCode = String(payload.id || payload.friendCode || '').trim().toUpperCase()
+        const summary = payload.summary || payload.profile
+        if (myCode && summary && typeof summary === 'object') {
+          socialPresence.set(myCode, { ...summary, friendCode: myCode, lastSeen: nowMs })
+          boundMapSize(socialPresence)
+        }
+        const sinceTs = Number(payload.since || 0)
+        const box = socialMailbox.get(myCode) || []
+        const packets = box.filter((m) => (m._serverTs || 0) > sinceTs)
+        const presenceList = []
+        for (const fc of payload.friends || payload.friendCodes || []) {
+          const cleanFc = String(fc || '').trim().toUpperCase()
+          const pres = socialPresence.get(cleanFc)
+          if (pres && nowMs - (pres.lastSeen || 0) < 45000) {
+            presenceList.push({ ...pres, friendCode: cleanFc, online: true })
+          }
+        }
+        sendJson(res, 200, {
+          ok: true,
+          serverTs: nowMs,
+          inbox: packets,
+          packets,
+          friends: presenceList,
+          presence: presenceList
+        })
+      } catch (err) {
+        sendJson(res, err?.statusCode === 413 ? 413 : 200, { ok: false, error: err?.message })
+      }
       return
     }
 
     if (pathname === '/api/jam/room/send' && req.method === 'POST') {
-      let b = ''
-      req.on('data', (c) => { b += c })
-      req.on('end', () => {
-        try {
-          const payload = JSON.parse(b || '{}')
-          const nowMs = Date.now()
-          const room = String(payload.roomCode || '').trim().toUpperCase()
-          if (room) {
-            const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
-            const events = jamRooms.get(room) || []
-            const cutoff = nowMs - 2 * 3600 * 1000
-            const filtered = events.filter((e) => (e._serverTs || 0) > cutoff)
-            if (!pkt._packetId || !filtered.some((e) => e._packetId === pkt._packetId)) {
-              filtered.push(pkt)
-              if (filtered.length > 200) filtered.splice(0, filtered.length - 200)
-            }
-            jamRooms.set(room, filtered)
+      try {
+        const payload = await readJsonBody(req, MAX_JSON_BODY_BYTES)
+        const nowMs = Date.now()
+        const room = String(payload.roomCode || '').trim().toUpperCase()
+        if (room) {
+          const pkt = { ...(payload.packet || {}), _serverTs: nowMs }
+          const events = jamRooms.get(room) || []
+          const cutoff = nowMs - 2 * 3600 * 1000
+          const filtered = events.filter((e) => (e._serverTs || 0) > cutoff)
+          if (!pkt._packetId || !filtered.some((e) => e._packetId === pkt._packetId)) {
+            filtered.push(pkt)
+            if (filtered.length > 200) filtered.splice(0, filtered.length - 200)
           }
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: true, serverTs: nowMs }))
-        } catch {
-          res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: false }))
+          jamRooms.set(room, filtered)
+          boundMapSize(jamRooms)
         }
-      })
+        sendJson(res, 200, { ok: true, serverTs: nowMs })
+      } catch (err) {
+        sendJson(res, err?.statusCode === 413 ? 413 : 200, { ok: false, error: err?.message })
+      }
       return
     }
 
@@ -540,20 +947,32 @@ function startServer(options = {}) {
       const room = String(parsedUrl.searchParams.get('roomCode') || '').trim().toUpperCase()
       const sinceTs = Number(parsedUrl.searchParams.get('since') || 0)
       const events = (jamRooms.get(room) || []).filter((e) => (e._serverTs || 0) > sinceTs)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ ok: true, serverTs: nowMs, events }))
+      sendJson(res, 200, { ok: true, serverTs: nowMs, events, packets: events })
       return
     }
 
-    // 7. Static File Serving from staticDir (frontend/dist)
+    // 7. Unknown /api/* routes MUST return 404 JSON rather than SPA index.html
+    if (pathname === '/api' || pathname.startsWith('/api/')) {
+      sendJson(res, 404, { error: 'API route not found', path: pathname })
+      return
+    }
+
+    // 8. Static File Serving from staticDir (frontend/dist)
     if (req.method === 'GET' || req.method === 'HEAD') {
-      let relativePath = decodeURIComponent(pathname.replace(/^\/+/, ''))
+      let relativePath
+      try {
+        relativePath = decodeURIComponent(pathname).replace(/^\/+/, '')
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'text/plain' })
+        res.end('Bad Request')
+        return
+      }
       if (!relativePath) relativePath = 'index.html'
 
-      let filePath = path.join(staticDir, relativePath)
+      let filePath = path.resolve(staticDir, relativePath)
 
-      // Prevent directory traversal
-      if (!filePath.startsWith(staticDir)) {
+      // Strictly enforce staticDir boundary (prevent prefix & directory traversal)
+      if (filePath !== staticDir && !filePath.startsWith(staticPrefix)) {
         res.writeHead(403, { 'Content-Type': 'text/plain' })
         res.end('Forbidden')
         return
@@ -561,7 +980,7 @@ function startServer(options = {}) {
 
       fs.stat(filePath, (err, stats) => {
         if (err || !stats.isFile()) {
-          // SPA fallback: serve index.html for navigation routes
+          // SPA fallback: serve index.html for non-API navigation routes
           filePath = path.join(staticDir, 'index.html')
         }
 
@@ -579,6 +998,9 @@ function startServer(options = {}) {
         }
 
         const readStream = fs.createReadStream(filePath)
+        readStream.on('error', () => {
+          if (!res.writableEnded) res.end()
+        })
         readStream.pipe(res)
       })
       return
@@ -589,25 +1011,58 @@ function startServer(options = {}) {
   })
 
   return new Promise((resolve, reject) => {
-    // Try preferred port 8000 (matching Mac dev/native), fallback to dynamic port
-    const tryPort = (port) => {
-      server.listen(port, '127.0.0.1', () => {
-        const actualPort = server.address().port
-        console.log(`[UpBeat Desktop Server] Running on http://127.0.0.1:${actualPort}`)
-        resolve({ server, port: actualPort, url: `http://127.0.0.1:${actualPort}` })
-      })
-      server.once('error', (err) => {
-        if (err.code === 'EADDRINUSE' && port !== 0) {
-          console.warn(`[UpBeat Desktop Server] Port ${port} in use, picking random free port...`)
-          tryPort(0)
+    const basePort = Number(options.preferredPort) || DEFAULT_PORT
+    const portCandidates =
+      Array.isArray(options.portCandidates) && options.portCandidates.length > 0
+        ? options.portCandidates
+        : Array.from({ length: PORT_FALLBACK_COUNT }, (_, idx) => basePort + idx)
+
+    let attemptIdx = 0
+
+    const tryNextPort = () => {
+      if (attemptIdx >= portCandidates.length) {
+        reject(
+          new Error(
+            `Unable to bind UpBeat desktop microserver on deterministic ports: ${portCandidates.join(', ')}`
+          )
+        )
+        return
+      }
+
+      const port = portCandidates[attemptIdx++]
+      const onError = (err) => {
+        server.removeListener('listening', onListening)
+        if (err?.code === 'EADDRINUSE') {
+          if (attemptIdx < portCandidates.length) {
+            console.warn(
+              `[UpBeat Desktop Server] Port ${port} in use, trying next deterministic port ${portCandidates[attemptIdx]}...`
+            )
+          }
+          tryNextPort()
         } else {
           reject(err)
         }
-      })
+      }
+      const onListening = () => {
+        server.removeListener('error', onError)
+        const actualPort = server.address().port
+        console.log(`[UpBeat Desktop Server] Running on http://127.0.0.1:${actualPort}`)
+        resolve({ server, port: actualPort, url: `http://127.0.0.1:${actualPort}` })
+      }
+
+      server.once('error', onError)
+      server.once('listening', onListening)
+      server.listen(port, '127.0.0.1')
     }
 
-    tryPort(options.preferredPort || 8000)
+    tryNextPort()
   })
 }
 
-module.exports = { startServer, resolveStreamUrl }
+module.exports = {
+  startServer,
+  resolveStreamUrl,
+  DEFAULT_PORT,
+  ALLOWED_INNERTUBE_ENDPOINTS,
+  isAllowedCorsOrigin
+}

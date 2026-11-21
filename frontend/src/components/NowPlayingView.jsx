@@ -85,6 +85,7 @@ function NowPlayingView({
   const [lyricsSelectStart, setLyricsSelectStart] = useState(false)
   const scrollRootRef = useRef(null)
   const lyricsSectionRef = useRef(null)
+  const wasPlayingBeforeVideoRef = useRef(false)
 
   const vid = track?.video_id || resolvedVid
   const thumbUrl = track?.thumbnail || (vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : '')
@@ -92,6 +93,10 @@ function NowPlayingView({
   const coverUrl = artUrl(track, true) || thumbUrl
   const coverFallback = artUrl(track, false) || thumbUrl
   const trackKey = vid || `${track?.title || ''}|${track?.artist || ''}`
+
+  useEffect(() => {
+    wasPlayingBeforeVideoRef.current = false
+  }, [trackKey])
 
   useEffect(() => {
     if (!vid) {
@@ -140,16 +145,25 @@ function NowPlayingView({
     if (setShowVideo) setShowVideo(nextShow)
     if (nextShow) {
       if (showLyrics) setShowLyrics(false)
-      // Pause background audio when viewing video
-      document.querySelectorAll('audio').forEach((el) => {
-        try { el.pause() } catch {}
-      })
-    } else {
-      // Resume background audio when exiting video mode
+      wasPlayingBeforeVideoRef.current = Boolean(isPlaying)
+      // Pause via active-deck controller / isPlaying state so midTrackStall watchdog stays idle
       if (isPlaying) {
-        document.querySelectorAll('audio').forEach((el) => {
-          if (el.src) try { el.play().catch(() => {}) } catch {}
-        })
+        if (window.UpBeatControls?.forcePause) {
+          window.UpBeatControls.forcePause()
+        } else {
+          onTogglePlay?.()
+        }
+      }
+    } else {
+      const shouldResume = wasPlayingBeforeVideoRef.current || isPlaying
+      wasPlayingBeforeVideoRef.current = false
+      // Resume active deck only when exiting video mode
+      if (shouldResume) {
+        if (window.UpBeatControls?.forcePlay) {
+          window.UpBeatControls.forcePlay()
+        } else if (!isPlaying) {
+          onTogglePlay?.()
+        }
       }
     }
   }
@@ -157,10 +171,14 @@ function NowPlayingView({
   const handleClose = () => {
     if (showVideo && setShowVideo) {
       setShowVideo(false)
-      if (isPlaying) {
-        document.querySelectorAll('audio').forEach((el) => {
-          if (el.src) try { el.play().catch(() => {}) } catch {}
-        })
+      const shouldResume = wasPlayingBeforeVideoRef.current || isPlaying
+      wasPlayingBeforeVideoRef.current = false
+      if (shouldResume) {
+        if (window.UpBeatControls?.forcePlay) {
+          window.UpBeatControls.forcePlay()
+        } else if (!isPlaying) {
+          onTogglePlay?.()
+        }
       }
     }
     if (onClose) onClose()

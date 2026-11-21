@@ -1,13 +1,16 @@
 /**
  * UpBeat Windows Desktop Application Main Process
- * Supports Windows 10 & 11 with native tray, media shortcuts,
+ * Supports Windows 10 & 11 with native tray, scoped media shortcuts,
  * hardware media controls, single-instance lock, and embedded audio microserver.
  */
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, session } = require('electron')
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, session, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const { startServer } = require('./server.cjs')
+const { startServer, DEFAULT_PORT } = require('./server.cjs')
+
+const MAX_IPC_JSON_BYTES = 1024 * 1024 // 1 MB
+const ALLOWED_PERMISSIONS = new Set(['clipboard-sanitized-write', 'clipboard-read', 'fullscreen'])
 
 // 1. Single Instance Lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -19,12 +22,23 @@ if (!gotTheLock) {
 let mainWindow = null
 let tray = null
 let internalServer = null
+let serverUrl = ''
+let userDataDir = ''
+let mediaShortcutsRegistered = false
 let currentPlaybackState = {
   playing: false,
   title: 'UpBeat',
   artist: '',
   duration: 0,
   currentTime: 0
+}
+let syncedFavoritesSnapshot = []
+let syncedQueueSnapshot = []
+
+function isTrustedSender(event) {
+  if (!serverUrl) return false
+  const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || ''
+  return senderUrl.startsWith(serverUrl)
 }
 
 function getIconPath() {
@@ -53,26 +67,32 @@ function updateTrayMenu() {
     {
       label: playPauseLabel,
       click: () => {
-        if (mainWindow) mainWindow.webContents.executeJavaScript('window.UpBeatControls?.togglePlay?.()')
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.executeJavaScript('window.UpBeatControls?.togglePlay?.()').catch(() => {})
+        }
       }
     },
     {
       label: 'Next Track',
       click: () => {
-        if (mainWindow) mainWindow.webContents.executeJavaScript('window.UpBeatControls?.next?.()')
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.executeJavaScript('window.UpBeatControls?.next?.()').catch(() => {})
+        }
       }
     },
     {
       label: 'Previous Track',
       click: () => {
-        if (mainWindow) mainWindow.webContents.executeJavaScript('window.UpBeatControls?.prev?.()')
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.executeJavaScript('window.UpBeatControls?.prev?.()').catch(() => {})
+        }
       }
     },
     { type: 'separator' },
     {
       label: 'Open UpBeat',
       click: () => {
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
           if (mainWindow.isMinimized()) mainWindow.restore()
           mainWindow.show()
           mainWindow.focus()
@@ -101,7 +121,7 @@ function setupTray() {
     updateTrayMenu()
 
     tray.on('double-click', () => {
-      if (mainWindow) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isMinimized()) mainWindow.restore()
         mainWindow.show()
         mainWindow.focus()
@@ -109,7 +129,7 @@ function setupTray() {
     })
 
     tray.on('click', () => {
-      if (mainWindow) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isMinimized()) mainWindow.restore()
         mainWindow.show()
         mainWindow.focus()
@@ -121,21 +141,52 @@ function setupTray() {
 }
 
 function registerMediaShortcuts() {
+  if (mediaShortcutsRegistered) return
   try {
     globalShortcut.register('MediaPlayPause', () => {
-      if (mainWindow) mainWindow.webContents.executeJavaScript('window.UpBeatControls?.togglePlay?.()')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript('window.UpBeatControls?.togglePlay?.()').catch(() => {})
+      }
     })
     globalShortcut.register('MediaNextTrack', () => {
-      if (mainWindow) mainWindow.webContents.executeJavaScript('window.UpBeatControls?.next?.()')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript('window.UpBeatControls?.next?.()').catch(() => {})
+      }
     })
     globalShortcut.register('MediaPreviousTrack', () => {
-      if (mainWindow) mainWindow.webContents.executeJavaScript('window.UpBeatControls?.prev?.()')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript('window.UpBeatControls?.prev?.()').catch(() => {})
+      }
     })
     globalShortcut.register('MediaStop', () => {
-      if (mainWindow) mainWindow.webContents.executeJavaScript('window.UpBeatControls?.pause?.()')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript('window.UpBeatControls?.pause?.()').catch(() => {})
+      }
     })
+    mediaShortcutsRegistered = true
   } catch (err) {
     console.warn('[UpBeat Desktop] Global media shortcut registration notice:', err.message)
+  }
+}
+
+function unregisterMediaShortcuts() {
+  if (!mediaShortcutsRegistered) return
+  try {
+    globalShortcut.unregister('MediaPlayPause')
+    globalShortcut.unregister('MediaNextTrack')
+    globalShortcut.unregister('MediaPreviousTrack')
+    globalShortcut.unregister('MediaStop')
+  } catch {}
+  mediaShortcutsRegistered = false
+}
+
+// Bind global media keys only while UpBeat is actively playing so SMTC and other
+// paused or active desktop players are never hijacked when UpBeat is idle/paused.
+function syncMediaShortcuts(isPlaying) {
+  if (isPlaying) {
+    registerMediaShortcuts()
+  } else {
+    unregisterMediaShortcuts()
   }
 }
 
@@ -149,22 +200,28 @@ async function createWindow() {
     staticDir = path.join(__dirname, 'frontend')
   }
 
-  const userDataDir = path.join(app.getPath('userData'), 'data')
+  userDataDir = path.join(app.getPath('userData'), 'data')
 
-  // Start internal microserver
+  // Start internal microserver on deterministic dedicated port (48173 -> 48175)
   try {
     const srv = await startServer({
-      preferredPort: 8000,
+      preferredPort: DEFAULT_PORT,
       staticDir,
       userDataDir,
-      version: app.getVersion() || '7.3.1'
+      version: app.getVersion() || '7.6.2'
     })
     internalServer = srv.server
+    serverUrl = srv.url
   } catch (err) {
     console.error('[UpBeat Desktop] Failed to start internal server:', err)
+    dialog.showErrorBox(
+      'UpBeat Startup Error',
+      `UpBeat could not start its local audio engine (${err?.message || 'port unavailable'}). Please close any conflicting UpBeat process and try again.`
+    )
+    app.isQuitting = true
+    app.quit()
+    return false
   }
-
-  const serverUrl = internalServer ? `http://127.0.0.1:${internalServer.address().port}` : 'http://127.0.0.1:8000'
 
   mainWindow = new BrowserWindow({
     width: 1320,
@@ -207,18 +264,29 @@ async function createWindow() {
 
   mainWindow.loadURL(serverUrl)
 
+  mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
+    if (!targetUrl.startsWith(serverUrl)) {
+      event.preventDefault()
+      if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+        shell.openExternal(targetUrl)
+      }
+    }
+  })
+
   // Handle external link clicks (open in system default browser)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http:') || url.startsWith('https:')) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url)
     }
     return { action: 'deny' }
   })
+
+  return true
 }
 
 // Second instance focus
 app.on('second-instance', () => {
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
@@ -228,14 +296,22 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (session?.defaultSession) {
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-      if (permission === 'media') return callback(true)
-      callback(true)
+      const url = webContents?.getURL?.() || ''
+      const isLocal = Boolean(serverUrl) && url.startsWith(serverUrl)
+      callback(isLocal && ALLOWED_PERMISSIONS.has(permission))
+    })
+    session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+      const isLocal = Boolean(serverUrl) && (
+        requestingOrigin?.startsWith(serverUrl) ||
+        webContents?.getURL?.()?.startsWith(serverUrl)
+      )
+      return Boolean(isLocal && ALLOWED_PERMISSIONS.has(permission))
     })
   }
 
-  await createWindow()
+  const started = await createWindow()
+  if (!started) return
   setupTray()
-  registerMediaShortcuts()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -243,6 +319,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('will-quit', () => {
+  unregisterMediaShortcuts()
   globalShortcut.unregisterAll()
   if (internalServer) {
     try { internalServer.close() } catch {}
@@ -251,27 +328,69 @@ app.on('will-quit', () => {
 
 // IPC Handlers
 ipcMain.on('upbeat:update-playback', (event, data) => {
-  currentPlaybackState = { ...currentPlaybackState, ...data }
+  if (!isTrustedSender(event) || !data || typeof data !== 'object') return
+  currentPlaybackState = {
+    playing: Boolean(data.playing),
+    title: typeof data.title === 'string' ? data.title.slice(0, 200) : 'UpBeat',
+    artist: typeof data.artist === 'string' ? data.artist.slice(0, 200) : '',
+    duration: Number(data.duration) || 0,
+    currentTime: Number(data.currentTime) || 0
+  }
+  syncMediaShortcuts(currentPlaybackState.playing)
   updateTrayMenu()
 })
 
+ipcMain.on('upbeat:sync-favorites', (event, itemsJson) => {
+  if (!isTrustedSender(event) || typeof itemsJson !== 'string') return
+  if (Buffer.byteLength(itemsJson, 'utf8') > MAX_IPC_JSON_BYTES) return
+  try {
+    const parsed = JSON.parse(itemsJson)
+    if (Array.isArray(parsed)) {
+      syncedFavoritesSnapshot = parsed.slice(0, 200)
+      if (userDataDir) {
+        const dest = path.join(userDataDir, 'synced-favorites.json')
+        fs.writeFileSync(dest, JSON.stringify(syncedFavoritesSnapshot), 'utf8')
+      }
+    }
+  } catch {}
+})
+
+ipcMain.on('upbeat:sync-queue', (event, itemsJson) => {
+  if (!isTrustedSender(event) || typeof itemsJson !== 'string') return
+  if (Buffer.byteLength(itemsJson, 'utf8') > MAX_IPC_JSON_BYTES) return
+  try {
+    const parsed = JSON.parse(itemsJson)
+    if (Array.isArray(parsed)) {
+      syncedQueueSnapshot = parsed.slice(0, 200)
+      if (userDataDir) {
+        const dest = path.join(userDataDir, 'synced-queue.json')
+        fs.writeFileSync(dest, JSON.stringify(syncedQueueSnapshot), 'utf8')
+      }
+    }
+  } catch {}
+})
+
 ipcMain.on('upbeat:open-external', (event, url) => {
-  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+  if (!isTrustedSender(event)) return
+  if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
     shell.openExternal(url)
   }
 })
 
-ipcMain.on('upbeat:minimize', () => {
-  if (mainWindow) mainWindow.minimize()
+ipcMain.on('upbeat:minimize', (event) => {
+  if (!isTrustedSender(event)) return
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize()
 })
 
-ipcMain.on('upbeat:maximize', () => {
-  if (mainWindow) {
+ipcMain.on('upbeat:maximize', (event) => {
+  if (!isTrustedSender(event)) return
+  if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMaximized()) mainWindow.unmaximize()
     else mainWindow.maximize()
   }
 })
 
-ipcMain.on('upbeat:close', () => {
-  if (mainWindow) mainWindow.close()
+ipcMain.on('upbeat:close', (event) => {
+  if (!isTrustedSender(event)) return
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close()
 })

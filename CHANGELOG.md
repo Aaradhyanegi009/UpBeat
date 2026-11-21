@@ -4,6 +4,18 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.6.2] - 2026-11-22
+
+### 🛡️ Security, Signing & OTA Integrity Hardening
+- **Backend & Electron Lockdown (`backend/main.py`, `backend/routers/`, `backend/safari_bridge.py`, `electron/server.cjs`, `api/innertube.js`)**: Replaced wildcard CORS with explicit localhost/LAN/Capacitor allowlists; enforced `https://` YouTube URL validation & AppleScript escaping on Safari endpoints plus loopback origin checks on desktop actions; validated 11-char `VIDEO_ID_REGEX` & `os.path.realpath` containment on `/api/audio` & `/api/download`; stripped `\r\n` control chars in `Content-Disposition`; allowlisted Innertube endpoints (`search`, `browse`, `next`, `player`); and moved Gemini keys from `?key=` query strings to `x-goog-api-key` headers.
+- **Android & OTA Integrity (`android/`, `frontend/src/otaUpdater.js`)**: Removed tracked `android/app/upbeat-sideload.keystore` and hardcoded signing credentials in favor of `UPBEAT_KEYSTORE_*` properties/env vars; disabled `allowBackup` and lock-screen exposure (`showWhenLocked`); restricted Android Auto artwork fetches to HTTPS YouTube/Google hosts; enforced fail-closed SHA-256 verification and native rollback awareness in `otaUpdater.js`.
+
+### 🎧 Playback, Discovery, Filter & Cross-Platform Reliability Fixes
+- **Frontend Audio, Queue & UI (`PlayerBar.jsx`, `NowPlayingView.jsx`, `useAudioPlayback.js`, `App.jsx`, `discoveryEngine.js`, `roomController.js`, `offlineStorage.js`)**: Eliminated dual-deck simultaneous audio on Watch video / car `'play'`; fixed sleep timer freeze (`notifyNativePlayback` deps); updated `YT.Player` fallback callbacks to use live refs; honored `repeatMode === 'off'` at queue end; guarded `isSbr2xFreeze` & debounced near-end stalls; exported `findNodes` for YTM `RDAMVM` radio; fixed Rediscover keys, chart ID alignment, post-onboarding refresh, Jam `{ emoji }` reactions + cloud `JAM_PONG` relay + LRU Blob URL cleanup, and `Cmd/Ctrl+B` collision.
+- **Backend, Edge API, Desktop, Android Auto, macOS & CI**: Fixed FastAPI `200`/`206`/`416` Range responses, atomic `.part_*` downloads, duplicate `operation_id` warnings, SPA `index.html` fallback routing, `_fast_innertube_audio`-first local stream resolution, `shared/music_filters.json` false positives (`"Dream On"`, `"November Rain"`, `"Alien Blues"`, `"Drama"`, `"Serenity"`), Vercel Edge error caching & social cursor parity, Electron deterministic port `48173` + `/api/download` & `/api/lyrics`, Android Auto active-WebView delegation + queue sync, macOS deep-link queuing + ATS hardening, and `.github/workflows/` release & CI checks.
+
+---
+
 ## [v7.6.1] - 2026-11-16
 
 ### ✨ AI Curator & AI Search Hotfix

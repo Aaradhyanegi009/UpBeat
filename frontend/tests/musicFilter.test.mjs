@@ -8,6 +8,7 @@ import {
   isStrictArtistName,
   sanitizeLocalMusicLibrary
 } from '../src/standaloneApi.js'
+import { MIN_DURATION_SEC, MAX_DURATION_SEC } from '../src/config/musicFilters.js'
 
 test('isValidMusicTrack is aliased to isStrictMusicTrack', () => {
   assert.equal(isValidMusicTrack, isStrictMusicTrack)
@@ -26,13 +27,13 @@ test('accepts valid music tracks across languages and duration formats', () => {
     isStrictMusicTrack({ title: 'Starboy', artist: 'The Weeknd', video_id: '34Na4j8AVgA', duration_seconds: 230 }),
     true
   )
-  // Exact boundary durations: 75s and 420s should be allowed
+  // Exact boundary durations: MIN_DURATION_SEC and MAX_DURATION_SEC should be allowed
   assert.equal(
-    isStrictMusicTrack({ title: 'Intro Interlude Song', artist: 'Synth Artist', video_id: 'abcdefghijk', duration: 75 }),
+    isStrictMusicTrack({ title: 'Intro Interlude Song', artist: 'Synth Artist', video_id: 'abcdefghijk', duration: MIN_DURATION_SEC }),
     true
   )
   assert.equal(
-    isStrictMusicTrack({ title: 'Progressive Track', artist: 'Band Name', video_id: 'abcdefghij1', duration: 420 }),
+    isStrictMusicTrack({ title: 'Progressive Track', artist: 'Band Name', video_id: 'abcdefghij1', duration: MAX_DURATION_SEC }),
     true
   )
 })
@@ -61,9 +62,9 @@ test('rejects view counts, invalid video IDs, missing metadata, and out-of-range
   assert.equal(isStrictMusicTrack({ title: 'Song', artist: '1.2M views', duration: 200 }), false)
   assert.equal(isStrictMusicTrack({ title: 'Song', artist: 'unknown', duration: 200 }), false)
   assert.equal(isStrictMusicTrack({ title: 'Song', artist: 'Artist', video_id: 'short_id', duration: 200 }), false)
-  // Out-of-bounds durations (<75s or >420s when known)
-  assert.equal(isStrictMusicTrack({ title: 'Clip', artist: 'Artist', video_id: 'dQw4w9WgXcQ', duration: 74 }), false)
-  assert.equal(isStrictMusicTrack({ title: 'Long Mix', artist: 'Artist', video_id: 'dQw4w9WgXcQ', duration: 421 }), false)
+  // Out-of-bounds durations (<MIN_DURATION_SEC or >MAX_DURATION_SEC when known)
+  assert.equal(isStrictMusicTrack({ title: 'Clip', artist: 'Artist', video_id: 'dQw4w9WgXcQ', duration: MIN_DURATION_SEC - 1 }), false)
+  assert.equal(isStrictMusicTrack({ title: 'Long Mix', artist: 'Artist', video_id: 'dQw4w9WgXcQ', duration: MAX_DURATION_SEC + 1 }), false)
   assert.equal(isStrictMusicTrack({ title: 'Two Hour Podcast', artist: 'Host', duration_text: '1:05:00' }), false)
 })
 

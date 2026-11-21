@@ -15,7 +15,10 @@ from .innertube_client import (
     _SESSION,
     _STREAM_CACHE,
     _fast_innertube_audio,
+    _stream_cache_get,
+    _stream_cache_set,
     get_video_duration,
+    invalidate_stream_cache,
     register_prefetch_hook,
     search_youtube_music_catalog,
     search_youtube_single,
@@ -24,6 +27,9 @@ from .track_filters import _duration_to_seconds
 
 _YDL_LOCAL = threading.local()
 _SC_CLIENT_ID = "xk6BGxLCsQJ5Ss0bH6sRdsZhts3gTNaU"
+_PREFETCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=3, thread_name_prefix="upbeat-prefetch"
+)
 
 
 def _get_ydl() -> yt_dlp.YoutubeDL:
@@ -326,18 +332,15 @@ def get_audio_stream_url(
     video_id = video_id.split("&")[0].split("?")[0].strip()
 
     now = time.time()
-    cached = _STREAM_CACHE.get(video_id)
-    if cached and (now - cached.get("ts", 0)) < 1500:
-        cached_dur = int(cached.get("duration") or 0)
-        if expected_duration > 60 and cached_dur > 0 and cached_dur < min(65, expected_duration * 0.5):
-            _STREAM_CACHE.pop(video_id, None)
-        else:
-            return cached
+    cached = _stream_cache_get(video_id, expected_duration=expected_duration)
+    if cached:
+        return cached
 
-    if os.environ.get("VERCEL"):
-        try:
-            fast_info = _fast_innertube_audio(video_id)
-            if fast_info and fast_info.get("url"):
+    # Fast Innertube audio resolution (0.35s) FIRST on both local Mac and Vercel
+    try:
+        fast_info = _fast_innertube_audio(video_id)
+        if fast_info and fast_info.get("url"):
+            if os.environ.get("VERCEL"):
                 probe = _SESSION.get(
                     fast_info["url"],
                     headers={"User-Agent": fast_info.get("ua", "Mozilla/5.0"), "Range": "bytes=0-1"},
@@ -346,77 +349,66 @@ def get_audio_stream_url(
                 )
                 probe.close()
                 if probe.status_code in (200, 206):
-                    _STREAM_CACHE[video_id] = fast_info
+                    _stream_cache_set(video_id, fast_info)
                     return fast_info
+            else:
+                _stream_cache_set(video_id, fast_info)
+                return fast_info
+    except Exception as e:
+        print(f"Innertube audio error for {video_id}: {e}")
+
+    if not os.environ.get("VERCEL"):
+        try:
+            ydl = _get_ydl()
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            stream_url = info.get("url")
+
+            if not stream_url and info.get("formats"):
+                audio_formats = [
+                    f for f in info["formats"]
+                    if f.get("url") and (f.get("acodec") != "none" or "audio" in (f.get("mimeType") or ""))
+                ]
+                if audio_formats:
+                    m4a_fmts = [f for f in audio_formats if f.get("ext") == "m4a"]
+                    best_fmt = (m4a_fmts or audio_formats)[-1]
+                    stream_url = best_fmt.get("url")
+
+            if stream_url:
+                ext = info.get("ext", "m4a")
+                mime = "audio/mp4" if ext == "m4a" else f"audio/{ext}"
+                clen = int(info.get("filesize") or info.get("filesize_approx") or 0)
+                if not clen:
+                    qs = urllib.parse.parse_qs(urllib.parse.urlparse(stream_url).query)
+                    if "clen" in qs:
+                        clen = int(qs["clen"][0])
+                ua = (info.get("http_headers") or {}).get(
+                    "User-Agent",
+                    (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+                    ),
+                )
+                entry = {
+                    "url": stream_url,
+                    "mime": mime,
+                    "clen": clen,
+                    "ua": ua,
+                    "title": info.get("title", ""),
+                    "uploader": info.get("uploader", ""),
+                    "duration": info.get("duration", 0),
+                    "ts": now,
+                }
+                _stream_cache_set(video_id, entry)
+                return entry
         except Exception as e:
-            print(f"Innertube audio error for {video_id}: {e}")
-
-        cloud_info = _resolve_cloud_fallback_audio(
-            video_id, title=title, artist=artist, expected_duration=expected_duration
-        )
-        if cloud_info and cloud_info.get("url"):
-            _STREAM_CACHE[video_id] = cloud_info
-            return cloud_info
-
-    try:
-        ydl = _get_ydl()
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-        stream_url = info.get("url")
-
-        if not stream_url and info.get("formats"):
-            audio_formats = [
-                f for f in info["formats"]
-                if f.get("url") and (f.get("acodec") != "none" or "audio" in (f.get("mimeType") or ""))
-            ]
-            if audio_formats:
-                m4a_fmts = [f for f in audio_formats if f.get("ext") == "m4a"]
-                best_fmt = (m4a_fmts or audio_formats)[-1]
-                stream_url = best_fmt.get("url")
-
-        if stream_url:
-            ext = info.get("ext", "m4a")
-            mime = "audio/mp4" if ext == "m4a" else f"audio/{ext}"
-            clen = int(info.get("filesize") or info.get("filesize_approx") or 0)
-            if not clen:
-                qs = urllib.parse.parse_qs(urllib.parse.urlparse(stream_url).query)
-                if "clen" in qs:
-                    clen = int(qs["clen"][0])
-            ua = (info.get("http_headers") or {}).get(
-                "User-Agent",
-                (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-                ),
-            )
-            entry = {
-                "url": stream_url,
-                "mime": mime,
-                "clen": clen,
-                "ua": ua,
-                "title": info.get("title", ""),
-                "uploader": info.get("uploader", ""),
-                "duration": info.get("duration", 0),
-                "ts": now,
-            }
-            _STREAM_CACHE[video_id] = entry
-            return entry
-    except Exception as e:
-        print(f"yt-dlp stream extraction error for {video_id}: {e}")
-
-    try:
-        fast_info = _fast_innertube_audio(video_id)
-        if fast_info and fast_info.get("url"):
-            _STREAM_CACHE[video_id] = fast_info
-            return fast_info
-    except Exception as e:
-        print(f"Innertube fallback audio error for {video_id}: {e}")
+            print(f"yt-dlp stream extraction error for {video_id}: {e}")
 
     try:
         cloud_info = _resolve_cloud_fallback_audio(
             video_id, title=title, artist=artist, expected_duration=expected_duration
         )
         if cloud_info and cloud_info.get("url"):
-            _STREAM_CACHE[video_id] = cloud_info
+            _stream_cache_set(video_id, cloud_info)
             return cloud_info
     except Exception as e:
         print(f"Cloud fallback audio error for {video_id}: {e}")
@@ -425,15 +417,16 @@ def get_audio_stream_url(
 
 
 def prefetch_streams_async(video_ids: List[str]) -> None:
-    """Warm up the stream cache in the background for the top tracks in a playlist."""
+    """Warm up the stream cache in the background using a shared bounded thread pool."""
     def _warm(vid: str):
-        if vid and vid not in _STREAM_CACHE:
+        if vid and not _stream_cache_get(vid):
             get_audio_stream_url(vid)
 
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+    seen = set()
     for v in video_ids[:3]:
-        pool.submit(_warm, v)
-    pool.shutdown(wait=False)
+        if v and v not in seen and not _stream_cache_get(v):
+            seen.add(v)
+            _PREFETCH_EXECUTOR.submit(_warm, v)
 
 
 register_prefetch_hook(prefetch_streams_async)

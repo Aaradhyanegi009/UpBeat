@@ -4,11 +4,11 @@
 import { getStoredApiKey } from "./platformConfig.js"
 
 const MODEL_ALIASES = {
-  'gemini-4-argon': 'gemini-robotics-er-2-preview',
-  'gemini-er-2-flash': 'gemini-robotics-er-2-preview'
+  'gemini-4-argon': 'gemini-2.5-flash-lite',
+  'gemini-er-2-flash': 'gemini-2.5-flash-lite'
 }
 const LOW_THINKING_MODELS = new Set(['gemini-3.8-flash', 'gemini-3.7-flash'])
-const ZERO_BUDGET_MODELS = new Set(['gemini-2.5-flash', 'gemini-robotics-er-2-preview'])
+const ZERO_BUDGET_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-robotics-er-2-preview'])
 
 // ---------------------------------------------------------------------------
 // Gemini (direct)
@@ -47,7 +47,7 @@ function describeError(status, model) {
 
 async function callGeminiDirect(modelId, prompt, apiKey, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const endpoint = MODEL_ALIASES[modelId] || modelId
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${endpoint}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${endpoint}:generateContent`
 
   const generationConfig = { temperature: 0.55 }
   if (!endpoint.includes('gemma')) generationConfig.responseMimeType = 'application/json'
@@ -65,7 +65,10 @@ async function callGeminiDirect(modelId, prompt, apiKey, timeoutMs = DEFAULT_TIM
   try {
     resp = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
       signal: controller.signal,
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig })
     })
@@ -119,12 +122,9 @@ export async function generateWithDirectGemini(prompt, preferredModel = 'gemini-
   const pool = [
     preferredModel,
     'gemini-4-argon',
-    'gemini-3.1-flash-lite',
-    'gemini-3.5-flash-lite',
     'gemini-flash-lite-latest',
-    'gemini-3-flash-preview',
     'gemini-2.5-flash',
-    'gemma-4-26b-a4b-it'
+    'gemini-2.0-flash'
   ].filter(Boolean)
   const seen = new Set()
   const candidates = pool.filter((m) => {

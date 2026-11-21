@@ -42,6 +42,7 @@ from .innertube_client import (
     browse_youtube_music_playlist,
     direct_search_youtube_music,
     get_video_duration,
+    invalidate_stream_cache,
     search_youtube_music_catalog,
     search_youtube_single,
 )
@@ -99,6 +100,7 @@ __all__ = [
     "format_seconds",
     "get_audio_stream_url",
     "get_video_duration",
+    "invalidate_stream_cache",
     "is_strict_music_track",
     "is_valid_music_track",
     "parse_duration_seconds",

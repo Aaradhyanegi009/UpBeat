@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Play, Users, RefreshCw, Sparkles, Shuffle, Search, Music, Disc, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
 import { navigate } from '../ui/router'
 import { Art, Avatar, Chip, ChipRow, IconButton, LikedTile, SectionHeader, Collage, Spinner, artUrl, TrackRow } from '../ui/primitives'
-import { MediaCard } from '../ui/AppContext'
+import { MediaCard, SongRow, useApp } from '../ui/AppContext'
 import { getInitialDiscoveryBlocks, fetchListenTogetherFeed, advanceRotationCursor, directSearchStandalone, isValidMusicTrack, THIRTY_MINUTES_MS } from '../standaloneApi'
 
 export const MOODS = [
@@ -30,6 +30,7 @@ export default function HomeView({
   jamActive = false,
   currentTrack = null,
   isPlaying = false,
+  onboardingVersion = 0,
   onOpenProfile,
   onOpenFriends,
   onOpenSettings,
@@ -40,24 +41,46 @@ export default function HomeView({
   onPlayTrack,
   onListenAlong
 }) {
+  const app = useApp()
   const [activeMood, setActiveMood] = useState('for_you')
   const [blocks, setBlocks] = useState(() => getInitialDiscoveryBlocks())
   const [refreshing, setRefreshing] = useState(false)
   const pinnedCoversRef = useRef({})
+  const userTracksRef = useRef(userTracks)
+  userTracksRef.current = userTracks
+  const tasteDnaRef = useRef(tasteDna)
+  tasteDnaRef.current = tasteDna
 
   // Mood-specific live data state
   const [moodData, setMoodData] = useState({})
   const [moodLoading, setMoodLoading] = useState(false)
   const autoRefreshTimerRef = useRef(null)
 
-  // Load / update personalized discovery blocks strictly ONCE ON MOUNT
+  // Load / update personalized discovery blocks on mount and whenever onboarding finishes
   useEffect(() => {
     let alive = true
-    fetchListenTogetherFeed({ userTracks, tasteDna })
+    const force = onboardingVersion > 0
+    if (force) pinnedCoversRef.current = {}
+    fetchListenTogetherFeed({ userTracks: userTracksRef.current, tasteDna: tasteDnaRef.current, forceRefresh: force })
       .then((b) => alive && Array.isArray(b) && b.length && setBlocks(b))
       .catch(() => {})
     return () => {
       alive = false
+    }
+  }, [onboardingVersion])
+
+  useEffect(() => {
+    let alive = true
+    const onOnboardingFinished = () => {
+      pinnedCoversRef.current = {}
+      fetchListenTogetherFeed({ userTracks: userTracksRef.current, tasteDna: tasteDnaRef.current, forceRefresh: true })
+        .then((b) => alive && Array.isArray(b) && b.length && setBlocks(b))
+        .catch(() => {})
+    }
+    window.addEventListener('upbeat-onboarding-finished', onOnboardingFinished)
+    return () => {
+      alive = false
+      window.removeEventListener('upbeat-onboarding-finished', onOnboardingFinished)
     }
   }, [])
 
@@ -443,16 +466,25 @@ export default function HomeView({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                {(activeMoodContent?.tracks || []).slice(0, 10).map((t, idx) => (
-                  <TrackRow
-                    key={t.video_id || `${t.title}-${idx}`}
-                    track={t}
-                    index={idx}
-                    isCurrent={currentTrack?.video_id === t.video_id}
-                    isPlaying={isPlaying && currentTrack?.video_id === t.video_id}
-                    onPlay={() => onPlayTrack?.(t, activeMoodContent.tracks)}
-                  />
-                ))}
+                {(activeMoodContent?.tracks || []).slice(0, 10).map((t, idx) =>
+                  app ? (
+                    <SongRow
+                      key={t.video_id || `${t.title}-${idx}`}
+                      track={t}
+                      list={activeMoodContent.tracks}
+                      index={idx}
+                    />
+                  ) : (
+                    <TrackRow
+                      key={t.video_id || `${t.title}-${idx}`}
+                      track={t}
+                      index={idx}
+                      isCurrent={currentTrack?.video_id === t.video_id}
+                      isPlaying={isPlaying && currentTrack?.video_id === t.video_id}
+                      onPlay={() => onPlayTrack?.(t, activeMoodContent.tracks)}
+                    />
+                  )
+                )}
               </div>
             )}
           </div>
@@ -583,7 +615,7 @@ function FeaturedCard({ block, thumbSrc, isDesktop, onOpen, onPlay, onShuffle })
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
       aria-label={`Open ${block.title}`}
     >
-      <Art src={img} hi className="!rounded-none ! absolute inset-[-60px] w-[calc(100%+120px)] h-[calc(100%+120px)] max-w-none blur-[36px] saturate-[1.2] brightness-[0.8]" />
+      <Art src={img} hi className="!rounded-none !absolute inset-[-60px] w-[calc(100%+120px)] h-[calc(100%+120px)] max-w-none blur-[36px] saturate-[1.2] brightness-[0.8]" />
       <div className="absolute inset-0 bg-gradient-to-r from-[rgba(10,10,11,0.92)] via-[rgba(10,10,11,0.6)] to-[rgba(10,10,11,0.25)]" />
       <Art
         src={img}

@@ -1,10 +1,15 @@
-name: Build UpBeat Android APK
+name: Build UpBeat Android APK & OTA Bundle
 
 on:
   push:
     branches: [ "main", "master" ]
     tags: [ "v*" ]
   workflow_dispatch:
+    inputs:
+      target_tag:
+        description: 'Optional release tag to publish APK & OTA bundle to (defaults to v<package.json version>)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -21,6 +26,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -35,28 +42,43 @@ jobs:
       - name: Build Frontend & Sync Capacitor Android
         working-directory: frontend
         run: |
-          npm install
+          npm ci
           npm run build
           npx cap sync android
 
-      - name: Build Android Debug APK
+      - name: Build Android APK (Signed Release or Debug Fallback)
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          UPBEAT_KEYSTORE_PASSWORD: ${{ secrets.UPBEAT_KEYSTORE_PASSWORD }}
+          UPBEAT_KEY_ALIAS: ${{ secrets.UPBEAT_KEY_ALIAS }}
+          UPBEAT_KEY_PASSWORD: ${{ secrets.UPBEAT_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/UpBeat.apk
+          mkdir -p app/build/outputs/apk
+          KEYSTORE_PATH="${RUNNER_TEMP}/upbeat-release.keystore"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$UPBEAT_KEYSTORE_PASSWORD" ] && [ -n "$UPBEAT_KEY_ALIAS" ] && [ -n "$UPBEAT_KEY_PASSWORD" ]; then
+            echo "Release signing secrets present: building signed release APK..."
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            export UPBEAT_KEYSTORE_FILE="$KEYSTORE_PATH"
+            ./gradlew assembleRelease --no-daemon
+            cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/UpBeat.apk
+            rm -f "$KEYSTORE_PATH"
+          else
+            echo "::notice::Android release signing secrets not set; building debug APK fallback."
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/UpBeat.apk
+          fi
 
       - name: Upload UpBeat-Android-APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: UpBeat-Android-APK
-          path: android/app/build/outputs/apk/debug/UpBeat.apk
+          path: android/app/build/outputs/apk/UpBeat.apk
+          if-no-files-found: error
 
-      - name: Package macOS App Bundle & OTA Live Update Bundle
+      - name: Package OTA Live Update Bundle
         run: |
-          if [ -d "UpBeat.app" ]; then
-            zip -r -y UpBeat-macOS.zip UpBeat.app
-          fi
           if [ -d "frontend/dist" ]; then
             cd frontend/dist
             zip -r ../../dist.zip .
@@ -64,16 +86,30 @@ jobs:
             sha256sum dist.zip | awk '{print $1}' > dist.zip.sha256
           fi
 
-      - name: Publish UpBeat.apk and macOS Release to GitHub
+      - name: Resolve Release Tag
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        id: release_tag
+        run: |
+          INPUT_TAG="${{ github.event.inputs.target_tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            VER="$(node -p "require('./package.json').version")"
+            TAG="v${VER}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Publish UpBeat.apk and OTA Bundle to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: UpBeat ${{ github.ref_name }}
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: UpBeat ${{ steps.release_tag.outputs.tag }}
           generate_release_notes: true
           files: |
-            android/app/build/outputs/apk/debug/UpBeat.apk
-            UpBeat-macOS.zip
+            android/app/build/outputs/apk/UpBeat.apk
             dist.zip
             dist.zip.sha256
         env:

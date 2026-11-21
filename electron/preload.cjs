@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('UpBeatNative', {
   platform: 'win32',
   isDesktop: true,
   isWindows: true,
-  appVersion: '7.3.1',
+  appVersion: '7.6.2',
 
   updatePlayback: (playing, title, artist, thumb, duration, currentTime) => {
     ipcRenderer.send('upbeat:update-playback', {

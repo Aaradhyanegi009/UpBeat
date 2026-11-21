@@ -67,6 +67,13 @@ export class JamSessionManager {
     this.syncInterval = null
     this.pingInterval = null
     this.clockSamples = []
+    this.destroyed = false
+    this._timers = new Set()
+    this.hostDisconnectTimer = null
+    this.lastHostPacketAt = 0
+    this.socialSseReconnectTimer = null
+    this.roomSseReconnectTimer = null
+    this.roomInitPollTimer = null
 
     this.cloudTransport = new CloudRelayTransport(this)
     this.peerTransport = new PeerTransport(this)
@@ -312,7 +319,37 @@ export class JamSessionManager {
   reportDriftStatus(...args) { return this.roomController.reportDriftStatus(...args) }
   leaveJam(...args) { return this.roomController.leaveJam(...args) }
 
+  scheduleTimer(fn, ms) {
+    if (this.destroyed) return null
+    const id = setTimeout(() => {
+      this._timers.delete(id)
+      if (this.destroyed) return
+      fn()
+    }, ms)
+    this._timers.add(id)
+    return id
+  }
+
+  clearTimer(id) {
+    if (!id) return
+    clearTimeout(id)
+    this._timers.delete(id)
+  }
+
+  clearAllTimers() {
+    for (const id of this._timers) {
+      clearTimeout(id)
+    }
+    this._timers.clear()
+    if (this.hostDisconnectTimer) { clearTimeout(this.hostDisconnectTimer); this.hostDisconnectTimer = null }
+    if (this.socialSseReconnectTimer) { clearTimeout(this.socialSseReconnectTimer); this.socialSseReconnectTimer = null }
+    if (this.roomSseReconnectTimer) { clearTimeout(this.roomSseReconnectTimer); this.roomSseReconnectTimer = null }
+    if (this.roomInitPollTimer) { clearTimeout(this.roomInitPollTimer); this.roomInitPollTimer = null }
+  }
+
   destroy() {
+    this.destroyed = true
+    this.clearAllTimers()
     if (this.presenceTimer) { clearInterval(this.presenceTimer); this.presenceTimer = null }
     if (this.backendPollTimer) { clearInterval(this.backendPollTimer); this.backendPollTimer = null }
     if (this.presencePeerReclaimTimer) { clearTimeout(this.presencePeerReclaimTimer); this.presencePeerReclaimTimer = null }
@@ -320,6 +357,7 @@ export class JamSessionManager {
     this.cloudTransport.destroySocial()
     this.peerTransport.destroyAll()
     this.listeners.clear()
+    this.clearAllTimers()
   }
 }
 

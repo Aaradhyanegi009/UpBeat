@@ -221,6 +221,12 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     private final List<CarTrack> mActiveCarQueue = Collections.synchronizedList(new ArrayList<>());
     private volatile int mActiveCarQueueIndex = 0;
     private volatile String mRepeatMode = "off";
+    private volatile boolean mShuffleEnabled = false;
+    private final java.util.concurrent.atomic.AtomicInteger mConsecutivePlaybackErrors = new java.util.concurrent.atomic.AtomicInteger(0);
+    private static final int MAX_CONSECUTIVE_PLAYBACK_ERRORS = 4;
+    private static final int MAX_STREAM_CACHE_SIZE = 100;
+    private volatile boolean mStandalonePrepared = false;
+    private volatile long mPendingSeekMs = 0;
     private String currentVideoId = "";
     private String currentQueueTitle = "UpBeat Queue";
 
@@ -298,7 +304,6 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         sInstance = this;
         mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         createNotificationChannel();
-        acquireLocks();
 
         initCuratedPlaylists();
         initMoodPlaylists();
@@ -321,6 +326,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         mMediaSession.setCallback(new MediaSessionCallback());
         syncMediaSessionRepeatMode();
+        syncMediaSessionShuffleMode();
         mMediaSession.setActive(true);
         setSessionToken(mMediaSession.getSessionToken());
 
@@ -746,6 +752,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private void playQueueAtIndex(List<CarTrack> sourceList, int startIndex, String queueTitle) {
+        mConsecutivePlaybackErrors.set(0);
         synchronized (mActiveCarQueue) {
             mActiveCarQueue.clear();
             if (sourceList != null && !sourceList.isEmpty()) {
@@ -768,12 +775,54 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
     }
 
+    private boolean isWebViewPlaybackActive() {
+        return MainActivity.sInstance != null && !mUsingStandalonePlayer;
+    }
+
+    private int findTrackIndexInList(List<CarTrack> list, String videoId, String title, String artist) {
+        if (list == null || list.isEmpty()) return -1;
+        String normVid = videoId != null ? videoId.trim() : "";
+        String normTitle = title != null ? title.trim() : "";
+        String normArtist = artist != null ? artist.trim() : "";
+        if (!normVid.isEmpty()) {
+            for (int i = 0; i < list.size(); i++) {
+                CarTrack t = list.get(i);
+                if (normVid.equals(t.videoId)) {
+                    return i;
+                }
+            }
+        }
+        if (!normTitle.isEmpty()) {
+            for (int i = 0; i < list.size(); i++) {
+                CarTrack t = list.get(i);
+                if (normTitle.equalsIgnoreCase(t.title != null ? t.title.trim() : "")) {
+                    if (normArtist.isEmpty() || normArtist.equalsIgnoreCase(t.artist != null ? t.artist.trim() : "")) {
+                        return i;
+                    }
+                }
+            }
+            for (int i = 0; i < list.size(); i++) {
+                CarTrack t = list.get(i);
+                if (normTitle.equalsIgnoreCase(t.title != null ? t.title.trim() : "")) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
     private void syncActiveCarQueueToMediaSession() {
         if (mMediaSession == null) return;
-        List<MediaSessionCompat.QueueItem> qItems = new ArrayList<>();
+        final List<MediaSessionCompat.QueueItem> qItems = new ArrayList<>();
+        final String titleCopy = currentQueueTitle;
         synchronized (mActiveCarQueue) {
-            int limit = Math.min(40, mActiveCarQueue.size());
-            for (int i = 0; i < limit; i++) {
+            int total = mActiveCarQueue.size();
+            int start = 0;
+            if (total > 40) {
+                start = Math.max(0, Math.min(mActiveCarQueueIndex - 5, total - 40));
+            }
+            int end = Math.min(total, start + 40);
+            for (int i = start; i < end; i++) {
                 CarTrack t = mActiveCarQueue.get(i);
                 MediaDescriptionCompat.Builder desc = new MediaDescriptionCompat.Builder()
                     .setMediaId(!t.videoId.isEmpty() ? t.videoId : ("q_" + i))
@@ -783,8 +832,17 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 qItems.add(new MediaSessionCompat.QueueItem(desc.build(), (long) i));
             }
         }
-        mMediaSession.setQueue(qItems);
-        mMediaSession.setQueueTitle(currentQueueTitle);
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            mMediaSession.setQueue(qItems);
+            mMediaSession.setQueueTitle(titleCopy);
+        } else {
+            mMainHandler.post(() -> {
+                if (mMediaSession != null) {
+                    mMediaSession.setQueue(qItems);
+                    mMediaSession.setQueueTitle(titleCopy);
+                }
+            });
+        }
     }
 
     private void syncMediaSessionRepeatMode() {
@@ -796,6 +854,13 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         } else {
             mMediaSession.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_NONE);
         }
+    }
+
+    private void syncMediaSessionShuffleMode() {
+        if (mMediaSession == null) return;
+        mMediaSession.setShuffleMode(
+            mShuffleEnabled ? PlaybackStateCompat.SHUFFLE_MODE_ALL : PlaybackStateCompat.SHUFFLE_MODE_NONE
+        );
     }
 
     private void toggleLoopOneFromCar() {
@@ -872,27 +937,39 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private void shuffleCurrentQueueFromCar() {
+        mShuffleEnabled = true;
+        syncMediaSessionShuffleMode();
         synchronized (mActiveCarQueue) {
-            if (mActiveCarQueue.size() <= 1) return;
-            CarTrack curr = (mActiveCarQueueIndex >= 0 && mActiveCarQueueIndex < mActiveCarQueue.size())
-                ? mActiveCarQueue.get(mActiveCarQueueIndex)
-                : null;
-            List<CarTrack> rest = new ArrayList<>();
-            for (int i = 0; i < mActiveCarQueue.size(); i++) {
-                if (curr == null || i != mActiveCarQueueIndex) {
-                    rest.add(mActiveCarQueue.get(i));
+            if (mActiveCarQueue.size() > 1) {
+                CarTrack curr = (mActiveCarQueueIndex >= 0 && mActiveCarQueueIndex < mActiveCarQueue.size())
+                    ? mActiveCarQueue.get(mActiveCarQueueIndex)
+                    : null;
+                List<CarTrack> rest = new ArrayList<>();
+                for (int i = 0; i < mActiveCarQueue.size(); i++) {
+                    if (curr == null || i != mActiveCarQueueIndex) {
+                        rest.add(mActiveCarQueue.get(i));
+                    }
                 }
+                Collections.shuffle(rest);
+                mActiveCarQueue.clear();
+                if (curr != null) {
+                    mActiveCarQueue.add(curr);
+                }
+                mActiveCarQueue.addAll(rest);
+                mActiveCarQueueIndex = 0;
+                syncActiveCarQueueToMediaSession();
             }
-            Collections.shuffle(rest);
-            mActiveCarQueue.clear();
-            if (curr != null) {
-                mActiveCarQueue.add(curr);
-            }
-            mActiveCarQueue.addAll(rest);
-            mActiveCarQueueIndex = 0;
-            syncActiveCarQueueToMediaSession();
         }
-        prefetchNextTrackAsync();
+        updatePlaybackState(
+            isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+            currentPositionMs,
+            isCurrentlyPlaying
+        );
+        if (isWebViewPlaybackActive()) {
+            MainActivity.sInstance.dispatchCarAction("toggle_shuffle", "on");
+        } else {
+            prefetchNextTrackAsync();
+        }
     }
 
     private void startRadioAutomixFromCar(final boolean playImmediately) {
@@ -927,13 +1004,65 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     mActiveCarQueueIndex = 0;
                     currentQueueTitle = "Automix Radio";
                     syncActiveCarQueueToMediaSession();
-                    if (!isCurrentlyPlaying) {
-                        playCarTrackStandalone(mActiveCarQueue.get(0));
-                    }
                 }
                 prefetchNextTrackAsync();
             });
         });
+    }
+
+    private void skipNextTrackFromCar() {
+        mConsecutivePlaybackErrors.set(0);
+        if (isWebViewPlaybackActive()) {
+            lastUserActionTime = SystemClock.elapsedRealtime();
+            lastUserActionWasPause = false;
+            MainActivity.sInstance.dispatchCarAction("next", "");
+            return;
+        }
+        playNextInCarQueue(true);
+    }
+
+    private void skipPrevTrackFromCar() {
+        mConsecutivePlaybackErrors.set(0);
+        long posMs = currentPositionMs;
+        if (mUsingStandalonePlayer && mStandalonePlayer != null) {
+            try {
+                posMs = mStandalonePlayer.getCurrentPosition();
+            } catch (Exception ignored) {}
+        }
+        if (posMs > 3000) {
+            seekStandaloneOrApp(0);
+            return;
+        }
+        if (isWebViewPlaybackActive()) {
+            lastUserActionTime = SystemClock.elapsedRealtime();
+            lastUserActionWasPause = false;
+            MainActivity.sInstance.dispatchCarAction("prev", "");
+            return;
+        }
+        playNextInCarQueue(false);
+    }
+
+    private void handleStandalonePlaybackFailure(final int gen) {
+        if (gen != mPlaybackGeneration) return;
+        if (currentVideoId != null && !currentVideoId.isEmpty()) {
+            mStreamCache.remove(currentVideoId);
+        }
+        int errCount = mConsecutivePlaybackErrors.incrementAndGet();
+        int queueSize;
+        synchronized (mActiveCarQueue) {
+            queueSize = mActiveCarQueue.size();
+        }
+        int retryCap = Math.min(MAX_CONSECUTIVE_PLAYBACK_ERRORS, Math.max(1, queueSize));
+        if (errCount < retryCap) {
+            playNextInCarQueue(true);
+            return;
+        }
+        mUsingStandalonePlayer = false;
+        isCurrentlyPlaying = false;
+        releaseStandalonePlayer();
+        releaseLocks();
+        updatePlaybackStateWithError("Unable to play audio. Check network connection.");
+        notifyNotification();
     }
 
     private void playNextInCarQueue(boolean forward) {
@@ -1008,6 +1137,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         applyMediaMetadata();
         updatePlaybackState(PlaybackStateCompat.STATE_BUFFERING, 0, true);
         ensureForeground(true);
+        acquireLocks();
         notifyNotification();
 
         mNetworkExecutor.submit(() -> {
@@ -1015,12 +1145,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             if (gen != mPlaybackGeneration) return;
 
             if (entry == null || entry.url == null || entry.url.isEmpty()) {
-                // Automatic fallback to next track in queue so car screen never errors out
-                mMainHandler.post(() -> {
-                    if (gen == mPlaybackGeneration) {
-                        playNextInCarQueue(true);
-                    }
-                });
+                mMainHandler.post(() -> handleStandalonePlaybackFailure(gen));
                 return;
             }
 
@@ -1035,6 +1160,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         try {
             releaseStandalonePlayer();
             requestAudioFocus();
+            mStandalonePrepared = false;
+            mPendingSeekMs = 0;
 
             MediaPlayer mp = new MediaPlayer();
             mStandalonePlayer = mp;
@@ -1057,15 +1184,26 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
             mp.setOnPreparedListener(player -> {
                 if (gen != mPlaybackGeneration) return;
+                mStandalonePrepared = true;
+                mConsecutivePlaybackErrors.set(0);
                 int durMs = player.getDuration();
                 if (durMs > 0) {
                     currentDurationMs = durMs;
                 }
+                long startPos = mPendingSeekMs;
+                mPendingSeekMs = 0;
+                if (startPos > 0) {
+                    try {
+                        player.seekTo((int) startPos);
+                    } catch (Exception ignored) {
+                        startPos = 0;
+                    }
+                }
                 player.start();
                 isCurrentlyPlaying = true;
-                currentPositionMs = 0;
+                currentPositionMs = Math.max(0, startPos);
                 applyMediaMetadata();
-                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, 0, true);
+                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, currentPositionMs, true);
                 notifyNotification();
                 mMainHandler.removeCallbacks(mProgressTicker);
                 mMainHandler.postDelayed(mProgressTicker, 1000);
@@ -1095,22 +1233,20 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             });
 
             mp.setOnErrorListener((player, what, extra) -> {
-                if (gen == mPlaybackGeneration) {
-                    playNextInCarQueue(true);
-                }
+                handleStandalonePlaybackFailure(gen);
                 return true;
             });
 
             mp.prepareAsync();
         } catch (Exception e) {
-            if (gen == mPlaybackGeneration) {
-                playNextInCarQueue(true);
-            }
+            handleStandalonePlaybackFailure(gen);
         }
     }
 
     private void releaseStandalonePlayer() {
         mMainHandler.removeCallbacks(mProgressTicker);
+        mStandalonePrepared = false;
+        mPendingSeekMs = 0;
         if (mStandalonePlayer != null) {
             try {
                 if (mStandalonePlayer.isPlaying()) {
@@ -1126,11 +1262,14 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private void resumeStandaloneOrApp() {
+        mConsecutivePlaybackErrors.set(0);
         isCurrentlyPlaying = true;
         lastUserActionTime = SystemClock.elapsedRealtime();
         lastUserActionWasPause = false;
+        ensureForeground(true);
+        acquireLocks();
 
-        if (mUsingStandalonePlayer && mStandalonePlayer != null) {
+        if (mUsingStandalonePlayer && mStandalonePlayer != null && mStandalonePrepared) {
             try {
                 requestAudioFocus();
                 mStandalonePlayer.start();
@@ -1165,6 +1304,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         lastUserActionTime = SystemClock.elapsedRealtime();
         lastUserActionWasPause = true;
         mMainHandler.removeCallbacks(mProgressTicker);
+        releaseLocks();
 
         if (mStandalonePlayer != null) {
             try {
@@ -1185,6 +1325,11 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     private void seekStandaloneOrApp(long posMs) {
         currentPositionMs = Math.max(0, posMs);
         if (mUsingStandalonePlayer && mStandalonePlayer != null) {
+            if (!mStandalonePrepared) {
+                mPendingSeekMs = currentPositionMs;
+                updatePlaybackState(PlaybackStateCompat.STATE_BUFFERING, currentPositionMs, isCurrentlyPlaying);
+                return;
+            }
             try {
                 mStandalonePlayer.seekTo((int) currentPositionMs);
                 updatePlaybackState(
@@ -1193,6 +1338,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     isCurrentlyPlaying
                 );
                 return;
+            } catch (IllegalStateException ignored) {
+                mPendingSeekMs = currentPositionMs;
             } catch (Exception ignored) {}
         }
         updatePlaybackState(PlaybackStateCompat.STATE_BUFFERING, currentPositionMs, isCurrentlyPlaying);
@@ -1204,6 +1351,32 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     // =========================================================================
     // Native YouTube InnerTube Stream Resolver & Search (Zero WebView Needed)
     // =========================================================================
+
+    private void putStreamCacheEntry(String vid, StreamCacheEntry entry) {
+        if (vid == null || entry == null) return;
+        if (mStreamCache.size() >= MAX_STREAM_CACHE_SIZE) {
+            long now = System.currentTimeMillis();
+            for (Map.Entry<String, StreamCacheEntry> e : new ArrayList<>(mStreamCache.entrySet())) {
+                if ((now - e.getValue().timestamp) >= 20 * 60 * 1000L) {
+                    mStreamCache.remove(e.getKey());
+                }
+            }
+            if (mStreamCache.size() >= MAX_STREAM_CACHE_SIZE) {
+                mStreamCache.clear();
+            }
+        }
+        mStreamCache.put(vid, entry);
+    }
+
+    private String getDeviceCountryCode() {
+        try {
+            String country = java.util.Locale.getDefault().getCountry();
+            if (country != null && country.length() == 2) {
+                return country.toUpperCase(java.util.Locale.ROOT);
+            }
+        } catch (Exception ignored) {}
+        return "US";
+    }
 
     private StreamCacheEntry resolveStreamEntryNative(CarTrack track) {
         if (track == null) return null;
@@ -1224,7 +1397,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         StreamCacheEntry resolved = fetchAndroidPlayerStream(vid);
         if (resolved != null) {
-            mStreamCache.put(vid, resolved);
+            putStreamCacheEntry(vid, resolved);
             return resolved;
         }
 
@@ -1234,7 +1407,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             if (!alt.videoId.equals(vid)) {
                 StreamCacheEntry altResolved = fetchAndroidPlayerStream(alt.videoId);
                 if (altResolved != null) {
-                    mStreamCache.put(vid, altResolved);
+                    putStreamCacheEntry(vid, altResolved);
                     return altResolved;
                 }
             }
@@ -1243,9 +1416,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private StreamCacheEntry fetchAndroidPlayerStream(String videoId) {
+        HttpURLConnection conn = null;
         try {
             URL url = new URL("https://www.youtube.com/youtubei/v1/player?prettyPrint=false");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
             conn.setConnectTimeout(5000);
@@ -1260,7 +1434,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             client.put("osVersion", "14");
             client.put("androidSdkVersion", 34);
             client.put("hl", "en");
-            client.put("gl", "IN");
+            client.put("gl", getDeviceCountryCode());
 
             JSONObject context = new JSONObject();
             context.put("client", client);
@@ -1323,16 +1497,22 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Exception ignored) {}
+            }
+        }
         return null;
     }
 
     private List<CarTrack> searchYouTubeMusicTracksNative(String query, int maxResults) {
         List<CarTrack> out = new ArrayList<>();
         if (query == null || query.trim().isEmpty()) return out;
+        HttpURLConnection conn = null;
         try {
             URL url = new URL("https://music.youtube.com/youtubei/v1/search?prettyPrint=false");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
             conn.setConnectTimeout(5000);
@@ -1344,7 +1524,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             client.put("clientName", "WEB_REMIX");
             client.put("clientVersion", "1.20260918.01.00");
             client.put("hl", "en");
-            client.put("gl", "IN");
+            client.put("gl", getDeviceCountryCode());
 
             JSONObject context = new JSONObject();
             context.put("client", client);
@@ -1363,7 +1543,12 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             String resp = readStreamToString(conn.getInputStream());
             JSONObject root = new JSONObject(resp);
             extractMusicRenderersRecursive(root, out, maxResults);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Exception ignored) {}
+            }
+        }
         return out;
     }
 
@@ -1458,12 +1643,12 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         @Override
         public void onSkipToNext() {
-            playNextInCarQueue(true);
+            skipNextTrackFromCar();
         }
 
         @Override
         public void onSkipToPrevious() {
-            playNextInCarQueue(false);
+            skipPrevTrackFromCar();
         }
 
         @Override
@@ -1483,11 +1668,35 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         @Override
         public void onSkipToQueueItem(long id) {
+            mConsecutivePlaybackErrors.set(0);
+            CarTrack target = null;
+            int idx = (int) id;
             synchronized (mActiveCarQueue) {
-                int idx = (int) id;
                 if (idx >= 0 && idx < mActiveCarQueue.size()) {
-                    playQueueAtIndex(new ArrayList<>(mActiveCarQueue), idx, currentQueueTitle);
+                    target = mActiveCarQueue.get(idx);
                 }
+            }
+            if (target == null) return;
+            if (isWebViewPlaybackActive()) {
+                lastUserActionTime = SystemClock.elapsedRealtime();
+                lastUserActionWasPause = false;
+                boolean matchesUserQueue = false;
+                synchronized (mUserQueue) {
+                    if (idx < mUserQueue.size()) {
+                        CarTrack uq = mUserQueue.get(idx);
+                        matchesUserQueue = (!target.videoId.isEmpty() && target.videoId.equals(uq.videoId))
+                            || target.title.equalsIgnoreCase(uq.title);
+                    }
+                }
+                if (matchesUserQueue) {
+                    MainActivity.sInstance.dispatchCarAction("play_index", String.valueOf(idx));
+                } else {
+                    MainActivity.sInstance.dispatchCarAction("play_title_artist", target.title + "___" + target.artist);
+                }
+                return;
+            }
+            synchronized (mActiveCarQueue) {
+                playQueueAtIndex(new ArrayList<>(mActiveCarQueue), idx, currentQueueTitle);
             }
         }
 
@@ -1507,6 +1716,43 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             );
             if (MainActivity.sInstance != null) {
                 MainActivity.sInstance.dispatchCarAction("toggle_loop", next);
+            }
+        }
+
+        @Override
+        public void onSetShuffleMode(int shuffleMode) {
+            boolean enable = (shuffleMode == PlaybackStateCompat.SHUFFLE_MODE_ALL
+                || shuffleMode == PlaybackStateCompat.SHUFFLE_MODE_GROUP);
+            mShuffleEnabled = enable;
+            syncMediaSessionShuffleMode();
+            if (enable) {
+                synchronized (mActiveCarQueue) {
+                    if (mActiveCarQueue.size() > 1) {
+                        CarTrack curr = (mActiveCarQueueIndex >= 0 && mActiveCarQueueIndex < mActiveCarQueue.size())
+                            ? mActiveCarQueue.get(mActiveCarQueueIndex)
+                            : null;
+                        List<CarTrack> rest = new ArrayList<>();
+                        for (int i = 0; i < mActiveCarQueue.size(); i++) {
+                            if (curr == null || i != mActiveCarQueueIndex) {
+                                rest.add(mActiveCarQueue.get(i));
+                            }
+                        }
+                        Collections.shuffle(rest);
+                        mActiveCarQueue.clear();
+                        if (curr != null) mActiveCarQueue.add(curr);
+                        mActiveCarQueue.addAll(rest);
+                        mActiveCarQueueIndex = 0;
+                        syncActiveCarQueueToMediaSession();
+                    }
+                }
+            }
+            updatePlaybackState(
+                isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                currentPositionMs,
+                isCurrentlyPlaying
+            );
+            if (isWebViewPlaybackActive()) {
+                MainActivity.sInstance.dispatchCarAction("toggle_shuffle", enable ? "on" : "off");
             }
         }
 
@@ -1650,21 +1896,25 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 resumeStandaloneOrApp();
                 return;
             }
+            mConsecutivePlaybackErrors.set(0);
             final String q = query.trim();
             currentTitle = q;
             currentArtist = "Searching UpBeat...";
             applyMediaMetadata();
             updatePlaybackState(PlaybackStateCompat.STATE_BUFFERING, 0, true);
+            ensureForeground(true);
             notifyNotification();
 
             mNetworkExecutor.submit(() -> {
                 List<CarTrack> results = searchYouTubeMusicTracksNative(q, 15);
                 if (!results.isEmpty()) {
-                    mMainHandler.post(() -> playQueueAtIndex(results, 0));
+                    mMainHandler.post(() -> playQueueAtIndex(results, 0, "Search: " + q));
                 } else {
                     mMainHandler.post(() -> {
-                        HotPlaylistDef def = mPlaylists.get(PL_HINDI_LATEST);
-                        if (def != null) playQueueAtIndex(def.tracks, 0);
+                        isCurrentlyPlaying = false;
+                        releaseLocks();
+                        updatePlaybackStateWithError("No results found for \"" + q + "\"");
+                        notifyNotification();
                     });
                 }
             });
@@ -1845,18 +2095,31 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             if (!pl.searchQuery.isEmpty()) {
                 result.detach();
                 mNetworkExecutor.submit(() -> {
-                    List<CarTrack> fetched = searchYouTubeMusicTracksNative(pl.searchQuery, 15);
-                    synchronized (pl.tracks) {
-                        if (pl.tracks.isEmpty()) {
-                            if (!fetched.isEmpty()) {
-                                pl.tracks.addAll(fetched);
-                            } else {
-                                HotPlaylistDef fallback = mPlaylists.get(PL_HINDI_LATEST);
-                                if (fallback != null) pl.tracks.addAll(fallback.tracks);
+                    boolean sent = false;
+                    try {
+                        List<CarTrack> fetched = searchYouTubeMusicTracksNative(pl.searchQuery, 15);
+                        synchronized (pl.tracks) {
+                            if (pl.tracks.isEmpty()) {
+                                if (!fetched.isEmpty()) {
+                                    pl.tracks.addAll(fetched);
+                                } else {
+                                    HotPlaylistDef fallback = mPlaylists.get(PL_HINDI_LATEST);
+                                    if (fallback != null) pl.tracks.addAll(fallback.tracks);
+                                }
+                            }
+                        }
+                        result.sendResult(buildPlaylistDetailItems(pl));
+                        sent = true;
+                    } catch (Exception ignored) {
+                    } finally {
+                        if (!sent) {
+                            try {
+                                result.sendResult(buildPlaylistDetailItems(pl));
+                            } catch (Exception ignored) {
+                                result.sendResult(new ArrayList<>());
                             }
                         }
                     }
-                    result.sendResult(buildPlaylistDetailItems(pl));
                 });
                 return;
             }
@@ -1982,36 +2245,40 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         result.detach();
         mNetworkExecutor.submit(() -> {
             List<MediaBrowserCompat.MediaItem> items = new ArrayList<>();
-            List<CarTrack> found = searchYouTubeMusicTracksNative(query, 15);
-            for (CarTrack t : found) {
-                String safeTitle = t.title.replace("__", " ");
-                String safeArtist = t.artist.replace("__", " ");
-                items.add(createPlayableListItem(
-                    "search__" + t.videoId + "__" + safeTitle + "__" + safeArtist,
-                    t.title,
-                    t.artist,
-                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title),
-                    "Search Results"
-                ));
-            }
-            if (items.isEmpty()) {
-                HotPlaylistDef def = mPlaylists.get(PL_HINDI_LATEST);
-                if (def != null) {
-                    synchronized (def.tracks) {
-                        for (int i = 0; i < Math.min(6, def.tracks.size()); i++) {
-                            CarTrack t = def.tracks.get(i);
-                            items.add(createPlayableListItem(
-                                "pltrack__" + def.id + "__" + i,
-                                t.title,
-                                t.artist,
-                                UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title),
-                                "Suggested Tracks"
-                            ));
+            try {
+                List<CarTrack> found = searchYouTubeMusicTracksNative(query, 15);
+                for (CarTrack t : found) {
+                    String safeTitle = t.title.replace("__", " ");
+                    String safeArtist = t.artist.replace("__", " ");
+                    items.add(createPlayableListItem(
+                        "search__" + t.videoId + "__" + safeTitle + "__" + safeArtist,
+                        t.title,
+                        t.artist,
+                        UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title),
+                        "Search Results"
+                    ));
+                }
+                if (items.isEmpty()) {
+                    HotPlaylistDef def = mPlaylists.get(PL_HINDI_LATEST);
+                    if (def != null) {
+                        synchronized (def.tracks) {
+                            for (int i = 0; i < Math.min(6, def.tracks.size()); i++) {
+                                CarTrack t = def.tracks.get(i);
+                                items.add(createPlayableListItem(
+                                    "pltrack__" + def.id + "__" + i,
+                                    t.title,
+                                    t.artist,
+                                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title),
+                                    "Suggested Tracks"
+                                ));
+                            }
                         }
                     }
                 }
+            } catch (Exception ignored) {
+            } finally {
+                result.sendResult(items);
             }
-            result.sendResult(items);
         });
     }
 
@@ -2153,6 +2420,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        ensureForeground(isCurrentlyPlaying);
         MediaButtonReceiver.handleIntent(mMediaSession, intent);
 
         if (intent != null && intent.getAction() != null) {
@@ -2171,10 +2439,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 pauseStandaloneOrApp();
                 return START_STICKY;
             } else if (ACTION_NEXT.equals(act)) {
-                playNextInCarQueue(true);
+                skipNextTrackFromCar();
                 return START_STICKY;
             } else if (ACTION_PREV.equals(act)) {
-                playNextInCarQueue(false);
+                skipPrevTrackFromCar();
                 return START_STICKY;
             } else if (ACTION_REWIND.equals(act)) {
                 seekStandaloneOrApp(Math.max(0, currentPositionMs - 10000));
@@ -2184,12 +2452,18 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 return START_STICKY;
             } else if (ACTION_STOP.equals(act)) {
                 isCurrentlyPlaying = false;
+                mUsingStandalonePlayer = false;
                 releaseStandalonePlayer();
+                releaseLocks();
                 updatePlaybackState(PlaybackStateCompat.STATE_STOPPED, 0, false);
                 if (MainActivity.sInstance != null) {
                     MainActivity.sInstance.dispatchCarAction("pause", "");
                 }
-                stopForeground(true);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE);
+                } else {
+                    stopForeground(true);
+                }
                 stopSelf();
                 return START_NOT_STICKY;
             }
@@ -2205,8 +2479,11 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             handlePlaybackUpdate(playing, t, a, art, dur, pos);
         }
 
-        ensureForeground(isCurrentlyPlaying);
-        acquireLocks();
+        if (isCurrentlyPlaying) {
+            acquireLocks();
+        } else {
+            releaseLocks();
+        }
         return START_STICKY;
     }
 
@@ -2266,9 +2543,66 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         if (durationSec > 0) {
             currentDurationMs = durationSec * 1000;
         }
+        String resolvedVid = "";
         int viIdx = cleanArt.indexOf("/vi/");
         if (viIdx >= 0 && cleanArt.length() >= viIdx + 15) {
-            currentVideoId = cleanArt.substring(viIdx + 4, viIdx + 15);
+            resolvedVid = cleanArt.substring(viIdx + 4, viIdx + 15);
+        }
+        if (resolvedVid.isEmpty()) {
+            synchronized (mUserQueue) {
+                int qIdx = findTrackIndexInList(mUserQueue, "", cleanTitle, cleanArtist);
+                if (qIdx >= 0) resolvedVid = mUserQueue.get(qIdx).videoId;
+            }
+        }
+        if (resolvedVid.isEmpty()) {
+            synchronized (mUserFavorites) {
+                int fIdx = findTrackIndexInList(mUserFavorites, "", cleanTitle, cleanArtist);
+                if (fIdx >= 0) resolvedVid = mUserFavorites.get(fIdx).videoId;
+            }
+        }
+        if (!resolvedVid.isEmpty()) {
+            currentVideoId = resolvedVid;
+        }
+
+        // Keep Android Auto queue & activeQueueItemId synchronized with active phone playback
+        boolean queueUpdated = false;
+        if (!mUsingStandalonePlayer && !"UpBeat".equals(cleanTitle)) {
+            synchronized (mActiveCarQueue) {
+                int idx = findTrackIndexInList(mActiveCarQueue, currentVideoId, cleanTitle, cleanArtist);
+                if (idx < 0) {
+                    synchronized (mUserQueue) {
+                        int uqIdx = findTrackIndexInList(mUserQueue, currentVideoId, cleanTitle, cleanArtist);
+                        if (uqIdx >= 0) {
+                            mActiveCarQueue.clear();
+                            mActiveCarQueue.addAll(mUserQueue);
+                            idx = uqIdx;
+                            queueUpdated = true;
+                        }
+                    }
+                }
+                if (idx < 0) {
+                    mActiveCarQueue.add(0, new CarTrack(cleanTitle, cleanArtist, currentVideoId, "", cleanArt));
+                    if (mActiveCarQueue.size() > 50) {
+                        mActiveCarQueue.remove(mActiveCarQueue.size() - 1);
+                    }
+                    idx = 0;
+                    queueUpdated = true;
+                }
+                if (idx != mActiveCarQueueIndex) {
+                    mActiveCarQueueIndex = idx;
+                    queueUpdated = true;
+                }
+            }
+        }
+
+        if (isCurrentlyPlaying) {
+            acquireLocks();
+        } else {
+            releaseLocks();
+        }
+
+        if (queueUpdated) {
+            syncActiveCarQueueToMediaSession();
         }
 
         if (trackChanged || durationChanged) {
@@ -2297,6 +2631,14 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     }
 
     private void updatePlaybackState(int state, long positionMs, boolean isPlaying) {
+        updatePlaybackStateInternal(state, positionMs, isPlaying, null);
+    }
+
+    private void updatePlaybackStateWithError(String errorMessage) {
+        updatePlaybackStateInternal(PlaybackStateCompat.STATE_ERROR, currentPositionMs, false, errorMessage);
+    }
+
+    private void updatePlaybackStateInternal(int state, long positionMs, boolean isPlaying, String errorMessage) {
         long actions = PlaybackStateCompat.ACTION_PLAY
             | PlaybackStateCompat.ACTION_PAUSE
             | PlaybackStateCompat.ACTION_PLAY_PAUSE
@@ -2319,6 +2661,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             .setActions(actions)
             .setActiveQueueItemId(Math.max(0, mActiveCarQueueIndex))
             .setState(state, positionMs, isPlaying ? 1.0f : 0.0f, SystemClock.elapsedRealtime());
+
+        if (errorMessage != null && !errorMessage.isEmpty()) {
+            stateBuilder.setErrorMessage(PlaybackStateCompat.ERROR_CODE_APP_ERROR, errorMessage);
+        }
 
         boolean loopOne = "one".equals(mRepeatMode);
         stateBuilder.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(
@@ -2438,25 +2784,33 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         final String targetTitle = currentTitle;
         mImageExecutor.submit(() -> {
+            if (!UpBeatArtProvider.isAllowedArtworkUrl(urlString)) {
+                return;
+            }
             Bitmap bmp = null;
+            HttpURLConnection conn = null;
             try {
                 URL url = new URL(urlString);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setInstanceFollowRedirects(true);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) UpBeatAuto/5.3");
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setInstanceFollowRedirects(false);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) UpBeatAuto/7.6");
                 conn.setConnectTimeout(4000);
                 conn.setReadTimeout(4000);
                 conn.connect();
                 if (conn.getResponseCode() == 200) {
-                    InputStream input = conn.getInputStream();
-                    BitmapFactory.Options opts = new BitmapFactory.Options();
-                    opts.inSampleSize = 2;
-                    opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                    bmp = BitmapFactory.decodeStream(input, null, opts);
-                    input.close();
+                    try (InputStream input = conn.getInputStream()) {
+                        BitmapFactory.Options opts = new BitmapFactory.Options();
+                        opts.inSampleSize = 2;
+                        opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
+                        bmp = BitmapFactory.decodeStream(input, null, opts);
+                    }
                 }
             } catch (Exception ignored) {
                 bmp = null;
+            } finally {
+                if (conn != null) {
+                    try { conn.disconnect(); } catch (Exception ignored) {}
+                }
             }
 
             final Bitmap finalBmp = bmp;
@@ -2595,7 +2949,34 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         prefs.edit().putString(KEY_QUEUE, queueJson).apply();
         if (sInstance != null) {
             sInstance.parseJsonToTrackList(queueJson, sInstance.mUserQueue);
-            sInstance.notifyAllBrowserTabs();
+            sInstance.mMainHandler.post(() -> {
+                if (sInstance == null) return;
+                if (!sInstance.mUsingStandalonePlayer) {
+                    synchronized (sInstance.mActiveCarQueue) {
+                        synchronized (sInstance.mUserQueue) {
+                            if (!sInstance.mUserQueue.isEmpty()) {
+                                sInstance.mActiveCarQueue.clear();
+                                sInstance.mActiveCarQueue.addAll(sInstance.mUserQueue);
+                                sInstance.currentQueueTitle = "UpBeat Queue";
+                                int match = sInstance.findTrackIndexInList(
+                                    sInstance.mActiveCarQueue,
+                                    sInstance.currentVideoId,
+                                    sInstance.currentTitle,
+                                    sInstance.currentArtist
+                                );
+                                sInstance.mActiveCarQueueIndex = match >= 0 ? match : 0;
+                            }
+                        }
+                    }
+                    sInstance.syncActiveCarQueueToMediaSession();
+                    sInstance.updatePlaybackState(
+                        sInstance.isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                        sInstance.currentPositionMs,
+                        sInstance.isCurrentlyPlaying
+                    );
+                }
+                sInstance.notifyAllBrowserTabs();
+            });
         }
     }
 
@@ -2605,7 +2986,11 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         prefs.edit().putString(KEY_MIXES, mixesJson).apply();
         if (sInstance != null) {
             sInstance.parseMixes(mixesJson);
-            sInstance.notifyAllBrowserTabs();
+            sInstance.mMainHandler.post(() -> {
+                if (sInstance != null) {
+                    sInstance.notifyAllBrowserTabs();
+                }
+            });
         }
     }
 
@@ -2615,12 +3000,16 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         prefs.edit().putString(KEY_FAVS, favsJson).apply();
         if (sInstance != null) {
             sInstance.parseJsonToTrackList(favsJson, sInstance.mUserFavorites);
-            sInstance.notifyAllBrowserTabs();
-            sInstance.updatePlaybackState(
-                sInstance.isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
-                sInstance.currentPositionMs,
-                sInstance.isCurrentlyPlaying
-            );
+            sInstance.mMainHandler.post(() -> {
+                if (sInstance != null) {
+                    sInstance.notifyAllBrowserTabs();
+                    sInstance.updatePlaybackState(
+                        sInstance.isCurrentlyPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                        sInstance.currentPositionMs,
+                        sInstance.isCurrentlyPlaying
+                    );
+                }
+            });
         }
     }
 
@@ -2628,7 +3017,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         if (context == null) return;
 
         if (sInstance != null) {
-            new Handler(Looper.getMainLooper()).post(() -> {
+            sInstance.mMainHandler.post(() -> {
                 if (sInstance != null) {
                     sInstance.handlePlaybackUpdate(isPlaying, title, artist, artUrl, durationSec, positionSec);
                 }

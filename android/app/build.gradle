@@ -7,8 +7,8 @@ android {
         applicationId "com.aaradhya.upbeat"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 101
-        versionName "7.6.1"
+        versionCode 102
+        versionName "7.6.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,23 +16,34 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // Stable signing key committed to the repo so every CI build can be installed
-    // over the previous one (CI otherwise generates a new random debug key per run).
+    // Release signing credentials are supplied via Gradle properties or environment variables
+    // (UPBEAT_KEYSTORE_FILE, UPBEAT_KEYSTORE_PASSWORD, UPBEAT_KEY_ALIAS, UPBEAT_KEY_PASSWORD)
+    // so no signing keys or passwords are ever committed to source control.
+    def upbeatKeystoreFile = findProperty('UPBEAT_KEYSTORE_FILE') ?: System.getenv('UPBEAT_KEYSTORE_FILE')
+    def upbeatKeystorePassword = findProperty('UPBEAT_KEYSTORE_PASSWORD') ?: System.getenv('UPBEAT_KEYSTORE_PASSWORD')
+    def upbeatKeyAlias = findProperty('UPBEAT_KEY_ALIAS') ?: System.getenv('UPBEAT_KEY_ALIAS')
+    def upbeatKeyPassword = findProperty('UPBEAT_KEY_PASSWORD') ?: System.getenv('UPBEAT_KEY_PASSWORD')
+    def hasReleaseSigning = upbeatKeystoreFile && upbeatKeystorePassword && upbeatKeyAlias && upbeatKeyPassword && file(upbeatKeystoreFile).exists()
+
     signingConfigs {
-        upbeat {
-            storeFile file('upbeat-sideload.keystore')
-            storeType 'pkcs12'
-            storePassword 'upbeat-sideload'
-            keyAlias 'upbeat'
-            keyPassword 'upbeat-sideload'
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(upbeatKeystoreFile)
+                storeType 'pkcs12'
+                storePassword upbeatKeystorePassword
+                keyAlias upbeatKeyAlias
+                keyPassword upbeatKeyPassword
+            }
         }
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.upbeat
+            // Uses standard local Android debug keystore automatically
         }
         release {
-            signingConfig signingConfigs.upbeat
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

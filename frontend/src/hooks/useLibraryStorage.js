@@ -86,16 +86,7 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
     const raw = loadStorage('argon_favs_v2', [])
     return (raw || []).filter((t) => !LEGACY_ANIME_SEED_IDS.has(t?.video_id))
   })
-  const [tasteDna, setTasteDna] = useState(() => {
-    const raw = loadStorage('argon_dna_v2', null)
-    if (raw) {
-      const isAnime = /anime|j-pop|j-rock|monogatari|sawano|higuchi/i.test(
-        `${raw.archetype || ''} ${raw.summary || ''} ${(raw.primary_genres || []).join(' ')}`
-      )
-      if (isAnime) return null
-    }
-    return raw
-  })
+  const [tasteDna, setTasteDna] = useState(() => loadStorage('argon_dna_v2', null))
   const [playlist, setPlaylist] = useState(() => loadStorage('argon_playlist_v2', null))
   const [queue, setQueue] = useState(() => loadStorage('upbeat_playback_queue', []))
   const [offlineTracks, setOfflineTracks] = useState([])
@@ -162,7 +153,7 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
     }
   }, [])
 
-  // Clean legacy seed IDs and legacy Taste DNA on first mount
+  // Clean legacy seed IDs on first mount
   useEffect(() => {
     try {
       setExtractedTracks((prev) => {
@@ -176,17 +167,6 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
         saveStorage('argon_favs_v2', filtered)
         return filtered
       })
-
-      const storedDna = loadStorage('argon_dna_v2', null)
-      if (storedDna) {
-        const isAnime = /anime|j-pop|j-rock|monogatari|sawano|higuchi/i.test(
-          `${storedDna.archetype || ''} ${storedDna.summary || ''} ${(storedDna.primary_genres || []).join(' ')}`
-        )
-        if (isAnime) {
-          setTasteDna(null)
-          localStorage.removeItem('argon_dna_v2')
-        }
-      }
     } catch {}
   }, [])
 

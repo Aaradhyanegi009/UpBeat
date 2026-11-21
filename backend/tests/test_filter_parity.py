@@ -38,10 +38,24 @@ class TestFilterParityAndConfig(unittest.TestCase):
         self.assertEqual(main_mod.app.version, pkg_ver)
 
         client = TestClient(main_mod.app)
-        res = client.get("/api/status", headers={"Origin": "https://example.com"})
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.headers.get("access-control-allow-origin"), "*")
-        self.assertNotEqual(res.headers.get("access-control-allow-credentials"), "true")
+        res_untrusted = client.get("/api/status", headers={"Origin": "https://example.com"})
+        self.assertEqual(res_untrusted.status_code, 200)
+        self.assertIsNone(res_untrusted.headers.get("access-control-allow-origin"))
+        self.assertNotEqual(res_untrusted.headers.get("access-control-allow-credentials"), "true")
+
+        for trusted_origin in (
+            "http://localhost:5173",
+            "http://127.0.0.1:48173",
+            "http://192.168.1.42:5173",
+            "capacitor://localhost",
+        ):
+            with self.subTest(origin=trusted_origin):
+                res_trusted = client.get("/api/status", headers={"Origin": trusted_origin})
+                self.assertEqual(res_trusted.status_code, 200)
+                self.assertEqual(res_trusted.headers.get("access-control-allow-origin"), trusted_origin)
+                exposed = res_trusted.headers.get("access-control-expose-headers", "")
+                for h in ("Content-Range", "Content-Length", "Accept-Ranges", "X-Track-Duration", "Content-Disposition"):
+                    self.assertIn(h, exposed)
 
 
 if __name__ == "__main__":

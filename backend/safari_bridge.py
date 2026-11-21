@@ -1,7 +1,10 @@
 import json
 import os
+import re
 import subprocess
+import sys
 import time
+import urllib.parse
 from typing import Dict, List, Optional, Any
 
 _TABS_CACHE: Dict[str, Any] = {"ts": 0.0, "tabs": [], "now_playing": None}
@@ -9,9 +12,64 @@ _FILTERS_PATH = os.path.join(os.path.dirname(__file__), "music_filters.json")
 with open(_FILTERS_PATH, "r", encoding="utf-8") as _f:
     _SAFARI_FILTER_RULES: Dict[str, Any] = json.load(_f)
 
+ALLOWED_SAFARI_ACTIONS = frozenset({"play_pause", "next", "prev"})
+_ALLOWED_YT_HOST_RE = re.compile(r"^(?:(?:www|music)\.)?youtube\.com$|^youtu\.be$", re.IGNORECASE)
+
+
+def is_macos_safari_supported() -> bool:
+    """Returns True only when running natively on macOS (non-Vercel)."""
+    return sys.platform == "darwin" and not bool(os.environ.get("VERCEL"))
+
+
+def validate_youtube_url(url: str) -> str:
+    """
+    Validates that a URL is strictly an https:// YouTube or youtu.be URL with no
+    embedded credentials, ports, whitespace, or control characters.
+    """
+    if not isinstance(url, str):
+        raise ValueError("URL must be a string")
+    clean = url.strip()
+    if not clean or len(clean) > 2048:
+        raise ValueError("Invalid URL length")
+    if any(ord(ch) <= 32 or ord(ch) == 127 for ch in clean):
+        raise ValueError("URL contains disallowed whitespace or control characters")
+    if '"' in clean or "\\" in clean:
+        raise ValueError("URL contains disallowed quote or backslash characters")
+
+    parsed = urllib.parse.urlparse(clean)
+    if parsed.scheme.lower() != "https":
+        raise ValueError("Only https:// URLs are allowed")
+    if parsed.username is not None or parsed.password is not None or parsed.port is not None:
+        raise ValueError("URL credentials and custom ports are not allowed")
+    host = (parsed.hostname or "").lower()
+    if not _ALLOWED_YT_HOST_RE.match(host):
+        raise ValueError("Only youtube.com, music.youtube.com, and youtu.be URLs are allowed")
+    return clean
+
+
+def _escape_applescript_string(value: str) -> str:
+    """Escapes a string safely for embedding inside AppleScript double quotes."""
+    if any(ch in value for ch in ("\r", "\n", "\x00")):
+        raise ValueError("AppleScript string cannot contain newline or NUL bytes")
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _validate_tab_indices(window_idx: int, tab_idx: int) -> None:
+    if (
+        isinstance(window_idx, bool)
+        or isinstance(tab_idx, bool)
+        or not isinstance(window_idx, int)
+        or not isinstance(tab_idx, int)
+        or window_idx < 1
+        or tab_idx < 1
+    ):
+        raise ValueError("window_idx and tab_idx must be positive integers")
+
 
 def run_applescript(script: str, timeout: float = 4.0) -> str:
-    """Executes AppleScript and returns stdout or raises exception."""
+    """Executes AppleScript on macOS and returns stdout or raises exception."""
+    if not is_macos_safari_supported():
+        raise RuntimeError("Safari AppleScript is only supported on macOS")
     res = subprocess.run(
         ["osascript", "-e", script],
         capture_output=True,
@@ -30,6 +88,7 @@ def run_applescript(script: str, timeout: float = 4.0) -> str:
 
 def run_safari_js_in_tab(window_idx: int, tab_idx: int, js_code: str) -> str:
     """Runs JavaScript in a specific window and tab index in Safari."""
+    _validate_tab_indices(window_idx, tab_idx)
     escaped_js = js_code.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
     tell application "Safari"
@@ -45,6 +104,8 @@ def run_safari_js_in_tab(window_idx: int, tab_idx: int, js_code: str) -> str:
 
 def list_safari_tabs(use_cache: bool = False) -> List[Dict[str, Any]]:
     """Lists all open tabs in Safari, flagging YouTube and YouTube Music tabs."""
+    if not is_macos_safari_supported():
+        return []
     now = time.time()
     if use_cache and (now - _TABS_CACHE["ts"] < 2.5):
         return _TABS_CACHE["tabs"]
@@ -101,16 +162,21 @@ def list_safari_tabs(use_cache: bool = False) -> List[Dict[str, Any]]:
 
 
 def open_safari_url(url: str, activate: bool = True) -> Dict[str, Any]:
-    """Opens a URL in a new Safari tab and focuses it so DOM renders immediately."""
+    """Opens a validated YouTube URL in a new Safari tab and focuses it."""
+    safe_url = validate_youtube_url(url)
+    if not is_macos_safari_supported():
+        return {"status": "error", "message": "Safari Companion is only supported on macOS", "url": safe_url}
+
+    escaped_url = _escape_applescript_string(safe_url)
     act_str = "activate" if activate else ""
     script = f'''
     tell application "Safari"
         {act_str}
         if (count of windows) = 0 then
-            open location "{url}"
+            open location "{escaped_url}"
         else
             tell window 1
-                set newTab to make new tab with properties {{URL:"{url}"}}
+                set newTab to make new tab with properties {{URL:"{escaped_url}"}}
                 set current tab to newTab
             end tell
         end if
@@ -119,7 +185,7 @@ def open_safari_url(url: str, activate: bool = True) -> Dict[str, Any]:
     '''
     run_applescript(script)
     _TABS_CACHE["ts"] = 0.0
-    return {"status": "ok", "url": url}
+    return {"status": "ok", "url": safe_url}
 
 
 def _build_safari_extraction_js() -> str:
@@ -137,6 +203,15 @@ def _build_safari_extraction_js() -> str:
                 tracks: []
             });
         }
+        const filterRules = __FILTER_RULES__;
+        const comedyRe = new RegExp(filterRules.patterns.comedy_podcast, 'i');
+        const devotionalRe = new RegExp(filterRules.patterns.devotional_religious, 'i');
+        const nonMusicGeneralRe = new RegExp(filterRules.patterns.non_music_general, 'i');
+        const nonMusicAcRe = new RegExp(filterRules.patterns.non_music_academic_and_creator, 'i');
+        const artistNumRe = new RegExp(filterRules.invalid_artist_numeric_pattern, 'i');
+        const artistGenRe = new RegExp(filterRules.invalid_artist_generic_pattern, 'i');
+        const videoIdRe = new RegExp(filterRules.video_id_pattern);
+
         const seenIds = new Set();
         let results = [];
         let pageType = 'yt_music';
@@ -155,15 +230,6 @@ def _build_safari_extraction_js() -> str:
             if (!cleanTitle || cleanTitle === 'Play all' || cleanTitle === 'PLAY ALL' || cleanTitle === 'Shuffle' || cleanTitle === 'Liked videos') return;
             if (cleanTitle.includes('Private video') || cleanTitle.includes('Deleted video')) return;
             if (/^\d+:\d+$/.test(cleanTitle)) return;
-
-            const filterRules = __FILTER_RULES__;
-            const comedyRe = new RegExp(filterRules.patterns.comedy_podcast, 'i');
-            const devotionalRe = new RegExp(filterRules.patterns.devotional_religious, 'i');
-            const nonMusicGeneralRe = new RegExp(filterRules.patterns.non_music_general, 'i');
-            const nonMusicAcRe = new RegExp(filterRules.patterns.non_music_academic_and_creator, 'i');
-            const artistNumRe = new RegExp(filterRules.invalid_artist_numeric_pattern, 'i');
-            const artistGenRe = new RegExp(filterRules.invalid_artist_generic_pattern, 'i');
-            const videoIdRe = new RegExp(filterRules.video_id_pattern);
 
             // Strict 11-char videoId check
             if (videoId && !videoIdRe.test(videoId)) return;
@@ -240,6 +306,8 @@ def _build_safari_extraction_js() -> str:
 
 def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
     """Extracts songs / videos / playlists from the specified Safari tab."""
+    if not is_macos_safari_supported():
+        return {"error": "Safari Companion is only supported on macOS", "tracks": [], "count": 0}
     raw = run_safari_js_in_tab(window_idx, tab_idx, _build_safari_extraction_js())
     try:
         return json.loads(raw)
@@ -249,6 +317,8 @@ def extract_tracks_from_tab(window_idx: int, tab_idx: int) -> Dict[str, Any]:
 
 def extract_all_safari_yt_tracks(window_idx: Optional[int] = None, tab_idx: Optional[int] = None) -> Dict[str, Any]:
     """Extracts tracks from a specific tab or scans all open YouTube tabs in Safari."""
+    if not is_macos_safari_supported():
+        return {"error": "Safari Companion is only supported on macOS", "tracks": [], "count": 0}
     if window_idx is not None and tab_idx is not None:
         return extract_tracks_from_tab(window_idx, tab_idx)
 
@@ -281,6 +351,8 @@ def extract_all_safari_yt_tracks(window_idx: Optional[int] = None, tab_idx: Opti
 
 def get_safari_now_playing() -> Optional[Dict[str, Any]]:
     """Checks open YouTube tabs in Safari to see if a video/song is active."""
+    if not is_macos_safari_supported():
+        return None
     tabs = list_safari_tabs(use_cache=True)
     yt_tabs = [t for t in tabs if t.get("is_yt")]
     if not yt_tabs:
@@ -290,16 +362,16 @@ def get_safari_now_playing() -> Optional[Dict[str, Any]]:
     (function() {
         const video = document.querySelector('video');
         if (!video) return JSON.stringify({ active: false });
-        
+
         const isPlaying = !video.paused && !video.ended && video.readyState > 2;
         const currentTime = video.currentTime || 0;
         const duration = video.duration || 0;
-        
+
         let title = '';
         let artist = '';
         let thumbnail = '';
         const vid = (new URLSearchParams(window.location.search)).get('v') || '';
-        
+
         if (window.location.host.includes('music.youtube.com')) {
             const bar = document.querySelector('ytmusic-player-bar');
             if (bar) {
@@ -313,7 +385,7 @@ def get_safari_now_playing() -> Optional[Dict[str, Any]]:
             artist = document.querySelector('#owner #channel-name a')?.textContent?.trim() || '';
             if (vid) thumbnail = 'https://i.ytimg.com/vi/' + vid + '/hqdefault.jpg';
         }
-        
+
         if (!title) return JSON.stringify({ active: false });
 
         return JSON.stringify({
@@ -343,7 +415,12 @@ def get_safari_now_playing() -> Optional[Dict[str, Any]]:
 
 
 def control_safari(action: str, window_idx: Optional[int] = None, tab_idx: Optional[int] = None) -> Dict[str, Any]:
-    """Sends playback control commands (play_pause, next, prev) to Safari."""
+    """Sends validated playback control commands (play_pause, next, prev) to Safari."""
+    if action not in ALLOWED_SAFARI_ACTIONS:
+        raise ValueError(f"Unsupported Safari action: {action!r}")
+    if not is_macos_safari_supported():
+        return {"status": "error", "message": "Safari Companion is only supported on macOS"}
+
     if window_idx is None or tab_idx is None:
         tabs = list_safari_tabs(use_cache=True)
         yt_tabs = [t for t in tabs if t.get("is_yt")]
@@ -352,12 +429,14 @@ def control_safari(action: str, window_idx: Optional[int] = None, tab_idx: Optio
         window_idx = yt_tabs[0]["window"]
         tab_idx = yt_tabs[0]["tab"]
 
+    _validate_tab_indices(window_idx, tab_idx)
+
     control_js = f"""
     (function() {{
         const action = "{action}";
         const isMusic = window.location.host.includes('music.youtube.com');
         const video = document.querySelector('video');
-        
+
         if (action === 'play_pause') {{
             if (isMusic) {{
                 const btn = document.querySelector('#play-pause-button, .play-pause-button');
@@ -399,6 +478,8 @@ def control_safari(action: str, window_idx: Optional[int] = None, tab_idx: Optio
 
 def get_safari_youtube_profile() -> Dict[str, Any]:
     """Extracts actual YouTube Music / Google profile picture and name from active Safari session."""
+    if not is_macos_safari_supported():
+        return {}
     script = '''
     tell application "Safari"
         repeat with w in windows
@@ -428,4 +509,3 @@ def get_safari_youtube_profile() -> Dict[str, Any]:
         return {"picture": pic} if pic else {}
     except Exception:
         return {}
-

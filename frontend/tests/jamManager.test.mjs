@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resetStorage } from './helpers/test-env.mjs'
+import { resetStorage, withWindowStub } from './helpers/test-env.mjs'
 import * as jamBarrel from '../src/jamEngine.js'
 import { JamSessionManager } from '../src/jam/JamSessionManager.js'
 
@@ -287,6 +287,164 @@ test('multi-peer Star-Topology Jam room lists all participants, enforces DJ mode
   } finally {
     host.destroy()
     guest.destroy()
+    resetStorage()
+  }
+})
+
+test('sendReaction emits both emoji and reaction fields and JAM_PONG relays over cloud when conn is absent', async () => {
+  resetStorage()
+  const MockPeer = createMockPeerClass()
+  const postedCloud = []
+
+  const cloudFetch = async (url, init = {}) => {
+    if (init.method === 'POST' && init.body) {
+      postedCloud.push({ url: String(url), payload: JSON.parse(init.body) })
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' }
+  }
+
+  const host = new JamSessionManager({ autoInit: false, PeerClass: MockPeer, fetchImpl: cloudFetch })
+  host.updateUserProfile({ friendCode: 'UP-HST111', name: 'Host User' })
+  const receivedReactions = []
+  host.setHandlers({ onReaction: (pkt) => receivedReactions.push(pkt) })
+
+  const guest = new JamSessionManager({ autoInit: false, PeerClass: MockPeer, fetchImpl: null })
+  guest.updateUserProfile({ friendCode: 'UP-GST222', name: 'Guest User' })
+
+  try {
+    await host.createJam(null, 'open_party')
+    postedCloud.length = 0
+
+    host.sendReaction('🔥')
+    assert.equal(receivedReactions.length, 1)
+    assert.equal(receivedReactions[0].emoji, '🔥')
+    assert.equal(receivedReactions[0].reaction, '🔥')
+    const cloudReaction = postedCloud.find((p) => p.payload?.type === 'JAM_REACTION')
+    assert.ok(cloudReaction, 'JAM_REACTION sent to cloud relay')
+    assert.equal(cloudReaction.payload.emoji, '🔥')
+
+    // Host replies to cloud-only JAM_PING (conn === null) with JAM_PONG via cloud relay
+    postedCloud.length = 0
+    host.handleIncomingPacket(
+      {
+        type: 'JAM_PING',
+        t1: 1000,
+        senderId: guest.getSelfParticipantId(),
+        _fromRole: 'guest',
+        _senderInstanceId: guest.instanceId
+      },
+      null
+    )
+    const cloudPong = postedCloud.find((p) => p.payload?.type === 'JAM_PONG')
+    assert.ok(cloudPong, 'JAM_PONG sent over cloud relay when direct PeerJS conn is null')
+
+    // Guest applying JAM_PONG updates clockOffsetMs and rttMs
+    guest.updateState({ active: true, isHost: false, role: 'guest', status: 'CONNECTED' })
+    const now = Date.now()
+    guest.handleIncomingPacket(
+      {
+        type: 'JAM_PONG',
+        t1: now - 40,
+        t2: now + 500,
+        t3: now + 502,
+        targetId: guest.getSelfParticipantId(),
+        _fromRole: 'host',
+        _senderInstanceId: host.instanceId
+      },
+      null
+    )
+    assert.ok(Math.abs(guest.state.clockOffsetMs - 521) <= 25)
+    assert.ok(guest.state.rttMs >= 2)
+  } finally {
+    host.destroy()
+    guest.destroy()
+    resetStorage()
+  }
+})
+
+test('roomController conn close cleans up guest state when no relay is active and destroy() clears timers', async () => {
+  resetStorage()
+  let latestPeer = null
+  let latestConn = null
+
+  class EventedMockPeer {
+    constructor() {
+      this.destroyed = false
+      this.disconnected = false
+      this.handlers = new Map()
+      latestPeer = this
+    }
+    on(evt, cb) {
+      const list = this.handlers.get(evt) || []
+      list.push(cb)
+      this.handlers.set(evt, list)
+    }
+    emit(evt, arg) {
+      for (const cb of this.handlers.get(evt) || []) cb(arg)
+    }
+    connect() {
+      const conn = {
+        open: true,
+        handlers: new Map(),
+        on(evt, cb) {
+          const list = this.handlers.get(evt) || []
+          list.push(cb)
+          this.handlers.set(evt, list)
+        },
+        emit(evt, arg) {
+          for (const cb of this.handlers.get(evt) || []) cb(arg)
+        },
+        send() {},
+        close() {
+          this.open = false
+        }
+      }
+      latestConn = conn
+      return conn
+    }
+    destroy() {
+      this.destroyed = true
+    }
+  }
+
+  // Native app with no backend URL -> hasBackend() === false, no EventSource in Node
+  const prevWindow = globalThis.window
+  globalThis.window = {
+    location: { origin: 'https://upbeat.example.com', pathname: '/', search: '', hash: '', port: '' },
+    localStorage: globalThis.localStorage,
+    sessionStorage: globalThis.sessionStorage,
+    Capacitor: { isNativePlatform: () => true }
+  }
+  const notifications = []
+  const guest = new JamSessionManager({ autoInit: false, PeerClass: EventedMockPeer, fetchImpl: null })
+  guest.setHandlers({ onNotify: (msg) => notifications.push(msg) })
+
+  try {
+    await guest.joinJam('JAM-ABCD')
+    assert.ok(latestPeer)
+    latestPeer.emit('open')
+    assert.ok(latestConn)
+    latestConn.emit('open')
+    assert.equal(guest.state.status, 'CONNECTED')
+    assert.equal(guest.state.active, true)
+
+    // Host drops PeerJS connection without JAM_ENDED
+    latestConn.emit('close')
+    assert.equal(guest.hostConn, null)
+    assert.equal(guest.state.active, false)
+    assert.equal(guest.state.status, 'IDLE')
+    assert.ok(notifications.some((n) => /disconnected/i.test(n)))
+
+    // destroy() marks destroyed and leaves zero active timers
+    guest.scheduleTimer(() => {}, 5000)
+    assert.ok(guest._timers.size >= 1)
+    guest.destroy()
+    assert.equal(guest.destroyed, true)
+    assert.equal(guest._timers.size, 0)
+  } finally {
+    guest.destroy()
+    if (prevWindow === undefined) delete globalThis.window
+    else globalThis.window = prevWindow
     resetStorage()
   }
 })

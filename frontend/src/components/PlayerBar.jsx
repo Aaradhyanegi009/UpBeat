@@ -216,6 +216,13 @@ export default function PlayerBar({
   const endedTriggeredTrackKeyRef = useRef('')
   const hasPrewarmedNextRef = useRef(false)
   const loadWatchdogRef = useRef(null)
+  const nearEndStallTimerRef = useRef(null)
+  const resolvedVidRef = useRef(resolvedVid)
+  resolvedVidRef.current = resolvedVid
+  const useIframeFallbackRef = useRef(useIframeFallback)
+  useIframeFallbackRef.current = useIframeFallback
+  const showVideoRef = useRef(showVideo)
+  showVideoRef.current = showVideo
 
   const clearLoadWatchdog = () => {
     if (loadWatchdogRef.current) {
@@ -224,10 +231,21 @@ export default function PlayerBar({
     }
   }
 
-  const getTrackTriggerKey = (vid = resolvedVid) => `${vid || ''}_${track?.video_id || ''}_${track?.title || ''}`
-  const isEndTriggered = (vid = resolvedVid) =>
+  const clearNearEndStallCheck = () => {
+    if (nearEndStallTimerRef.current) {
+      clearTimeout(nearEndStallTimerRef.current)
+      nearEndStallTimerRef.current = null
+    }
+  }
+
+  const trackRef = useRef(currentTrack)
+  const getTrackTriggerKey = (vid = resolvedVidRef.current) => {
+    const t = trackRef.current
+    return `${vid || ''}_${t?.video_id || ''}_${t?.title || ''}`
+  }
+  const isEndTriggered = (vid = resolvedVidRef.current) =>
     endedTriggeredRef.current || (endedTriggeredTrackKeyRef.current && endedTriggeredTrackKeyRef.current === getTrackTriggerKey(vid))
-  const markEndTriggered = (vid = resolvedVid) => {
+  const markEndTriggered = (vid = resolvedVidRef.current) => {
     endedTriggeredRef.current = true
     endedTriggeredTrackKeyRef.current = getTrackTriggerKey(vid)
   }
@@ -279,7 +297,7 @@ export default function PlayerBar({
   // Defends against the WebKit / Chromium HE-AAC SBR bug (2x duration) and
   // 32kbps partial VBR bitrate estimation bug (which falsely inflates 4:00 -> 15:32).
   const sanitizeDuration = (rawDur) => {
-    if (useIframeFallback) return
+    if (useIframeFallbackRef.current) return
     if (typeof rawDur !== 'number' || !isFinite(rawDur) || rawDur <= 0) return
 
     const authDur = authoritativeDurationRef.current
@@ -301,10 +319,14 @@ export default function PlayerBar({
   }
 
   const onNextRef = useRef(onNext)
+  const onPrevRef = useRef(onPrev)
   const isPlayingRef = useRef(isPlaying)
   useEffect(() => {
     onNextRef.current = onNext
   }, [onNext])
+  useEffect(() => {
+    onPrevRef.current = onPrev
+  }, [onPrev])
   useEffect(() => {
     isPlayingRef.current = isPlaying
   }, [isPlaying])
@@ -320,6 +342,7 @@ export default function PlayerBar({
     fallback_ids: [],
     url: safariNowPlaying.url || ''
   } : null)
+  trackRef.current = track
 
   const isSafariMode = playbackMode === 'safari'
   const effectiveDuration =
@@ -328,6 +351,8 @@ export default function PlayerBar({
       : (authoritativeDurationRef.current > 0
           ? authoritativeDurationRef.current
           : parseDurationText(track?.duration_text))
+  const effectiveDurationRef = useRef(effectiveDuration)
+  effectiveDurationRef.current = effectiveDuration
   const thumbUrl = (track ? artUrl(track) : '') || track?.thumbnail || (resolvedVid ? `https://i.ytimg.com/vi/${resolvedVid}/hqdefault.jpg` : '')
   const albumColor = useAlbumColor(thumbUrl)
 
@@ -460,8 +485,8 @@ export default function PlayerBar({
     const title = t?.title || 'UpBeat'
     const artist = t?.artist || ''
     const thumb = customThumb || thumbUrl || (resolvedVid ? `https://i.ytimg.com/vi/${resolvedVid}/hqdefault.jpg` : '')
-    const d = Math.round(durSec ?? (effectiveDuration || 0))
-    const c = Math.round(curSec ?? (currentTime || 0))
+    const d = Math.round(durSec ?? (effectiveDurationRef.current || 0))
+    const c = Math.round(curSec ?? (currentTimeRef.current || 0))
 
     // 1. Android Capacitor Native Media Session
     if (window.UpBeatNative?.updatePlayback) {
@@ -483,7 +508,9 @@ export default function PlayerBar({
         })
       } catch {}
     }
-  }, [track, thumbUrl, resolvedVid, effectiveDuration, currentTime])
+  }, [track, thumbUrl, resolvedVid])
+  const notifyNativePlaybackRef = useRef(notifyNativePlayback)
+  notifyNativePlaybackRef.current = notifyNativePlayback
 
   const restoreVolume = useCallback(() => {
     const baseVol = isMuted ? 0 : volume / 100
@@ -515,18 +542,19 @@ export default function PlayerBar({
       if (active) {
         try {
           active.pause()
-          active.volume = isMuted ? 0 : volume / 100
+          active.volume = isMutedRef.current ? 0 : volumeRef.current / 100
         } catch {}
       }
       const p = playerRef.current
       if (p && typeof p.pauseVideo === 'function') {
         try {
           p.pauseVideo()
-          p.setVolume(isMuted ? 0 : volume)
+          p.setVolume(isMutedRef.current ? 0 : volumeRef.current)
         } catch {}
       }
+      isPlayingRef.current = false
       setIsPlaying(false)
-      notifyNativePlayback(false, currentTimeRef.current, effectiveDuration)
+      notifyNativePlaybackRef.current?.(false, currentTimeRef.current, effectiveDurationRef.current)
       return true
     }
     if (repeatModeRef.current === 'one') {
@@ -536,7 +564,7 @@ export default function PlayerBar({
       currentTimeRef.current = 0
       setCurrentTime(0)
       const active = getActiveAudio()
-      if (!useIframeFallback && active) {
+      if (!useIframeFallbackRef.current && active) {
         try {
           active.currentTime = 0
           active.play().catch(() => {})
@@ -547,11 +575,13 @@ export default function PlayerBar({
           playerRef.current.playVideo()
         } catch {}
       }
-      notifyNativePlayback(true, 0, effectiveDuration)
+      notifyNativePlaybackRef.current?.(true, 0, effectiveDurationRef.current)
       return true
     }
     return false
-  }, [isMuted, volume, effectiveDuration, useIframeFallback, notifyNativePlayback, setIsPlaying])
+  }, [setIsPlaying])
+  const handleTrackEndedRef = useRef(handleTrackEnded)
+  handleTrackEndedRef.current = handleTrackEnded
 
   const handleSetSleepTimer = useCallback((type, fadeOut = true) => {
     restoreVolume()
@@ -622,7 +652,7 @@ export default function PlayerBar({
       })
 
       // Smooth volume fade-out over last 30 seconds
-      const baseVol = isMuted ? 0 : volume / 100
+      const baseVol = isMutedRef.current ? 0 : volumeRef.current / 100
       if (sleepTimer.fadeOut && remaining <= 30 && remaining > 0) {
         const fadeFactor = remaining / 30
         const fadedVol = Math.max(0, Math.min(baseVol, baseVol * fadeFactor))
@@ -653,11 +683,12 @@ export default function PlayerBar({
         if (p && typeof p.pauseVideo === 'function') {
           try {
             p.pauseVideo()
-            p.setVolume(isMuted ? 0 : volume)
+            p.setVolume(isMutedRef.current ? 0 : volumeRef.current)
           } catch {}
         }
+        isPlayingRef.current = false
         setIsPlaying(false)
-        notifyNativePlayback(false, currentTimeRef.current, effectiveDuration)
+        notifyNativePlaybackRef.current?.(false, currentTimeRef.current, effectiveDurationRef.current)
         setSleepTimer({
           active: false,
           mode: 'off',
@@ -670,7 +701,7 @@ export default function PlayerBar({
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [sleepTimer.active, sleepTimer.mode, sleepTimer.targetTimestamp, sleepTimer.fadeOut, isMuted, volume, effectiveDuration, notifyNativePlayback, setIsPlaying])
+  }, [sleepTimer.active, sleepTimer.mode, sleepTimer.targetTimestamp, sleepTimer.fadeOut, setIsPlaying])
 
   // Prime both audio decks on first user interaction so Safari never blocks background transitions
   const primedRef = useRef(false)
@@ -709,6 +740,7 @@ export default function PlayerBar({
 
   const commitSeek = (targetSec, fromRemoteJam = false) => {
     finishCrossfadeNow()
+    clearNearEndStallCheck()
     const sec = Math.max(0, Number(targetSec) || 0)
     currentTimeRef.current = sec
     setCurrentTime(sec)
@@ -716,7 +748,7 @@ export default function PlayerBar({
     lastCurChangeTimeRef.current = Date.now()
     clearEndTriggered()
     lastNativeReportSecRef.current = sec
-    notifyNativePlayback(Boolean(isPlayingRef.current), sec, effectiveDuration)
+    notifyNativePlaybackRef.current?.(Boolean(isPlayingRef.current), sec, effectiveDurationRef.current)
     restoreVolume()
     if (!fromRemoteJam && onUserSeek) {
       try {
@@ -724,9 +756,9 @@ export default function PlayerBar({
       } catch {}
     }
     const activeAudio = getActiveAudio()
-    if (!useIframeFallback && activeAudio) {
+    if (!useIframeFallbackRef.current && activeAudio) {
       try {
-        if (activeAudio.readyState >= 1) {
+        if (activeAudio.readyState >= 1 && activeAudio.dataset.vid === resolvedVidRef.current) {
           activeAudio.currentTime = sec
           pendingSeekSecRef.current = null
         } else {
@@ -747,6 +779,7 @@ export default function PlayerBar({
   const forcePauseDirect = (targetSec) => {
     isPlayingRef.current = false
     setIsPlaying(false)
+    clearNearEndStallCheck()
     finishCrossfadeNow()
     ;[audioRefA.current, audioRefB.current].forEach((a) => {
       if (a) {
@@ -767,9 +800,9 @@ export default function PlayerBar({
       setCurrentTime(sec)
       lastCurPosRef.current = sec
       const activeAudio = getActiveAudio()
-      if (!useIframeFallback && activeAudio) {
+      if (!useIframeFallbackRef.current && activeAudio) {
         try {
-          if (activeAudio.readyState >= 1) {
+          if (activeAudio.readyState >= 1 && activeAudio.dataset.vid === resolvedVidRef.current) {
             if (Math.abs((activeAudio.currentTime || 0) - sec) > 0.15) {
               activeAudio.currentTime = sec
             }
@@ -789,7 +822,7 @@ export default function PlayerBar({
         navigator.mediaSession.playbackState = 'paused'
       } catch {}
     }
-    notifyNativePlayback(false, currentTimeRef.current || 0, effectiveDuration)
+    notifyNativePlaybackRef.current?.(false, currentTimeRef.current || 0, effectiveDurationRef.current)
   }
 
   const forcePlayDirect = (targetSec) => {
@@ -801,11 +834,11 @@ export default function PlayerBar({
       }
     }
     const activeAudio = getActiveAudio()
-    if (!useIframeFallback && activeAudio && activeAudio.getAttribute('src')) {
+    if (!useIframeFallbackRef.current && activeAudio && activeAudio.getAttribute('src')) {
       try {
         activeAudio.play().catch(() => {})
       } catch {}
-    } else if (useIframeFallback && playerRef.current && typeof playerRef.current.playVideo === 'function') {
+    } else if (useIframeFallbackRef.current && playerRef.current && typeof playerRef.current.playVideo === 'function') {
       try {
         playerRef.current.playVideo()
       } catch {}
@@ -815,7 +848,7 @@ export default function PlayerBar({
         navigator.mediaSession.playbackState = 'playing'
       } catch {}
     }
-    notifyNativePlayback(true, currentTimeRef.current || 0, effectiveDuration)
+    notifyNativePlaybackRef.current?.(true, currentTimeRef.current || 0, effectiveDurationRef.current)
   }
 
   const forcePauseRef = useRef(forcePauseDirect)
@@ -838,7 +871,7 @@ export default function PlayerBar({
       forcePlay: (targetSec) => forcePlayRef.current?.(targetSec),
       forcePause: (targetSec) => forcePauseRef.current?.(targetSec),
       next: () => onNextRef.current(),
-      prev: () => onPrev(),
+      prev: () => onPrevRef.current?.(),
       seekTo: (sec, fromRemoteJam = false) => commitSeekRef.current?.(sec, fromRemoteJam),
       getCurrentTime: () => currentTimeRef.current || 0,
       getDuration: () => authoritativeDurationRef.current || 0,
@@ -855,11 +888,12 @@ export default function PlayerBar({
     return () => {
       delete window.UpBeatControls
     }
-  }, [onPrev, setIsPlaying])
+  }, [])
 
   // Resolve video_id if track lacks one
   useEffect(() => {
     clearEndTriggered()
+    clearNearEndStallCheck()
     currentTimeRef.current = 0
     setCurrentTime(0)
     setScrubTime(0)
@@ -987,6 +1021,7 @@ export default function PlayerBar({
 
     if (playerRef.current && typeof playerRef.current.stopVideo === 'function') {
       try { playerRef.current.stopVideo() } catch {}
+      currentVidRef.current = ''
     }
 
     const tryNextFallback = () => {
@@ -1220,9 +1255,10 @@ export default function PlayerBar({
 
   // Sync play/pause with HTML5 <audio> or YT.Player fallback
   useEffect(() => {
-    if (playbackMode !== 'app') {
-      if (audioRefA.current) audioRefA.current.pause()
-      if (audioRefB.current) audioRefB.current.pause()
+    if (playbackMode !== 'app' || showVideo) {
+      finishCrossfadeNow()
+      if (audioRefA.current) try { audioRefA.current.pause() } catch {}
+      if (audioRefB.current) try { audioRefB.current.pause() } catch {}
       if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
         try { playerRef.current.pauseVideo() } catch {}
       }
@@ -1249,7 +1285,7 @@ export default function PlayerBar({
         if ('mediaSession' in navigator) {
           navigator.mediaSession.playbackState = 'paused'
         }
-        notifyNativePlayback(false, currentTime, effectiveDuration)
+        notifyNativePlaybackRef.current?.(false, currentTimeRef.current, effectiveDurationRef.current)
       }
       return
     }
@@ -1265,7 +1301,7 @@ export default function PlayerBar({
         }
       } catch {}
     }
-  }, [isPlaying, playbackMode, useIframeFallback])
+  }, [isPlaying, playbackMode, useIframeFallback, showVideo])
 
   // Sync volume
   useEffect(() => {
@@ -1321,30 +1357,42 @@ export default function PlayerBar({
           },
           events: {
             onReady: (e) => {
-              currentVidRef.current = resolvedVid
-              e.target.setVolume(isMuted ? 0 : volume)
+              const targetVid = resolvedVidRef.current || resolvedVid
+              currentVidRef.current = targetVid
+              e.target.setVolume(isMutedRef.current ? 0 : volumeRef.current)
+              if (targetVid && targetVid !== resolvedVid && typeof e.target.loadVideoById === 'function') {
+                if (isPlayingRef.current) e.target.loadVideoById(targetVid)
+                else e.target.cueVideoById(targetVid)
+                return
+              }
               if (isPlayingRef.current) {
                 e.target.playVideo()
               }
             },
             onStateChange: (e) => {
               if (e.data === 0) {
-                if (useIframeFallback && currentVidRef.current === resolvedVid && !isEndTriggered(resolvedVid)) {
-                  markEndTriggered(resolvedVid)
-                  if (handleTrackEnded()) return
+                const activeVid = resolvedVidRef.current
+                if (useIframeFallbackRef.current && activeVid && currentVidRef.current === activeVid && !isEndTriggered(activeVid)) {
+                  markEndTriggered(activeVid)
+                  if (handleTrackEndedRef.current?.()) return
                   onNextRef.current()
                 }
               } else if (e.data === 1) {
+                if (!useIframeFallbackRef.current) return
                 clearEndTriggered()
+                isPlayingRef.current = true
                 setIsPlaying(true)
                 const dur = e.target.getDuration()
                 if (dur) setDuration(dur)
               } else if (e.data === 2) {
+                if (!useIframeFallbackRef.current) return
+                isPlayingRef.current = false
                 setIsPlaying(false)
               }
             },
             onError: () => {
-              if (useIframeFallback && currentVidRef.current === resolvedVid) {
+              const activeVid = resolvedVidRef.current
+              if (useIframeFallbackRef.current && activeVid && currentVidRef.current === activeVid) {
                 onNextRef.current()
               }
             }
@@ -1371,17 +1419,20 @@ export default function PlayerBar({
 
   // Optimized progress ticker: 250ms when app is active; 1500ms when hidden/in-background to save battery & CPU
   useEffect(() => {
-    if (!isPlaying || playbackMode !== 'app') return
+    if (!isPlaying || playbackMode !== 'app' || showVideo) return
 
     let timerId = null
     let isCancelled = false
 
     const tick = () => {
-      if (isCancelled || isScrubbingRef.current) return
+      if (isCancelled || isScrubbingRef.current || showVideoRef.current) return
 
-      if (!useIframeFallback) {
+      const activeVid = resolvedVidRef.current
+      const activeTrack = trackRef.current
+
+      if (!useIframeFallbackRef.current) {
         const audio = getActiveAudio()
-        if (!audio || !resolvedVid || audio.dataset.vid !== resolvedVid) return
+        if (!audio || !activeVid || audio.dataset.vid !== activeVid) return
         const cur = audio.currentTime
         const rawDur = audio.duration
         const targetDur =
@@ -1389,7 +1440,7 @@ export default function PlayerBar({
             ? duration
             : (authoritativeDurationRef.current > 0
                 ? authoritativeDurationRef.current
-                : parseDurationText(track?.duration_text))
+                : parseDurationText(activeTrack?.duration_text))
 
         if (typeof cur === 'number' && !isNaN(cur) && cur >= 0) {
           syncUiCurrentTime(cur)
@@ -1398,13 +1449,14 @@ export default function PlayerBar({
           if (Math.abs(cur - lastCurPosRef.current) > 0.05) {
             lastCurPosRef.current = cur
             lastCurChangeTimeRef.current = Date.now()
+            clearNearEndStallCheck()
           }
 
           // Native playback IPC: report periodically (every 5 seconds) to avoid spamming the Android UI thread
           if (Math.abs(cur - lastNativeReportSecRef.current) >= 5) {
             lastNativeReportSecRef.current = cur
             if (isPlayingRef.current) {
-              notifyNativePlayback(true, cur, targetDur)
+              notifyNativePlaybackRef.current?.(true, cur, targetDur)
             }
           }
         }
@@ -1424,20 +1476,27 @@ export default function PlayerBar({
         const isEnded = Boolean(audio.ended)
         const reachedTargetEnd = effectiveEndDur > 5 && cur >= effectiveEndDur - 0.4
         const stalledNearEnd = effectiveEndDur > 5 && cur >= effectiveEndDur - 2.0 && cur > 5 && timeSinceAdvance >= 1500
-        const isSbr2xFreeze =
+        const authDur = authoritativeDurationRef.current
+        const hasSbr2xMismatch =
+          authDur > 20 &&
           typeof rawDur === 'number' &&
+          isFinite(rawDur) &&
+          rawDur >= authDur * 1.75 &&
+          rawDur <= authDur * 2.25
+        const isSbr2xFreeze =
+          hasSbr2xMismatch &&
           rawDur > 20 &&
           cur > 5 &&
           Math.abs(cur - rawDur / 2) <= 3.0 &&
           timeSinceAdvance >= 1800
         const midTrackStall = cur > 1 && timeSinceAdvance >= 12000
 
-        if (midTrackStall && isPlayingRef.current) {
+        if (midTrackStall && isPlayingRef.current && !showVideoRef.current) {
           audio.play().catch(() => {})
-          if (timeSinceAdvance >= 18000 && !isEndTriggered()) {
+          if (timeSinceAdvance >= 18000 && !isEndTriggered(activeVid)) {
             console.warn('[UpBeat] Mid-track stall recovery: advancing track')
-            markEndTriggered()
-            if (handleTrackEnded()) return
+            markEndTriggered(activeVid)
+            if (handleTrackEndedRef.current?.()) return
             onNextRef.current()
             return
           }
@@ -1453,24 +1512,24 @@ export default function PlayerBar({
           effectiveEndDur > xfade + 6 &&
           cur >= effectiveEndDur - xfade &&
           cur > 2 &&
-          !isEndTriggered()
+          !isEndTriggered(activeVid)
         ) {
-          markEndTriggered()
+          markEndTriggered(activeVid)
           autoCrossfadeDurationMsRef.current = xfade * 1000
           onNextRef.current()
           return
         }
 
-        if ((isEnded || reachedTargetEnd || stalledNearEnd || isSbr2xFreeze) && !isEndTriggered() && cur > 0.5) {
-          markEndTriggered()
-          if (handleTrackEnded()) return
+        if ((isEnded || reachedTargetEnd || stalledNearEnd || isSbr2xFreeze) && !isEndTriggered(activeVid) && cur > 0.5) {
+          markEndTriggered(activeVid)
+          if (handleTrackEndedRef.current?.()) return
           onNextRef.current()
         }
         return
       }
 
       const p = playerRef.current
-      if (useIframeFallback && p && typeof p.getCurrentTime === 'function') {
+      if (useIframeFallbackRef.current && p && typeof p.getCurrentTime === 'function') {
         try {
           const cur = p.getCurrentTime()
           if (typeof cur === 'number' && !isNaN(cur) && cur >= 0) {
@@ -1480,10 +1539,10 @@ export default function PlayerBar({
             const dur = p.getDuration()
             if (typeof dur === 'number' && isFinite(dur) && dur > 0) {
               sanitizeDuration(dur)
-              const effectiveDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
-              if (cur >= effectiveDur - 0.3 && effectiveDur > 5 && !isEndTriggered(resolvedVid)) {
-                markEndTriggered(resolvedVid)
-                if (handleTrackEnded()) return
+              const effectiveDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(activeTrack?.duration_text))
+              if (cur >= effectiveDur - 0.3 && effectiveDur > 5 && !isEndTriggered(activeVid)) {
+                markEndTriggered(activeVid)
+                if (handleTrackEndedRef.current?.()) return
                 onNextRef.current()
               }
             }
@@ -1508,12 +1567,12 @@ export default function PlayerBar({
       isCancelled = true
       if (timerId) clearTimeout(timerId)
     }
-  }, [isPlaying, playbackMode, useIframeFallback, duration, track])
+  }, [isPlaying, playbackMode, useIframeFallback, showVideo, duration, resolvedVid, track])
 
   // Sync Android Foreground Media Service + Android Auto + macOS + Lock Screen MediaSession
   // NOTE: currentTime is accessed via currentTimeRef to avoid running this heavy IPC effect 4 times/sec
   useEffect(() => {
-    notifyNativePlayback(Boolean(isPlaying), currentTimeRef.current, effectiveDuration)
+    notifyNativePlaybackRef.current?.(Boolean(isPlaying), currentTimeRef.current, effectiveDuration)
 
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
@@ -1528,48 +1587,25 @@ export default function PlayerBar({
         }
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
         navigator.mediaSession.setActionHandler('play', () => {
-          setIsPlaying(true)
-          isPlayingRef.current = true
-          if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = 'playing'
-          }
-          const activeAudio = getActiveAudio()
-          if (activeAudio && activeAudio.src) {
-            try { activeAudio.play().catch(() => {}) } catch {}
-          }
-          notifyNativePlayback(true, currentTimeRef.current, effectiveDuration)
+          forcePlayRef.current?.()
         })
         navigator.mediaSession.setActionHandler('pause', () => {
-          setIsPlaying(false)
-          isPlayingRef.current = false
-          if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = 'paused'
-          }
-          const activeAudio = getActiveAudio()
-          if (activeAudio) {
-            try { activeAudio.pause() } catch {}
-          }
-          if (audioRefA.current) try { audioRefA.current.pause() } catch {}
-          if (audioRefB.current) try { audioRefB.current.pause() } catch {}
-          if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
-            try { playerRef.current.pauseVideo() } catch {}
-          }
-          notifyNativePlayback(false, currentTimeRef.current, effectiveDuration)
+          forcePauseRef.current?.()
         })
-        navigator.mediaSession.setActionHandler('previoustrack', () => onPrev())
+        navigator.mediaSession.setActionHandler('previoustrack', () => onPrevRef.current?.())
         navigator.mediaSession.setActionHandler('nexttrack', () => onNextRef.current())
         navigator.mediaSession.setActionHandler('seekto', (details) => {
           if (details && typeof details.seekTime === 'number') {
-            commitSeek(details.seekTime)
+            commitSeekRef.current?.(details.seekTime)
           }
         })
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
           const offset = details?.seekOffset || 10
-          commitSeek(currentTimeRef.current + offset)
+          commitSeekRef.current?.(currentTimeRef.current + offset)
         })
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
           const offset = details?.seekOffset || 10
-          commitSeek(Math.max(0, currentTimeRef.current - offset))
+          commitSeekRef.current?.(Math.max(0, currentTimeRef.current - offset))
         })
 
         if ('setPositionState' in navigator.mediaSession && effectiveDuration > 0 && currentTimeRef.current >= 0) {
@@ -1583,20 +1619,64 @@ export default function PlayerBar({
         }
       } catch {}
     }
-  }, [isPlaying, track?.title, track?.artist, track?.thumbnail, resolvedVid, thumbUrl, effectiveDuration, onPrev])
+  }, [isPlaying, track?.title, track?.artist, track?.thumbnail, resolvedVid, thumbUrl, effectiveDuration])
 
   // Listen for in-car seek commands from Android Auto
   useEffect(() => {
     const onCarSeek = (e) => {
       if (typeof e?.detail === 'number') {
-        commitSeek(e.detail)
+        commitSeekRef.current?.(e.detail)
       }
     }
     window.addEventListener('upbeat-car-seek', onCarSeek)
     return () => window.removeEventListener('upbeat-car-seek', onCarSeek)
-  }, [duration, useIframeFallback])
+  }, [])
+
+  useEffect(() => () => clearNearEndStallCheck(), [])
+
+  const scheduleNearEndStallCheck = (audioEl, deck, vid) => {
+    if (!audioEl || !vid) return
+    const cur = audioEl.currentTime || 0
+    const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(trackRef.current?.duration_text))
+    const rawDur = audioEl.duration
+    const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
+    if (!(effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0) || isEndTriggered(vid)) {
+      return
+    }
+    if (nearEndStallTimerRef.current) return
+    nearEndStallTimerRef.current = setTimeout(() => {
+      nearEndStallTimerRef.current = null
+      if (
+        activeDeckRef.current !== deck ||
+        !isPlayingRef.current ||
+        isScrubbingRef.current ||
+        showVideoRef.current ||
+        useIframeFallbackRef.current
+      ) {
+        return
+      }
+      if (audioEl.dataset.vid !== resolvedVidRef.current || audioEl.dataset.vid !== vid) return
+      const liveCur = audioEl.currentTime || 0
+      const liveRawDur = audioEl.duration
+      const liveTargetDur = authoritativeDurationRef.current || parseDurationText(trackRef.current?.duration_text)
+      const liveEndDur = (typeof liveRawDur === 'number' && isFinite(liveRawDur) && liveRawDur > liveTargetDur) ? liveRawDur : liveTargetDur
+      const stalledTime = Date.now() - (lastCurChangeTimeRef.current || 0)
+      if (
+        liveEndDur > 5 &&
+        liveCur > 5 &&
+        liveCur >= liveEndDur - 2.0 &&
+        (audioEl.ended || audioEl.paused || audioEl.readyState < 3 || stalledTime >= 1400) &&
+        !isEndTriggered(vid)
+      ) {
+        markEndTriggered(vid)
+        if (handleTrackEndedRef.current?.()) return
+        onNextRef.current()
+      }
+    }, 1500)
+  }
 
   const handleScrubStart = () => {
+    clearNearEndStallCheck()
     setIsScrubbing(true)
     setScrubTime(currentTime)
   }
@@ -1630,6 +1710,9 @@ export default function PlayerBar({
               syncUiCurrentTime(cur)
               if (cur > 0.5) {
                 clearLoadWatchdog()
+              }
+              if (Math.abs(cur - lastCurPosRef.current) > 0.05) {
+                clearNearEndStallCheck()
               }
               if (cur > 5 && !hasPrewarmedNextRef.current) {
                 hasPrewarmedNextRef.current = true
@@ -1676,19 +1759,20 @@ export default function PlayerBar({
                 } catch {}
               }
             }
-            if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
+            if (isPlayingRef.current && !showVideoRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
               e.currentTarget.play().catch(() => {})
             }
           }}
           onLoadedData={(e) => {
             setIsLoadingStream(false)
-            if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
+            if (isPlayingRef.current && !showVideoRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
               e.currentTarget.play().catch(() => {})
             }
           }}
           onCanPlay={(e) => {
             setIsLoadingStream(false)
-            if (isPlayingRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
+            clearNearEndStallCheck()
+            if (isPlayingRef.current && !showVideoRef.current && e.currentTarget.paused && !fadeIntervalRef.current) {
               e.currentTarget.play().catch(() => {})
             }
           }}
@@ -1700,9 +1784,10 @@ export default function PlayerBar({
           onPlay={(e) => {
             setIsLoadingStream(false)
             clearLoadWatchdog()
-            // If playback was explicitly paused (e.g. via Host Jam pause or forcePause),
+            clearNearEndStallCheck()
+            // If playback was explicitly paused (e.g. via Host Jam pause, Watch video, or forcePause),
             // do not allow an asynchronous browser play/seek event to unpause the deck!
-            if (!isPlayingRef.current) {
+            if (!isPlayingRef.current || showVideoRef.current) {
               try {
                 e.currentTarget.pause()
               } catch {}
@@ -1712,7 +1797,7 @@ export default function PlayerBar({
               setIsPlaying(true)
               isPlayingRef.current = true
               lastCurChangeTimeRef.current = Date.now()
-              notifyNativePlayback(true, e.currentTarget.currentTime || 0, effectiveDuration)
+              notifyNativePlaybackRef.current?.(true, e.currentTarget.currentTime || 0, effectiveDurationRef.current)
             }
           }}
           onPause={() => {
@@ -1720,35 +1805,20 @@ export default function PlayerBar({
             // or deck swaps must NEVER flip the user's playback state to paused!
           }}
           onWaiting={(e) => {
-            if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid) {
-              const cur = e.currentTarget.currentTime || 0
-              const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
-              const rawDur = e.currentTarget.duration
-              const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
-              if (effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
-                markEndTriggered(e.currentTarget.dataset.vid)
-                if (handleTrackEnded()) return
-                onNextRef.current()
-              }
+            if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVidRef.current) {
+              scheduleNearEndStallCheck(e.currentTarget, deck, e.currentTarget.dataset.vid)
             }
           }}
           onStalled={(e) => {
-            if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid) {
-              const cur = e.currentTarget.currentTime || 0
-              const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(track?.duration_text))
-              const rawDur = e.currentTarget.duration
-              const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
-              if (effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0 && !isEndTriggered(e.currentTarget.dataset.vid)) {
-                markEndTriggered(e.currentTarget.dataset.vid)
-                if (handleTrackEnded()) return
-                onNextRef.current()
-              }
+            if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVidRef.current) {
+              scheduleNearEndStallCheck(e.currentTarget, deck, e.currentTarget.dataset.vid)
             }
           }}
           onEnded={(e) => {
-            if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVid && !isEndTriggered(e.currentTarget.dataset.vid)) {
+            clearNearEndStallCheck()
+            if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVidRef.current && !isEndTriggered(e.currentTarget.dataset.vid)) {
               markEndTriggered(e.currentTarget.dataset.vid)
-              if (handleTrackEnded()) return
+              if (handleTrackEndedRef.current?.()) return
               onNextRef.current()
             }
           }}

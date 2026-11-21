@@ -68,17 +68,19 @@ export default function App() {
   const initialBootRef = useRef(false)
 
   const [models] = useState([
-    { id: 'gemini-4-argon', name: 'Gemini 4 Argon (⚡ 1s Fastest)' },
-    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (2s Fast)' },
-    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Active)' },
-    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest' },
-    { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash Preview' },
+    { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Fastest · 2.5 Flash Lite)' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-    { id: 'gemma-4-26b-a4b-it', name: 'Gemma 4 26B MoE' },
-    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Legacy)' }
+    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }
   ])
   const [selectedModel, setSelectedModel] = useState(() => {
-    return localStorage.getItem('argon_selected_model') || 'gemini-4-argon'
+    const validIds = new Set(['gemini-4-argon', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash'])
+    try {
+      const saved = localStorage.getItem('argon_selected_model')
+      return saved && validIds.has(saved) ? saved : 'gemini-4-argon'
+    } catch {
+      return 'gemini-4-argon'
+    }
   })
   const handleSelectModel = (modelId) => {
     setSelectedModel(modelId)
@@ -91,20 +93,10 @@ export default function App() {
   const [discoveryLevel, setDiscoveryLevel] = useState(50)
   const [trackCount, setTrackCount] = useState(20)
   const [createSeed, setCreateSeed] = useState(null)
-  const [activeTab, setActiveTab] = useState('curator')
-  const [searchMode, setSearchMode] = useState('direct')
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  const [isLoadingPlaylistBrowse, setIsLoadingPlaylistBrowse] = useState(false)
-  const [isResolvingBatch, setIsResolvingBatch] = useState(false)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window !== 'undefined') return window.innerWidth >= 1024
-    return true
-  })
-  const [showKeyModal, setShowKeyModal] = useState(false)
   const [isQueueOpen, setIsQueueOpen] = useState(false)
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false)
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
   const [otaUpdate, setOtaUpdate] = useState(null)
   const [isApplyingOta, setIsApplyingOta] = useState(false)
@@ -124,6 +116,8 @@ export default function App() {
   const scrollRef = useRef(null)
   const scrollMemoryRef = useRef({})
   const searchInputRef = useRef(null)
+  const companionCurrentTrackRef = useRef(null)
+  const [onboardingVersion, setOnboardingVersion] = useState(0)
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try {
       if (localStorage.getItem('upbeat_onboarded_v1') && localStorage.getItem('upbeat_chart_prefs_v1')) return false
@@ -203,12 +197,13 @@ export default function App() {
     setExtractedTracks,
     setTasteDna,
     selectedModel,
+    currentTrackRef: companionCurrentTrackRef,
     showNotify
   })
 
   const {
     currentTrack, setCurrentTrack, currentTrackIdx, setCurrentTrackIdx,
-    isPlaying, setIsPlaying, playbackMode, setPlaybackMode,
+    isPlaying, setIsPlaying, playbackMode, setPlaybackMode, activePlaybackContext,
     isShuffle, setIsShuffle, repeatMode, setRepeatMode, crossfadeSec, setCrossfadeSec,
     currentTrackRef, isPlayingRef, queueRef, handleNextRef, handlePrevRef,
     upNext, isTrackFavorite, handleToggleFavorite, handlePlayTrack, handleTogglePlay,
@@ -223,12 +218,13 @@ export default function App() {
     offlineTracks,
     queue,
     setQueue,
-    activeTab,
+    activeTab: 'curator',
     setPlayingFrom,
     remoteJamGuardRef,
     onPushToSafari: handlePushToSafari,
     showNotify
   })
+  companionCurrentTrackRef.current = currentTrack
 
   const {
     jamState, isJamModalOpen, setIsJamModalOpen,
@@ -278,109 +274,102 @@ export default function App() {
     })
   }, [])
 
-  // Global shortcut: Cmd+B / Ctrl+B to slide toggle sidebar
-  useEffect(() => {
-    const handleKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-        e.preventDefault()
-        setRightPanelOpen((prev) => !prev)
-      }
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [])
-
-  // Handle in-car controls from Android Auto & car head units
-  useEffect(() => {
-    window.onUpBeatCarAction = (action, payload) => {
-      switch (action) {
-        case 'play':
+  // Handle in-car controls from Android Auto & car head units (ref-backed so closures never go stale)
+  const carActionRef = useRef(null)
+  carActionRef.current = (action, payload) => {
+    switch (action) {
+      case 'play':
+        if (window.UpBeatControls?.forcePlay) {
+          window.UpBeatControls.forcePlay()
+        } else {
           setIsPlaying(true)
           if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'playing'
           }
-          document.querySelectorAll('audio').forEach((el) => {
-            if (el.src) try { el.play().catch(() => {}) } catch {}
-          })
-          break
-        case 'pause':
+        }
+        break
+      case 'pause':
+        if (window.UpBeatControls?.forcePause) {
+          window.UpBeatControls.forcePause()
+        } else {
           setIsPlaying(false)
           if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'paused'
           }
-          document.querySelectorAll('audio').forEach((el) => {
-            try { el.pause() } catch {}
-          })
-          break
-        case 'next':
-          handleNext()
-          break
-        case 'prev':
-          handlePrev()
-          break
-        case 'seek':
-          window.dispatchEvent(new CustomEvent('upbeat-car-seek', { detail: Number(payload) || 0 }))
-          break
-        case 'play_title_artist': {
-          const parts = (payload || '').split('___')
-          const tTitle = parts[0]?.trim()
-          const tArtist = parts[1]?.trim()
-          if (tTitle) {
-            const query = `${tTitle} ${tArtist || ''}`.trim()
-            handleDirectSearch(query, 'auto', true)
-          }
-          break
         }
-        case 'play_index': {
-          const idx = parseInt(payload, 10)
-          const activeList = playlist?.tracks?.length ? playlist.tracks : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : []))
-          if (!isNaN(idx) && activeList?.[idx]) {
-            handlePlayTrack(activeList[idx], idx, activeList)
-          }
-          break
+        break
+      case 'next':
+        handleNext()
+        break
+      case 'prev':
+        handlePrev()
+        break
+      case 'seek':
+        window.dispatchEvent(new CustomEvent('upbeat-car-seek', { detail: Number(payload) || 0 }))
+        break
+      case 'play_title_artist': {
+        const parts = (payload || '').split('___')
+        const tTitle = parts[0]?.trim()
+        const tArtist = parts[1]?.trim()
+        if (tTitle) {
+          const query = `${tTitle} ${tArtist || ''}`.trim()
+          handleDirectSearch(query, 'auto', true)
         }
-        case 'play_favorite': {
-          const idx = parseInt(payload, 10)
-          const activeFavs = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : [])
-          if (!isNaN(idx) && activeFavs?.[idx]) {
-            handlePlayTrack(activeFavs[idx], idx, activeFavs)
-          }
-          break
-        }
-        case 'play_preset': {
-          const presetMap = {
-            preset_late_night: 'Atmospheric late night drive lofi hip hop mix',
-            preset_focus: 'Deep focus instrumental ambient electronic beats',
-            preset_energy: 'High energy fast BPM workout motivation tracks',
-            preset_anime: 'Cinematic orchestral soundtracks and epic film scores',
-            preset_hindi: 'New Hindi songs latest releases'
-          }
-          const promptText = presetMap[payload] || 'Curated music mix'
-          setPrompt(promptText)
-          handleDirectSearch(promptText, 'auto', true)
-          break
-        }
-        case 'search_play': {
-          if (payload) {
-            setPrompt(payload)
-            handleDirectSearch(payload, 'auto', true)
-          }
-          break
-        }
-        case 'toggle_loop': {
-          if (payload === 'one') setRepeatMode('one')
-          else if (payload === 'off') setRepeatMode('off')
-          else toggleLoopSong()
-          break
-        }
-        case 'toggle_like': {
-          if (currentTrackRef.current) handleToggleFavorite(currentTrackRef.current)
-          break
-        }
-        default:
-          break
+        break
       }
+      case 'play_index': {
+        const idx = parseInt(payload, 10)
+        const activeList = playlist?.tracks?.length ? playlist.tracks : (queue?.length ? queue : (extractedTracks?.length ? extractedTracks : []))
+        if (!isNaN(idx) && activeList?.[idx]) {
+          handlePlayTrack(activeList[idx], idx, activeList)
+        }
+        break
+      }
+      case 'play_favorite': {
+        const idx = parseInt(payload, 10)
+        const activeFavs = favorites?.length ? favorites : (extractedTracks?.length ? extractedTracks : [])
+        if (!isNaN(idx) && activeFavs?.[idx]) {
+          handlePlayTrack(activeFavs[idx], idx, activeFavs)
+        }
+        break
+      }
+      case 'play_preset': {
+        const presetMap = {
+          preset_late_night: 'Atmospheric late night drive lofi hip hop mix',
+          preset_focus: 'Deep focus instrumental ambient electronic beats',
+          preset_energy: 'High energy fast BPM workout motivation tracks',
+          preset_anime: 'Cinematic orchestral soundtracks and epic film scores',
+          preset_hindi: 'New Hindi songs latest releases'
+        }
+        const promptText = presetMap[payload] || 'Curated music mix'
+        setPrompt(promptText)
+        handleDirectSearch(promptText, 'auto', true)
+        break
+      }
+      case 'search_play': {
+        if (payload) {
+          setPrompt(payload)
+          handleDirectSearch(payload, 'auto', true)
+        }
+        break
+      }
+      case 'toggle_loop': {
+        if (payload === 'one') setRepeatMode('one')
+        else if (payload === 'off') setRepeatMode('off')
+        else toggleLoopSong()
+        break
+      }
+      case 'toggle_like': {
+        if (currentTrackRef.current) handleToggleFavorite(currentTrackRef.current)
+        break
+      }
+      default:
+        break
     }
+  }
+
+  useEffect(() => {
+    window.onUpBeatCarAction = (action, payload) => carActionRef.current?.(action, payload)
 
     // Flush any pending car actions queued during cold start
     if (window.UpBeatNative && typeof window.UpBeatNative.readyForCarActions === 'function') {
@@ -392,7 +381,7 @@ export default function App() {
     return () => {
       delete window.onUpBeatCarAction
     }
-  }, [playlist, favorites, queue, extractedTracks, currentTrackIdx])
+  }, [])
   // Auto-heal any cached playlist tracks missing thumbnails or real durations
   useEffect(() => {
     if (!hasBackend() || !playlist?.tracks?.length) return
@@ -410,7 +399,6 @@ export default function App() {
     )
     if (!needsResolve) return
 
-    setIsResolvingBatch(true)
     fetch(`${getApiBase()}/resolve-batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -427,7 +415,6 @@ export default function App() {
         }
       })
       .catch(() => {})
-      .finally(() => setIsResolvingBatch(false))
   }, [playlist?.playlist_title])
   // Sync Liked Songs: Analyzes favorites to update Sonic Taste DNA and curates fresh songs
   const handleSyncFavorites = async () => {
@@ -637,7 +624,6 @@ export default function App() {
     if (!q || isSearching || isGenerating) return
 
     setIsSearching(true)
-    setActiveTab('curator')
 
     try {
       let data = null
@@ -660,7 +646,7 @@ export default function App() {
       setPlaylist(data)
       if (data.tracks && data.tracks.length > 0) {
         if (autoPlay) {
-          handlePlayTrack(data.tracks[0], 0)
+          handlePlayTrack(data.tracks[0], 0, data.tracks)
         } else if (!currentTrack || !isPlaying) {
           setCurrentTrack(data.tracks[0])
           setCurrentTrackIdx(0)
@@ -672,107 +658,6 @@ export default function App() {
     } finally {
       setIsSearching(false)
     }
-  }
-
-  const handleSelectMatchedPlaylist = async (pl) => {
-    if (!pl?.browse_id || isLoadingPlaylistBrowse) return
-    setIsLoadingPlaylistBrowse(true)
-    try {
-      let tracks = []
-      if (hasBackend()) {
-        try {
-          const res = await fetch(
-            `${getApiBase()}/playlist-browse?browse_id=${encodeURIComponent(pl.browse_id)}&title=${encodeURIComponent(pl.title || '')}&subtitle=${encodeURIComponent(pl.subtitle || '')}`
-          )
-          const ct = res.headers.get('content-type') || ''
-          if (res.ok && ct.includes('application/json')) {
-            const d = await res.json()
-            tracks = d.tracks || []
-          }
-        } catch {}
-      }
-      if (!tracks.length) {
-        tracks = await browsePlaylistStandalone(pl.browse_id, pl.title, pl.subtitle)
-      }
-
-      if (tracks.length > 0) {
-        setPlaylist((prev) => ({
-          ...(prev || {
-            is_direct_search: true,
-            search_query: pl.title,
-            matched_playlists: [pl],
-            youtube_results: [],
-            song_results: []
-          }),
-          playlist_title: pl.title,
-          subtitle: `${pl.subtitle} • 0 AI tokens`,
-          vibe_description: `${pl.subtitle} • Prepared playlist`,
-          active_source: 'playlist',
-          active_browse_id: pl.browse_id,
-          tracks
-        }))
-        if (!currentTrack) {
-          setCurrentTrack(tracks[0])
-          setCurrentTrackIdx(0)
-        }
-        showNotify(`Loaded "${pl.title}" (${tracks.length} tracks • 0 tokens)`, 'info')
-      } else if (pl.query) {
-        setPrompt(pl.query)
-        handleDirectSearch(pl.query, 'auto')
-      } else {
-        showNotify('Could not load tracks from that playlist', 'warning')
-      }
-    } finally {
-      setIsLoadingPlaylistBrowse(false)
-    }
-  }
-
-  const handleSelectYoutubeResults = () => {
-    setPlaylist((prev) => {
-      if (!prev || !prev.youtube_results?.length) return prev
-      const q = prev.search_query || prompt
-      const count = prev.youtube_results.length
-      return {
-        ...prev,
-        playlist_title: `"${q}"`,
-        subtitle: `YouTube results : ${count} videos`,
-        vibe_description: `YouTube results : ${count} videos`,
-        active_source: 'youtube',
-        active_browse_id: '',
-        tracks: prev.youtube_results
-      }
-    })
-  }
-
-  const handleSelectDirectSongs = (directTracks, title, subtitle) => {
-    if (Array.isArray(directTracks) && directTracks.length > 0) {
-      const plTitle = title || 'Rediscover Favorites Mix'
-      const plSubtitle = subtitle || `${directTracks.length} tracks`
-      setPlaylist({
-        playlist_title: plTitle,
-        subtitle: plSubtitle,
-        vibe_description: plSubtitle,
-        active_source: 'songs',
-        active_browse_id: '',
-        tracks: directTracks
-      })
-      handlePlayTrack(directTracks[0], 0, directTracks)
-      return
-    }
-    setPlaylist((prev) => {
-      if (!prev || !prev.song_results?.length) return prev
-      const q = prev.search_query || prompt
-      const count = prev.song_results.length
-      return {
-        ...prev,
-        playlist_title: `"${q}"`,
-        subtitle: `YouTube results : ${count} videos`,
-        vibe_description: `YouTube results : ${count} videos`,
-        active_source: 'songs',
-        active_browse_id: '',
-        tracks: prev.song_results
-      }
-    })
   }
 
   // Initial boot: check Safari and now playing status without auto-pulling tabs into library
@@ -796,12 +681,6 @@ export default function App() {
     }, 7000)
     return () => clearInterval(timer)
   }, [])
-  const handleSelectPreset = (preset) => {
-    setActivePresetId(preset.id)
-    setPrompt(preset.prompt)
-    setEnergyLevel(preset.energy)
-    handleGenerate(preset.prompt, undefined, preset.energy)
-  }
 
   const handlePromptChange = (val) => {
     setPrompt(val)
@@ -1135,48 +1014,55 @@ export default function App() {
   }
 
   // Android hardware back: MainActivity calls this before leaving the app
-  useEffect(() => {
-    window.UpBeatHandleBack = () => {
-      if (closeTopLayer()) return true
-      if (route.path !== '/') {
-        if (canGoBack()) window.history.back()
-        else navigate('/', { replace: true })
-        return true
-      }
-      return false
+  const backHandlerRef = useRef(null)
+  backHandlerRef.current = () => {
+    if (closeTopLayer()) return true
+    if (route.path !== '/') {
+      if (canGoBack()) window.history.back()
+      else navigate('/', { replace: true })
+      return true
     }
-  })
+    return false
+  }
+  useEffect(() => {
+    window.UpBeatHandleBack = () => backHandlerRef.current?.() ?? false
+    return () => {
+      delete window.UpBeatHandleBack
+    }
+  }, [])
 
-  // Desktop keyboard shortcuts
-  useEffect(() => {
-    const onKey = (e) => {
-      const tag = (e.target?.tagName || '').toLowerCase()
-      const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable
-      const mod = e.metaKey || e.ctrlKey
-      if (mod && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        if (route.path !== '/search') navigate('/search', searchQuery ? { params: { q: searchQuery } } : undefined)
-        setTimeout(() => searchInputRef.current?.focus(), 30)
-      } else if (mod && e.key.toLowerCase() === 'n') {
-        e.preventDefault()
-        navigate('/create')
-      } else if (mod && (e.key.toLowerCase() === 'b' || e.key === '\\')) {
-        e.preventDefault()
-        setLeftNavOpen((v) => !v)
-      } else if (e.key === 'Escape' && !typing) {
-        if (isNowPlayingOpen) setIsNowPlayingOpen(false)
-        else if (isQueueOpen) setIsQueueOpen(false)
-      } else if (e.code === 'Space' && !typing && tag !== 'button' && tag !== 'a' && !mod) {
-        e.preventDefault()
-        handleTogglePlay()
-      } else if (!mod && !typing && tag !== 'button' && tag !== 'a' && e.key.toLowerCase() === 'l') {
-        e.preventDefault()
-        toggleLoopSong()
-      }
+  // Desktop keyboard shortcuts (consolidated: Cmd/Ctrl+B toggles left nav only)
+  const keyHandlerRef = useRef(null)
+  keyHandlerRef.current = (e) => {
+    const tag = (e.target?.tagName || '').toLowerCase()
+    const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable
+    const mod = e.metaKey || e.ctrlKey
+    if (mod && e.key.toLowerCase() === 'k') {
+      e.preventDefault()
+      if (route.path !== '/search') navigate('/search', searchQuery ? { params: { q: searchQuery } } : undefined)
+      setTimeout(() => searchInputRef.current?.focus(), 30)
+    } else if (mod && e.key.toLowerCase() === 'n') {
+      e.preventDefault()
+      navigate('/create')
+    } else if (mod && (e.key.toLowerCase() === 'b' || e.key === '\\')) {
+      e.preventDefault()
+      setLeftNavOpen((v) => !v)
+    } else if (e.key === 'Escape' && !typing) {
+      if (isNowPlayingOpen) setIsNowPlayingOpen(false)
+      else if (isQueueOpen) setIsQueueOpen(false)
+    } else if (e.code === 'Space' && !typing && tag !== 'button' && tag !== 'a' && !mod) {
+      e.preventDefault()
+      handleTogglePlay()
+    } else if (!mod && !typing && tag !== 'button' && tag !== 'a' && e.key.toLowerCase() === 'l') {
+      e.preventDefault()
+      toggleLoopSong()
     }
+  }
+  useEffect(() => {
+    const onKey = (e) => keyHandlerRef.current?.(e)
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  })
+  }, [])
 
   // Scroll memory per screen
   const routeKey = `${route.path}?${new URLSearchParams(route.params).toString()}`
@@ -1211,6 +1097,8 @@ export default function App() {
   const friends = jamState?.friends || []
 
   // ---- first-run setup -------------------------------------------------------
+  const DEFAULT_CHART_IDS = ['block_india_top_daily', 'block_india_trendy', 'block_global_top_daily', 'block_us_top_daily']
+
   const finishOnboarding = async ({ genres = [], artists = [], chartPrefs = [] } = {}, { connect = false } = {}) => {
     setOnboardingBusy(true)
     try {
@@ -1218,10 +1106,11 @@ export default function App() {
       if (Array.isArray(chartPrefs) && chartPrefs.length) {
         saveStorage('upbeat_chart_prefs_v1', chartPrefs)
       } else {
-        saveStorage('upbeat_chart_prefs_v1', ['india', 'india_trendy', 'global50', 'us_billboard'])
+        saveStorage('upbeat_chart_prefs_v1', DEFAULT_CHART_IDS)
       }
       try {
         sessionStorage.removeItem('upbeat_discovery_feed_cache_v7')
+        sessionStorage.removeItem('upbeat_discovery_blocks_v632')
       } catch {}
       const picks = artists.slice(0, 8)
       const results = await Promise.all(
@@ -1245,6 +1134,10 @@ export default function App() {
       } catch {}
       setOnboardingBusy(false)
       setShowOnboarding(false)
+      setOnboardingVersion((v) => v + 1)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('upbeat-onboarding-finished'))
+      }
       navigate('/', { replace: true })
       if (connect) setShowGoogleModal(true)
     }
@@ -1254,19 +1147,17 @@ export default function App() {
     try {
       localStorage.setItem('upbeat_onboarded_v1', '1')
       if (!localStorage.getItem('upbeat_chart_prefs_v1')) {
-        localStorage.setItem('upbeat_chart_prefs_v1', JSON.stringify(['india', 'india_trendy', 'global50', 'us_billboard']))
+        localStorage.setItem('upbeat_chart_prefs_v1', JSON.stringify(DEFAULT_CHART_IDS))
       }
+      sessionStorage.removeItem('upbeat_discovery_feed_cache_v7')
+      sessionStorage.removeItem('upbeat_discovery_blocks_v632')
     } catch {}
     setShowOnboarding(false)
+    setOnboardingVersion((v) => v + 1)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('upbeat-onboarding-finished'))
+    }
   }
-
-  const lastModelStatus = playlist
-    ? {
-        isFallback: Boolean(playlist.is_fallback) || (playlist.used_model && playlist.used_model !== selectedModel),
-        usedModel: playlist.used_model || selectedModel,
-        reason: playlist.fallback_reason || 'Target model busy or rate-limited'
-      }
-    : null
 
   // ---- screens ------------------------------------------------------------
   const renderView = () => {
@@ -1472,6 +1363,7 @@ export default function App() {
             jamActive={Boolean(jamState?.active)}
             currentTrack={currentTrack}
             isPlaying={isPlaying}
+            onboardingVersion={onboardingVersion}
             onOpenProfile={() => setIsProfileEditOpen(true)}
             onOpenFriends={openFriends}
             onOpenSettings={() => navigate('/settings')}
@@ -1718,10 +1610,17 @@ export default function App() {
           currentTrack={currentTrack}
           isPlaying={isPlaying}
           onPlayTrack={(track, queueIdx) => {
+            const ctxList = activePlaybackContext?.length
+              ? activePlaybackContext
+              : (playlist?.tracks?.length ? playlist.tracks : [track])
             if (typeof queueIdx === 'number') {
               setQueue((prev) => prev.filter((_, i) => i !== queueIdx))
+              const idxInCtx = ctxList.findIndex((t) => sameTrack(t, track))
+              handlePlayTrack(track, idxInCtx >= 0 ? idxInCtx : currentTrackIdx, ctxList)
+              return
             }
-            handlePlayTrack(track, 0)
+            const idxInCtx = ctxList.findIndex((t) => sameTrack(t, track))
+            handlePlayTrack(track, idxInCtx >= 0 ? idxInCtx : 0, ctxList)
           }}
           onRemoveFromQueue={handleRemoveFromQueue}
           onClearQueue={handleClearQueue}

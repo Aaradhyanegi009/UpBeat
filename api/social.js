@@ -1,5 +1,5 @@
 export const config = {
-  runtime: 'edge'
+  runtime: 'edge',
 }
 
 const CORS_HEADERS = {
@@ -19,10 +19,25 @@ function getSocialStore() {
   return globalThis.__UPBEAT_SOCIAL_BOX__
 }
 
-function normalizeFriendId(raw) {
+function nextPushTs(nowMs = Date.now()) {
+  const prev = globalThis.__UPBEAT_SOCIAL_LAST_TS__ || 0
+  const ts = Math.max(nowMs, prev + 1)
+  globalThis.__UPBEAT_SOCIAL_LAST_TS__ = ts
+  return ts
+}
+
+function currentServerTs(nowMs = Date.now()) {
+  const prev = globalThis.__UPBEAT_SOCIAL_LAST_TS__ || 0
+  const ts = Math.max(nowMs, prev)
+  globalThis.__UPBEAT_SOCIAL_LAST_TS__ = ts
+  return ts
+}
+
+export function normalizeFriendId(raw) {
   if (!raw) return ''
   const str = String(raw).trim().toUpperCase()
   const cleaned = str.replace(/[^A-Z0-9-]/g, '')
+  if (!cleaned) return ''
   if (cleaned.startsWith('UP-')) {
     const body = cleaned.slice(3).replace(/[^A-Z0-9]/g, '')
     return body ? `UP-${body.slice(0, 6)}` : ''
@@ -64,6 +79,25 @@ function ensureRecord(store, friendId) {
   return rec
 }
 
+function collectPresence(store, friendIds, nowMs) {
+  const friendsPresence = []
+  for (const fId of friendIds) {
+    if (!fId) continue
+    const fRec = store.get(fId)
+    if (fRec && fRec.profile && nowMs - (fRec.lastSeen || 0) < ONLINE_WINDOW_MS) {
+      friendsPresence.push({
+        ...fRec.profile,
+        friendCode: fId,
+        online: true,
+        lastSeen: fRec.lastSeen,
+        nowPlaying: fRec.profile.currentTrack || null,
+        roomCode: fRec.profile.activeJamCode || ''
+      })
+    }
+  }
+  return friendsPresence
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -73,15 +107,17 @@ export default async function handler(req) {
   }
 
   const store = getSocialStore()
-  const nowMs = Date.now()
-  pruneStore(store, nowMs)
 
   try {
     const url = new URL(req.url, 'http://localhost')
 
-    // GET /api/social?id=UP-XXXXXX&friends=UP-AAA,UP-BBB
+    // GET /api/social?id=UP-XXXXXX&friends=UP-AAA,UP-BBB&since=0
     if (req.method === 'GET') {
+      const nowMs = currentServerTs()
+      pruneStore(store, nowMs)
+
       const myId = normalizeFriendId(url.searchParams.get('id') || url.searchParams.get('friendCode'))
+      const since = Number(url.searchParams.get('since') || 0) || 0
       const friendsParam = url.searchParams.get('friends') || ''
       const friendIds = friendsParam
         .split(',')
@@ -92,25 +128,12 @@ export default async function handler(req) {
       if (myId) {
         const myRec = ensureRecord(store, myId)
         myRec.lastSeen = nowMs
-        inboxPackets = Array.isArray(myRec.inbox) ? [...myRec.inbox] : []
-        // Drain delivered packets so they aren't re-delivered endlessly
-        myRec.inbox = []
+        inboxPackets = (Array.isArray(myRec.inbox) ? myRec.inbox : [])
+          .filter((pkt) => (pkt._serverTs || 0) > since)
+          .map((pkt) => ({ ...pkt }))
       }
 
-      const friendsPresence = []
-      for (const fId of friendIds) {
-        const fRec = store.get(fId)
-        if (fRec && fRec.profile && nowMs - (fRec.lastSeen || 0) < ONLINE_WINDOW_MS) {
-          friendsPresence.push({
-            ...fRec.profile,
-            friendCode: fId,
-            online: true,
-            lastSeen: fRec.lastSeen,
-            nowPlaying: fRec.profile.currentTrack || null,
-            roomCode: fRec.profile.activeJamCode || ''
-          })
-        }
-      }
+      const friendsPresence = collectPresence(store, friendIds, nowMs)
 
       return new Response(
         JSON.stringify({
@@ -134,10 +157,12 @@ export default async function handler(req) {
       const action = body.action || (body.toId || body.targetFriendCode ? 'push' : 'poll')
 
       if (action === 'push') {
+        const nowMs = nextPushTs()
+        pruneStore(store, nowMs)
+
         const targetId = normalizeFriendId(body.toId || body.targetFriendCode || body.packet?.targetFriendCode)
         const packet = body.packet && typeof body.packet === 'object' ? { ...body.packet } : null
 
-        // Update sender's online presence if included
         const senderProfile = packet?.from || body.profile || body.summary
         const senderId = normalizeFriendId(
           senderProfile?.friendCode || packet?._fromFriendCode || body.fromId
@@ -181,8 +206,12 @@ export default async function handler(req) {
         )
       }
 
-      // POST poll fallback (updates caller's full summary + drains inbox + returns friend statuses)
+      // POST poll fallback (updates caller's full summary + retains packets filtered by since cursor)
+      const nowMs = currentServerTs()
+      pruneStore(store, nowMs)
+
       const myId = normalizeFriendId(body.id || body.friendCode)
+      const since = Number(body.since || 0) || 0
       const summary = body.summary || body.profile
       if (myId) {
         const myRec = ensureRecord(store, myId)
@@ -192,32 +221,19 @@ export default async function handler(req) {
         myRec.lastSeen = nowMs
       }
 
-      const inboxPackets = myId ? [...(store.get(myId)?.inbox || [])] : []
-      if (myId && store.get(myId)) {
-        store.get(myId).inbox = []
-      }
+      const inboxPackets = myId
+        ? (store.get(myId)?.inbox || [])
+            .filter((pkt) => (pkt._serverTs || 0) > since)
+            .map((pkt) => ({ ...pkt }))
+        : []
 
       const rawFriends = Array.isArray(body.friends)
         ? body.friends
         : Array.isArray(body.friendCodes)
           ? body.friendCodes
           : []
-      const friendsPresence = []
-      for (const rawF of rawFriends) {
-        const fId = normalizeFriendId(rawF)
-        if (!fId) continue
-        const fRec = store.get(fId)
-        if (fRec && fRec.profile && nowMs - (fRec.lastSeen || 0) < ONLINE_WINDOW_MS) {
-          friendsPresence.push({
-            ...fRec.profile,
-            friendCode: fId,
-            online: true,
-            lastSeen: fRec.lastSeen,
-            nowPlaying: fRec.profile.currentTrack || null,
-            roomCode: fRec.profile.activeJamCode || ''
-          })
-        }
-      }
+      const friendIds = rawFriends.map((rawF) => normalizeFriendId(rawF)).filter(Boolean)
+      const friendsPresence = collectPresence(store, friendIds, nowMs)
 
       return new Response(
         JSON.stringify({

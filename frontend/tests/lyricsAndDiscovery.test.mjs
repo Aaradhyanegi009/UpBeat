@@ -8,7 +8,9 @@ import {
   formatDurationSeconds,
   fisherYatesShuffle,
   resolveRankedChartBlocks,
-  getInitialDiscoveryBlocks
+  getInitialDiscoveryBlocks,
+  fetchRelatedCompanionTracks,
+  buildHybridRediscoverBlock
 } from '../src/standaloneApi.js'
 
 test('cleanTrackMetadataForLyrics strips noisy YouTube tags and label channels', () => {
@@ -79,4 +81,110 @@ test('getInitialDiscoveryBlocks provides 7 tier-1 charts and 7 tier-2 Made for Y
   const tier2 = blocks.filter((b) => b.tier === 2)
   assert.equal(tier1.length, 7)
   assert.equal(tier2.length, 7)
+})
+
+test('fetchRelatedCompanionTracks uses exported findNodes for YTM RDAMVM radio automix', async () => {
+  resetStorage()
+  const prevFetch = globalThis.fetch
+  const requested = []
+
+  globalThis.fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : {}
+    requested.push({ url: String(url), endpoint: body.endpoint, playlistId: body.body?.playlistId })
+    if (body.endpoint === 'next') {
+      return new Response(
+        JSON.stringify({
+          contents: {
+            singleColumnMusicWatchNextResultsRenderer: {
+              tabbedRenderer: {
+                watchNextTabbedResultsRenderer: {
+                  tabs: [
+                    {
+                      tabRenderer: {
+                        content: {
+                          musicQueueRenderer: {
+                            content: {
+                              playlistPanelRenderer: {
+                                contents: [
+                                  {
+                                    playlistPanelVideoRenderer: {
+                                      videoId: 'dQw4w9WgXcQ',
+                                      title: { runs: [{ text: 'Radio Track One' }] },
+                                      shortBylineText: { runs: [{ text: 'Artist Radio' }] },
+                                      lengthText: { runs: [{ text: '3:32' }] }
+                                    }
+                                  },
+                                  {
+                                    playlistPanelVideoRenderer: {
+                                      videoId: '9bZkp7q19f0',
+                                      title: { runs: [{ text: 'Radio Track Two' }] },
+                                      shortBylineText: { runs: [{ text: 'Second Artist' }] },
+                                      lengthText: { runs: [{ text: '4:12' }] }
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    }
+    return new Response(JSON.stringify({}), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+
+  try {
+    const companions = await fetchRelatedCompanionTracks(
+      [{ video_id: '34Na4j8AVgA', title: 'Starboy', artist: 'The Weeknd' }],
+      2
+    )
+    assert.equal(companions.length, 2)
+    assert.equal(companions[0].video_id, 'dQw4w9WgXcQ')
+    assert.equal(companions[0].source, 'radio_companion')
+    assert.equal(requested.some((r) => r.endpoint === 'next' && r.playlistId === 'RDAMVM34Na4j8AVgA'), true)
+  } finally {
+    globalThis.fetch = prevFetch
+    resetStorage()
+  }
+})
+
+test('buildHybridRediscoverBlock reads argon_favs_v2 and argon_seeds_v2 from localStorage', async () => {
+  resetStorage()
+  localStorage.setItem(
+    'argon_favs_v2',
+    JSON.stringify([
+      { video_id: 'dQw4w9WgXcQ', title: 'Fav Track A', artist: 'Artist A', duration_text: '3:30' },
+      { video_id: '9bZkp7q19f0', title: 'Fav Track B', artist: 'Artist B', duration_text: '3:45' }
+    ])
+  )
+  localStorage.setItem(
+    'argon_seeds_v2',
+    JSON.stringify([
+      { video_id: '3JZ_D3ELwOQ', title: 'Seed Track C', artist: 'Artist C', duration_text: '4:00' }
+    ])
+  )
+
+  const prevFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({}), { status: 200, headers: { 'content-type': 'application/json' } })
+
+  try {
+    const block = await buildHybridRediscoverBlock()
+    const vids = new Set((block.preloadedTracks || []).map((t) => t.video_id))
+    assert.equal(vids.has('dQw4w9WgXcQ'), true)
+    assert.equal(vids.has('9bZkp7q19f0'), true)
+    assert.equal(vids.has('3JZ_D3ELwOQ'), true)
+    assert.equal(block.subtitle, 'Shuffled favorites & related radio')
+  } finally {
+    globalThis.fetch = prevFetch
+    resetStorage()
+  }
 })

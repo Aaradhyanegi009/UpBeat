@@ -42,6 +42,7 @@ export class PeerTransport {
 
 
   ensurePresencePeerAlive() {
+    if (this.mgr.destroyed) return
     const myFriendCode = normalizeFriendCode(this.mgr.userProfile?.friendCode)
     if (!myFriendCode) return
 
@@ -81,13 +82,14 @@ export class PeerTransport {
       })
 
       pPeer.on('disconnected', () => {
+        if (this.mgr.destroyed) return
         try {
           if (!pPeer.destroyed) {
             pPeer.reconnect()
           }
         } catch {}
-        setTimeout(() => {
-          if (this.mgr.presencePeer === pPeer && (pPeer.destroyed || pPeer.disconnected)) {
+        this.mgr.scheduleTimer(() => {
+          if (!this.mgr.destroyed && this.mgr.presencePeer === pPeer && (pPeer.destroyed || pPeer.disconnected)) {
             try {
               pPeer.destroy()
             } catch {}
@@ -102,12 +104,15 @@ export class PeerTransport {
       pPeer.on('close', () => {
         if (this.mgr.presencePeer === pPeer) {
           this.mgr.presencePeer = null
-          setTimeout(() => this.mgr.ensurePresencePeerAlive(), 1500)
+          if (!this.mgr.destroyed) {
+            this.mgr.scheduleTimer(() => this.mgr.ensurePresencePeerAlive(), 1500)
+          }
         }
       })
 
       pPeer.on('error', (err) => {
         this.mgr.updateState({ presenceReady: true })
+        if (this.mgr.destroyed) return
         if (err?.type === 'unavailable-id') {
           // Spin up auxiliary outbound peer immediately so B -> A works at 0ms,
           // AND schedule automatic reclaim of upbeat-user-UP-XXXXXX so A -> B also works!
@@ -119,7 +124,7 @@ export class PeerTransport {
             this.mgr.presencePeer = null
           }
           if (!this.mgr.presencePeerReclaimTimer) {
-            this.mgr.presencePeerReclaimTimer = setTimeout(() => {
+            this.mgr.presencePeerReclaimTimer = this.mgr.scheduleTimer(() => {
               this.mgr.presencePeerReclaimTimer = null
               this.mgr.ensurePresencePeerAlive()
             }, 3500)
@@ -131,7 +136,7 @@ export class PeerTransport {
           err?.type === 'socket-closed' ||
           err?.type === 'disconnected'
         ) {
-          setTimeout(() => this.mgr.ensurePresencePeerAlive(), 1500)
+          this.mgr.scheduleTimer(() => this.mgr.ensurePresencePeerAlive(), 1500)
         }
       })
     } catch {}
@@ -172,7 +177,7 @@ export class PeerTransport {
     // Multi-window storage synchronization & window focus / visibility / network auto-refresh
     if (typeof window !== 'undefined' && !this.mgr._storageListenerAdded) {
       this.mgr._storageListenerAdded = true
-      window.addEventListener('storage', (ev) => {
+      const onStorage = (ev) => {
         if (
           ev.key === FRIENDS_LIST_STORAGE_KEY ||
           ev.key === FRIEND_REQ_IN_STORAGE_KEY ||
@@ -187,9 +192,10 @@ export class PeerTransport {
             outgoingRequests: nextOut
           })
         }
-      })
+      }
 
       const onWakeOrOnline = () => {
+        if (this.mgr.destroyed) return
         this.mgr.ensurePresencePeerAlive()
         this.mgr.pingAllFriends()
         this.mgr.retryOutgoingRequests()
@@ -198,14 +204,21 @@ export class PeerTransport {
         this.mgr.pollSocialCloudInbox(this.mgr.userProfile?.friendCode, false)
       }
 
+      const onVisibility = () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          onWakeOrOnline()
+        }
+      }
+
+      this.mgr._onStorageListener = onStorage
+      this.mgr._onWakeListener = onWakeOrOnline
+      this.mgr._onVisibilityListener = onVisibility
+
+      window.addEventListener('storage', onStorage)
       window.addEventListener('focus', onWakeOrOnline)
       window.addEventListener('online', onWakeOrOnline)
       if (typeof document !== 'undefined') {
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            onWakeOrOnline()
-          }
-        })
+        document.addEventListener('visibilitychange', onVisibility)
       }
     }
 
@@ -241,7 +254,7 @@ export class PeerTransport {
       this.mgr.pollBackendSocial()
     }, 3000)
 
-    setTimeout(() => {
+    this.mgr.scheduleTimer(() => {
       this.mgr.pollEdgeSocialMailbox()
       this.mgr.pollBackendSocial()
       this.mgr.pollSocialCloudInbox(myFriendCode, true)
@@ -314,7 +327,7 @@ export class PeerTransport {
       if (conn) {
         this.mgr.pendingPeerConns.set(normTarget, conn)
         this.mgr.setupPresenceConn(conn, normTarget)
-        setTimeout(() => {
+        this.mgr.scheduleTimer(() => {
           if (this.mgr.pendingPeerConns.get(normTarget) === conn && !conn.open) {
             this.mgr.pendingPeerConns.delete(normTarget)
           }
@@ -350,7 +363,7 @@ export class PeerTransport {
       }
     }
     sendUnacked()
-    setTimeout(sendUnacked, 250)
+    this.mgr.scheduleTimer(sendUnacked, 250)
   }
 
 
@@ -656,6 +669,22 @@ export class PeerTransport {
 
 
   destroyAll() {
+    if (typeof window !== 'undefined') {
+      if (this.mgr._onStorageListener) {
+        window.removeEventListener('storage', this.mgr._onStorageListener)
+        this.mgr._onStorageListener = null
+      }
+      if (this.mgr._onWakeListener) {
+        window.removeEventListener('focus', this.mgr._onWakeListener)
+        window.removeEventListener('online', this.mgr._onWakeListener)
+        this.mgr._onWakeListener = null
+      }
+    }
+    if (typeof document !== 'undefined' && this.mgr._onVisibilityListener) {
+      document.removeEventListener('visibilitychange', this.mgr._onVisibilityListener)
+      this.mgr._onVisibilityListener = null
+    }
+    this.mgr._storageListenerAdded = false
     for (const [, entry] of this.mgr.pendingAckPackets.entries()) {
       entry.timers.forEach((t) => clearTimeout(t))
     }

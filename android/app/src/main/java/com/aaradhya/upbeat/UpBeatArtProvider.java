@@ -25,6 +25,11 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Generates Obsidian Dark & Crimson Rose album/playlist cover artwork
@@ -34,7 +39,49 @@ public class UpBeatArtProvider extends ContentProvider {
 
     public static final String AUTHORITY = "com.aaradhya.upbeat.art";
     private static final String CACHE_FOLDER = "aa_art_v76";
+    private static final int MAX_DISK_CACHE_FILES = 200;
     private static final LruCache<String, File> sDiskCacheIndex = new LruCache<>(160);
+    private static final Set<String> ALLOWED_ART_HOSTS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+        "i.ytimg.com",
+        "i1.ytimg.com",
+        "yt3.ggpht.com",
+        "lh3.googleusercontent.com"
+    )));
+
+    public static boolean isAllowedArtworkUrl(String urlStr) {
+        if (urlStr == null) return false;
+        String trimmed = urlStr.trim();
+        if (trimmed.isEmpty()) return false;
+        try {
+            URL url = new URL(trimmed);
+            String protocol = url.getProtocol();
+            if (!"https".equalsIgnoreCase(protocol)) return false;
+            if (url.getUserInfo() != null) return false;
+            int port = url.getPort();
+            if (port != -1 && port != 443) return false;
+            String host = url.getHost();
+            return host != null && ALLOWED_ART_HOSTS.contains(host.toLowerCase(Locale.ROOT));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean isValidVideoId(String videoId) {
+        return videoId != null && videoId.matches("^[a-zA-Z0-9_-]{11}$");
+    }
+
+    private void pruneCacheIfNeeded(File cacheDir) {
+        try {
+            File[] files = cacheDir.listFiles();
+            if (files == null || files.length <= MAX_DISK_CACHE_FILES) return;
+            Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            int toDelete = files.length - MAX_DISK_CACHE_FILES;
+            for (int i = 0; i < toDelete; i++) {
+                //noinspection ResultOfMethodCallIgnored
+                files[i].delete();
+            }
+        } catch (Exception ignored) {}
+    }
 
     public static Uri buildCardUri(String cardId, String tagTop, String ribbonText, String ribbonHex, String heroVid) {
         return buildCardUri(cardId, tagTop, ribbonText, ribbonHex, heroVid, null);
@@ -131,6 +178,7 @@ public class UpBeatArtProvider extends ContentProvider {
             bmp.recycle();
 
             sDiskCacheIndex.put(key, targetFile);
+            pruneCacheIfNeeded(cacheDir);
             return ParcelFileDescriptor.open(targetFile, ParcelFileDescriptor.MODE_READ_ONLY);
         } catch (Exception e) {
             throw new FileNotFoundException("Art error: " + e.getMessage());
@@ -300,11 +348,11 @@ public class UpBeatArtProvider extends ContentProvider {
     }
 
     private Bitmap downloadBestArtwork(String thumbUrl, String videoId, int targetSize) {
-        if (thumbUrl != null && (thumbUrl.startsWith("https://") || thumbUrl.startsWith("http://"))) {
-            Bitmap b = downloadCenterSquareThumb(thumbUrl, targetSize);
+        if (isAllowedArtworkUrl(thumbUrl)) {
+            Bitmap b = downloadCenterSquareThumb(thumbUrl.trim(), targetSize);
             if (b != null) return b;
         }
-        if (videoId != null && videoId.length() == 11) {
+        if (isValidVideoId(videoId)) {
             String[] variants = new String[]{
                 "https://i.ytimg.com/vi/" + videoId + "/maxresdefault.jpg",
                 "https://i.ytimg.com/vi/" + videoId + "/sddefault.jpg",
@@ -319,15 +367,39 @@ public class UpBeatArtProvider extends ContentProvider {
     }
 
     private Bitmap downloadCenterSquareThumb(String urlStr, int targetSize) {
+        if (!isAllowedArtworkUrl(urlStr)) {
+            return null;
+        }
+        HttpURLConnection conn = null;
         try {
-            URL url = new URL(urlStr);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setInstanceFollowRedirects(true);
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) UpBeatAuto/7.6");
-            conn.setConnectTimeout(4500);
-            conn.setReadTimeout(4500);
-            conn.connect();
-            if (conn.getResponseCode() != 200) {
+            String currentUrl = urlStr;
+            for (int hop = 0; hop < 3; hop++) {
+                if (!isAllowedArtworkUrl(currentUrl)) {
+                    return null;
+                }
+                URL url = new URL(currentUrl);
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setInstanceFollowRedirects(false);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) UpBeatAuto/7.6");
+                conn.setConnectTimeout(4500);
+                conn.setReadTimeout(4500);
+                conn.connect();
+                int code = conn.getResponseCode();
+                if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP
+                        || code == 307 || code == 308 || code == HttpURLConnection.HTTP_SEE_OTHER) {
+                    String location = conn.getHeaderField("Location");
+                    conn.disconnect();
+                    conn = null;
+                    if (location == null || location.trim().isEmpty()) return null;
+                    currentUrl = new URL(url, location.trim()).toString();
+                    continue;
+                }
+                if (code != HttpURLConnection.HTTP_OK) {
+                    return null;
+                }
+                break;
+            }
+            if (conn == null || conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
                 return null;
             }
             Bitmap raw;
@@ -336,7 +408,8 @@ public class UpBeatArtProvider extends ContentProvider {
                 opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
                 raw = BitmapFactory.decodeStream(is, null, opts);
             }
-            if (raw == null || raw.getWidth() < 16 || raw.getHeight() < 16) {
+            if (raw == null || raw.getWidth() < 64 || raw.getHeight() < 64
+                    || (raw.getWidth() == 120 && raw.getHeight() == 90)) {
                 if (raw != null) raw.recycle();
                 return null;
             }
@@ -356,6 +429,12 @@ public class UpBeatArtProvider extends ContentProvider {
             return scaled;
         } catch (Exception e) {
             return null;
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.disconnect();
+                } catch (Exception ignored) {}
+            }
         }
     }
 

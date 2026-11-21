@@ -3,7 +3,7 @@
 import json
 import os
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 _FILTERS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -126,7 +126,7 @@ def _relevance(text: str, tokens: List[str]) -> float:
     return sum(1 for tok in tokens if tok in t) / len(tokens)
 
 
-def is_strict_music_track(track: Dict[str, Any]) -> bool:
+def is_strict_music_track(track: Dict[str, Any], max_duration: Optional[int] = None) -> bool:
     """Validates that a candidate track dict represents a real music track (no comedy/podcasts/devotional/shorts)."""
     if not isinstance(track, dict):
         return False
@@ -162,8 +162,8 @@ def is_strict_music_track(track: Dict[str, Any]) -> bool:
     elif track.get("duration_text"):
         sec = _duration_to_seconds(str(track["duration_text"]))
 
-    # Duration strictly between 75s (1:15) and 420s (7:00) when duration is known
-    if sec > 0 and (sec < MIN_DURATION_SEC or sec > MAX_DURATION_SEC):
+    upper_bound = MAX_DURATION_SEC if max_duration is None else max_duration
+    if sec > 0 and (sec < MIN_DURATION_SEC or (upper_bound > 0 and sec > upper_bound)):
         return False
 
     return True

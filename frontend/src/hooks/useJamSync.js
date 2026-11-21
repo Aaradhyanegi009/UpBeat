@@ -108,7 +108,8 @@ export function useJamSync({
         if (!data) return
         activateRemoteJamGuard(350)
         try {
-          if (data.track?.video_id && data.track.video_id !== currentTrackRef.current?.video_id) {
+          const trackChanged = Boolean(data.track?.video_id && data.track.video_id !== currentTrackRef.current?.video_id)
+          if (trackChanged) {
             currentTrackRef.current = data.track
             setCurrentTrack(data.track)
           }
@@ -131,7 +132,7 @@ export function useJamSync({
             }
           }
           if (data.track?.video_id || currentTrackRef.current?.video_id) {
-            const localTime = window.UpBeatControls?.getCurrentTime?.() || 0
+            const localTime = trackChanged ? 0 : (window.UpBeatControls?.getCurrentTime?.() || 0)
             const drift = evaluateAudioDrift(
               localTime,
               Number(data.currentTime) || 0,
@@ -141,6 +142,9 @@ export function useJamSync({
             )
             if (drift.action === 'SEEK') {
               window.UpBeatControls?.seekTo?.(drift.targetTime, true)
+              if (trackChanged && drift.targetTime > 0.5) {
+                setTimeout(() => window.UpBeatControls?.seekTo?.(drift.targetTime, true), 80)
+              }
               window.UpBeatControls?.setPlaybackRate?.(1.0)
             } else if (drift.action === 'RAMP') {
               window.UpBeatControls?.setPlaybackRate?.(drift.playbackRate)
@@ -195,14 +199,15 @@ export function useJamSync({
         showNotify(`${addedBy?.name || 'Friend'} added "${track.title}" to Jam queue`, 'info')
       },
       onReaction: (packet) => {
-        if (!packet?.emoji) return
+        const rawEmoji = packet?.emoji || packet?.reaction
+        if (!rawEmoji) return
         const id = packet.id || `${Date.now()}_${Math.random()}`
         const xOffset = 18 + Math.floor(Math.random() * 64)
         setJamReactions((prev) => [
           ...prev.slice(-14),
           {
             id,
-            emoji: renderEmoji(packet.emoji, '🔥'),
+            emoji: renderEmoji(rawEmoji, '🔥'),
             senderName: packet.senderName || 'Listener',
             senderAvatar: renderEmoji(packet.senderAvatar, '🎧'),
             xOffset

@@ -15,6 +15,7 @@ export function trackKeyOf(track) {
 /** Lyrics for a track: { loading, synced, lines: [{ time, text }], plainText } */
 export function useLyrics(track, durationSec = 0) {
   const key = trackKeyOf(track)
+  const roundedDuration = Math.round(Number(durationSec) || 0)
   const [state, setState] = useState({ key: '', loading: false, data: null })
   useEffect(() => {
     if (!track?.title) {
@@ -23,14 +24,13 @@ export function useLyrics(track, durationSec = 0) {
     }
     let alive = true
     setState((s) => ({ key, loading: true, data: s.key === key ? s.data : null }))
-    fetchTrackLyrics(track, durationSec)
+    fetchTrackLyrics(track, roundedDuration)
       .then((data) => alive && setState({ key, loading: false, data: data || null }))
       .catch(() => alive && setState({ key, loading: false, data: null }))
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
+  }, [key, track?.title, track?.artist, track?.video_id, roundedDuration])
   // Instrumental markers (♪, …) become spacing, not lines you can select or share
   const lines = useMemo(
     () =>

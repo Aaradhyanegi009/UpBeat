@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       target_tag:
-        description: 'Release tag to attach Windows binaries to (default: v7.3.1)'
+        description: 'Optional release tag to attach Windows binaries to (defaults to v<package.json version>)'
         required: false
-        default: 'v7.3.1'
+        default: ''
 
 permissions:
   contents: write
@@ -27,16 +27,23 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Verify Electron Scripts & Tests
+        run: |
+          node -c electron/main.cjs
+          node -c electron/preload.cjs
+          node -c electron/server.cjs
+          node --test electron/tests/*.test.mjs
+
       - name: Build Frontend Assets
         working-directory: frontend
         run: |
-          npm install
+          npm ci
           npm run build
 
       - name: Install Electron Desktop Dependencies
         working-directory: electron
         run: |
-          npm install
+          npm ci
 
       - name: Package Windows Desktop App (NSIS Installer & Portable ZIP)
         working-directory: electron
@@ -81,11 +88,28 @@ jobs:
           path: electron/dist-win/UpBeat-Windows.zip
           if-no-files-found: error
 
+      - name: Resolve Release Tag
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        id: release_tag
+        shell: pwsh
+        run: |
+          $inputTag = "${{ github.event.inputs.target_tag }}".Trim()
+          $refName = "${{ github.ref_name }}"
+          if ($inputTag) {
+            $tag = $inputTag
+          } elseif ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            $tag = $refName
+          } else {
+            $ver = (node -p "require('./package.json').version").Trim()
+            $tag = "v$ver"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
       - name: Publish Windows App to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.target_tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || 'v7.3.1' }}
+          tag_name: ${{ steps.release_tag.outputs.tag }}
           files: |
             electron/dist-win/UpBeat-Windows-Setup.exe
             electron/dist-win/UpBeat-Windows.zip

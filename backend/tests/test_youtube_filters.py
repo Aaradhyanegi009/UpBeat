@@ -40,9 +40,18 @@ class TestYoutubeFilters(unittest.TestCase):
         )
         self.assertTrue(
             is_valid_music_track(
-                {"title": "Long Track", "artist": "Artist", "video_id": "abcdefghij1", "duration_sec": 420}
+                {"title": "Long Track", "artist": "Artist", "video_id": "abcdefghij1", "duration_sec": 600}
             )
         )
+        for song in (
+            {"title": "Dream On", "artist": "Aerosmith", "video_id": "89dGC8de0CA", "duration_sec": 267},
+            {"title": "November Rain", "artist": "Guns N' Roses", "video_id": "8SbUC-UaAxE", "duration_sec": 537},
+            {"title": "Alien Blues", "artist": "Vundabar", "video_id": "N8bH1R6L0nE", "duration_sec": 156},
+            {"title": "Drama", "artist": "aespa", "video_id": "D8VEhcPeSlc", "duration_sec": 215},
+            {"title": "Serenity", "artist": "Godsmack", "video_id": "iW3K2iS4l9Y", "duration_sec": 274},
+        ):
+            with self.subTest(title=song["title"]):
+                self.assertTrue(is_valid_music_track(song))
 
     def test_rejects_comedy_devotional_kids_gaming_lectures(self):
         bad_tracks = [
@@ -63,7 +72,7 @@ class TestYoutubeFilters(unittest.TestCase):
         self.assertFalse(is_valid_music_track({"title": "Song", "artist": "1.2M views", "duration_sec": 200}))
         self.assertFalse(is_valid_music_track({"title": "Song", "artist": "Artist", "video_id": "short"}))
         self.assertFalse(is_valid_music_track({"title": "Short Clip", "artist": "Artist", "duration_sec": 74}))
-        self.assertFalse(is_valid_music_track({"title": "Podcast Ep", "artist": "Artist", "duration_sec": 421}))
+        self.assertFalse(is_valid_music_track({"title": "Extended Talk", "artist": "Artist", "duration_sec": 601}))
 
     def test_unrequested_variants_and_canonical_title(self):
         self.assertEqual(canonical_song_title("Sapphire (Official Video) [HD]"), "sapphire")

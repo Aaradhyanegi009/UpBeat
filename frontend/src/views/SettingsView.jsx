@@ -98,7 +98,7 @@ export default function SettingsView({
               >
                 Edit profile
               </Chip>
-              {googleUser?.accessToken ? (
+              {(googleUser?.accessToken || googleUser?.provider === 'youtube_instant' || googleUser?.connectedAt) ? (
                 <Chip
                   variant="ghost"
                   onClick={onLogout}

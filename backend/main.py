@@ -2,13 +2,18 @@
 
 import json
 import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 try:
     from curator import analyze_taste_dna, curate_playlist
     from favorites_store import get_favorites, toggle_favorite
+    from routers import (
+        ALLOWED_ORIGIN_REGEX,
+        CORS_EXPOSE_HEADERS,
+        get_allowed_origins,
+    )
     from routers.music import (
         CurateRequest,
         ResolveBatchRequest,
@@ -59,6 +64,11 @@ try:
 except ImportError:
     from backend.curator import analyze_taste_dna, curate_playlist
     from backend.favorites_store import get_favorites, toggle_favorite
+    from backend.routers import (
+        ALLOWED_ORIGIN_REGEX,
+        CORS_EXPOSE_HEADERS,
+        get_allowed_origins,
+    )
     from backend.routers.music import (
         CurateRequest,
         ResolveBatchRequest,
@@ -126,7 +136,7 @@ def _resolve_app_version() -> str:
                 return str(ver)
     except Exception:
         pass
-    return "7.6.1"
+    return "7.6.2"
 
 
 APP_VERSION = _resolve_app_version()
@@ -139,10 +149,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_allowed_origins(),
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=CORS_EXPOSE_HEADERS,
 )
 
 
@@ -161,9 +173,42 @@ app.include_router(music_router)
 app.include_router(offline_router)
 app.include_router(social_router)
 
+
+def serve_spa_path(dist_dir: str, full_path: str):
+    """
+    Serves static assets safely inside dist_dir and falls back to index.html for SPA
+    client routes, while keeping /api/* returning JSON 404.
+    """
+    clean_path = (full_path or "").lstrip("/")
+    if clean_path == "api" or clean_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    dist_real = os.path.realpath(dist_dir)
+    if not os.path.isdir(dist_real):
+        raise HTTPException(status_code=404, detail="Frontend bundle not found")
+
+    if clean_path:
+        candidate = os.path.realpath(os.path.join(dist_real, clean_path))
+        if (candidate == dist_real or candidate.startswith(dist_real + os.sep)) and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        if clean_path == "assets" or clean_path.startswith("assets/"):
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+    index_html = os.path.join(dist_real, "index.html")
+    if os.path.isfile(index_html):
+        return FileResponse(index_html, media_type="text/html")
+    raise HTTPException(status_code=404, detail="Frontend index not found")
+
+
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 if os.path.exists(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback_get(full_path: str):
+        return serve_spa_path(frontend_dist, full_path)
+
+    @app.head("/{full_path:path}", include_in_schema=False)
+    def spa_fallback_head(full_path: str):
+        return serve_spa_path(frontend_dist, full_path)
 
 
 if __name__ == "__main__":

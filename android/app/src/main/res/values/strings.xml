@@ -3,5 +3,5 @@
     <string name="app_name">UpBeat</string>
     <string name="title_activity_main">UpBeat</string>
     <string name="package_name">com.aaradhya.upbeat</string>
-    <string name="custom_url_scheme">com.aaradhya.upbeat</string>
+    <string name="custom_url_scheme">upbeat</string>
 </resources>

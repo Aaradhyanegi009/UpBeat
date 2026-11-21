@@ -32,6 +32,7 @@ export class CloudRelayTransport {
       }
       let relayIdx = 0
       const connect = () => {
+        if (this.mgr.destroyed) return
         const base = CLOUD_RELAYS[relayIdx % CLOUD_RELAYS.length]
         try {
           const es = new EventSource(`${base}/${topic}/sse?since=1h`)
@@ -52,10 +53,13 @@ export class CloudRelayTransport {
               if (this.mgr.socialEventSource === es) {
                 es.close()
                 this.mgr.socialEventSource = null
+                if (this.mgr.destroyed) return
                 relayIdx = (relayIdx + 1) % CLOUD_RELAYS.length
                 // Reconnect automatically with backoff — never give up!
-                setTimeout(() => {
-                  if (!this.mgr.socialEventSource) {
+                this.mgr.clearTimer(this.mgr.socialSseReconnectTimer)
+                this.mgr.socialSseReconnectTimer = this.mgr.scheduleTimer(() => {
+                  this.mgr.socialSseReconnectTimer = null
+                  if (!this.mgr.destroyed && !this.mgr.socialEventSource) {
                     connect()
                   }
                 }, 3000)
@@ -63,8 +67,13 @@ export class CloudRelayTransport {
             } catch {}
           }
         } catch {
+          if (this.mgr.destroyed) return
           relayIdx = (relayIdx + 1) % CLOUD_RELAYS.length
-          setTimeout(() => connect(), 3000)
+          this.mgr.clearTimer(this.mgr.socialSseReconnectTimer)
+          this.mgr.socialSseReconnectTimer = this.mgr.scheduleTimer(() => {
+            this.mgr.socialSseReconnectTimer = null
+            if (!this.mgr.destroyed) connect()
+          }, 3000)
         }
       }
       connect()
@@ -299,6 +308,7 @@ export class CloudRelayTransport {
       try {
         let roomRelayIdx = 0
         const connectRoomSse = () => {
+          if (this.mgr.destroyed || !this.mgr.state.active) return
           const base = CLOUD_RELAYS[roomRelayIdx % CLOUD_RELAYS.length]
           try {
             const es = new EventSource(`${base}/${topic}/sse?since=5m`)
@@ -319,9 +329,12 @@ export class CloudRelayTransport {
                 if (this.mgr.roomEventSource === es) {
                   es.close()
                   this.mgr.roomEventSource = null
+                  if (this.mgr.destroyed || !this.mgr.state.active) return
                   roomRelayIdx = (roomRelayIdx + 1) % CLOUD_RELAYS.length
-                  setTimeout(() => {
-                    if (!this.mgr.roomEventSource && this.mgr.state.active) {
+                  this.mgr.clearTimer(this.mgr.roomSseReconnectTimer)
+                  this.mgr.roomSseReconnectTimer = this.mgr.scheduleTimer(() => {
+                    this.mgr.roomSseReconnectTimer = null
+                    if (!this.mgr.destroyed && !this.mgr.roomEventSource && this.mgr.state.active) {
                       connectRoomSse()
                     }
                   }, 2500)
@@ -329,9 +342,12 @@ export class CloudRelayTransport {
               } catch {}
             }
           } catch {
+            if (this.mgr.destroyed || !this.mgr.state.active) return
             roomRelayIdx = (roomRelayIdx + 1) % CLOUD_RELAYS.length
-            setTimeout(() => {
-              if (!this.mgr.roomEventSource && this.mgr.state.active) connectRoomSse()
+            this.mgr.clearTimer(this.mgr.roomSseReconnectTimer)
+            this.mgr.roomSseReconnectTimer = this.mgr.scheduleTimer(() => {
+              this.mgr.roomSseReconnectTimer = null
+              if (!this.mgr.destroyed && !this.mgr.roomEventSource && this.mgr.state.active) connectRoomSse()
             }, 2500)
           }
         }
@@ -345,13 +361,22 @@ export class CloudRelayTransport {
       this.mgr.pollBackendRoom(roomCode)
       this.mgr.pollCloudRoom(roomCode)
     }, 1500)
-    setTimeout(() => {
+    this.mgr.roomInitPollTimer = this.mgr.scheduleTimer(() => {
+      this.mgr.roomInitPollTimer = null
       this.mgr.pollBackendRoom(roomCode)
       this.mgr.pollCloudRoom(roomCode)
     }, 250)
   }
 
   teardownRoomTransports() {
+    if (this.mgr.roomSseReconnectTimer) {
+      this.mgr.clearTimer(this.mgr.roomSseReconnectTimer)
+      this.mgr.roomSseReconnectTimer = null
+    }
+    if (this.mgr.roomInitPollTimer) {
+      this.mgr.clearTimer(this.mgr.roomInitPollTimer)
+      this.mgr.roomInitPollTimer = null
+    }
     if (this.mgr.bc) {
       try {
         this.mgr.bc.close()
@@ -468,6 +493,10 @@ export class CloudRelayTransport {
 
 
   destroySocial() {
+    if (this.mgr.socialSseReconnectTimer) {
+      this.mgr.clearTimer(this.mgr.socialSseReconnectTimer)
+      this.mgr.socialSseReconnectTimer = null
+    }
     if (this.mgr.socialBc) {
       try {
         this.mgr.socialBc.close()

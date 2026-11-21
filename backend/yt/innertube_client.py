@@ -1,9 +1,13 @@
 """YouTube & YouTube Music Innertube HTTP client, search, and playlist browsing."""
 
+from collections import OrderedDict
 import concurrent.futures
+import copy
 import math
 import re
+import threading
 import time
+import urllib.parse
 from typing import Any, Callable, Dict, List, Optional
 import requests
 from requests.adapters import HTTPAdapter
@@ -20,12 +24,135 @@ from .track_filters import (
     parse_duration_seconds,
 )
 
-_SEARCH_CACHE: Dict[str, Dict] = {}
-_STREAM_CACHE: Dict[str, Dict[str, Any]] = {}
-_DIRECT_SEARCH_CACHE: Dict[str, Dict[str, Any]] = {}
-_PLAYLIST_BROWSE_CACHE: Dict[str, Dict[str, Any]] = {}
+_CACHE_LOCK = threading.RLock()
+_MAX_CACHE_ENTRIES = 256
+_SEARCH_CACHE_TTL = 1800.0
+_DIRECT_SEARCH_CACHE_TTL = 1200.0
+_PLAYLIST_BROWSE_CACHE_TTL = 1800.0
+_STREAM_CACHE_FALLBACK_TTL = 1500.0
+
+_SEARCH_CACHE: OrderedDict[str, Dict] = OrderedDict()
+_SEARCH_CACHE_TS: Dict[str, float] = {}
+_STREAM_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+_DIRECT_SEARCH_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+_PLAYLIST_BROWSE_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
 
 _PREFETCH_HOOK: Optional[Callable[[List[str]], None]] = None
+
+
+def _extract_stream_expiry(stream_url: str, fallback_ttl: float = _STREAM_CACHE_FALLBACK_TTL, now: Optional[float] = None) -> float:
+    """Extracts the googlevideo expire= Unix timestamp (with a 60s safety buffer), bounded by fallback_ttl."""
+    cur = time.time() if now is None else now
+    default_exp = cur + fallback_ttl
+    if not stream_url:
+        return default_exp
+    try:
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(stream_url).query)
+        raw_exp = (qs.get("expire") or [None])[0]
+        if raw_exp:
+            exp_ts = int(raw_exp)
+            if exp_ts > 0:
+                return min(default_exp, float(exp_ts) - 60.0)
+    except Exception:
+        pass
+    return default_exp
+
+
+def _stream_cache_get(video_id: str, expected_duration: int = 0) -> Optional[Dict[str, Any]]:
+    """Thread-safe bounded stream cache lookup checking both URL expiry and duration sanity."""
+    if not video_id:
+        return None
+    now = time.time()
+    with _CACHE_LOCK:
+        cached = _STREAM_CACHE.get(video_id)
+        if not cached:
+            return None
+        expires_at = cached.get("expires_at")
+        if expires_at is None:
+            expires_at = float(cached.get("ts", 0)) + _STREAM_CACHE_FALLBACK_TTL
+        if now >= expires_at:
+            _STREAM_CACHE.pop(video_id, None)
+            return None
+        cached_dur = int(cached.get("duration") or 0)
+        if expected_duration > 60 and cached_dur > 0 and cached_dur < min(65, expected_duration * 0.5):
+            _STREAM_CACHE.pop(video_id, None)
+            return None
+        if isinstance(_STREAM_CACHE, OrderedDict):
+            _STREAM_CACHE.move_to_end(video_id)
+        return copy.deepcopy(cached)
+
+
+def _stream_cache_set(video_id: str, entry: Dict[str, Any], fallback_ttl: float = _STREAM_CACHE_FALLBACK_TTL) -> None:
+    """Thread-safe bounded insertion into _STREAM_CACHE respecting googlevideo expire= timestamps."""
+    if not video_id or not isinstance(entry, dict) or not entry.get("url"):
+        return
+    now = time.time()
+    stored = copy.deepcopy(entry)
+    stored.setdefault("ts", now)
+    expires_at = stored.get("expires_at")
+    if expires_at is None:
+        expires_at = _extract_stream_expiry(stored["url"], fallback_ttl=fallback_ttl, now=stored["ts"])
+    stored["expires_at"] = expires_at
+    if expires_at <= now:
+        return
+    with _CACHE_LOCK:
+        _STREAM_CACHE[video_id] = stored
+        if isinstance(_STREAM_CACHE, OrderedDict):
+            _STREAM_CACHE.move_to_end(video_id)
+        while len(_STREAM_CACHE) > _MAX_CACHE_ENTRIES:
+            _STREAM_CACHE.popitem(last=False)
+
+
+def invalidate_stream_cache(video_id: str) -> None:
+    """Removes a cached stream entry (e.g. after upstream HTTP 403/410)."""
+    if not video_id:
+        return
+    with _CACHE_LOCK:
+        _STREAM_CACHE.pop(video_id, None)
+
+
+def _bounded_cache_get(cache: Dict[str, Any], key: str, ttl: float, ts_map: Optional[Dict[str, float]] = None) -> Optional[Any]:
+    now = time.time()
+    with _CACHE_LOCK:
+        val = cache.get(key)
+        if val is None:
+            return None
+        ts = ts_map.get(key, 0.0) if ts_map is not None else float(val.get("ts", 0.0))
+        if (now - ts) >= ttl:
+            cache.pop(key, None)
+            if ts_map is not None:
+                ts_map.pop(key, None)
+            return None
+        if isinstance(cache, OrderedDict):
+            cache.move_to_end(key)
+        return copy.deepcopy(val if ts_map is not None else val.get("data", val.get("tracks")))
+
+
+def _bounded_cache_set(
+    cache: Dict[str, Any],
+    key: str,
+    payload: Any,
+    max_entries: int = _MAX_CACHE_ENTRIES,
+    ts_map: Optional[Dict[str, float]] = None,
+    wrapper_key: str = "data",
+) -> None:
+    now = time.time()
+    with _CACHE_LOCK:
+        if ts_map is not None:
+            cache[key] = copy.deepcopy(payload)
+            ts_map[key] = now
+        else:
+            cache[key] = {wrapper_key: copy.deepcopy(payload), "ts": now}
+        if isinstance(cache, OrderedDict):
+            cache.move_to_end(key)
+        while len(cache) > max_entries:
+            if isinstance(cache, OrderedDict):
+                old_k, _ = cache.popitem(last=False)
+            else:
+                old_k = next(iter(cache))
+                cache.pop(old_k, None)
+            if ts_map is not None:
+                ts_map.pop(old_k, None)
 
 
 def register_prefetch_hook(fn: Callable[[List[str]], None]) -> None:
@@ -419,8 +546,9 @@ def get_video_duration(video_id: str) -> str:
     """Fetches real video duration via fast Innertube player endpoint (0.3s) without heavy scraping."""
     if not video_id or len(video_id) != 11:
         return ""
-    if video_id in _STREAM_CACHE and _STREAM_CACHE[video_id].get("duration"):
-        return format_seconds(int(_STREAM_CACHE[video_id]["duration"]))
+    cached = _stream_cache_get(video_id)
+    if cached and cached.get("duration"):
+        return format_seconds(int(cached["duration"]))
     try:
         payload = {
             "context": {"client": _ANDROID_CLIENT_CONTEXT},
@@ -577,7 +705,7 @@ def search_youtube_music_catalog(query: str, max_items: int = 12) -> List[Dict[s
     return catalog
 
 
-def _yt_web_search(query: str, pages: int = 2) -> Dict[str, Any]:
+def _yt_web_search(query: str, pages: int = 2, allow_long_mix: bool = False) -> Dict[str, Any]:
     """Exact same results (and order) as typing the query on youtube.com."""
     url = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
     videos: List[Dict[str, Any]] = []
@@ -622,7 +750,7 @@ def _yt_web_search(query: str, pages: int = 2) -> Dict[str, Any]:
                 "play_count_num": parse_play_count(views),
                 "duration_sec": _duration_to_seconds(dur),
             }
-            if not is_valid_music_track(track_obj):
+            if not is_valid_music_track(track_obj, max_duration=(14400 if allow_long_mix else None)):
                 continue
             videos.append(track_obj)
 
@@ -669,8 +797,9 @@ def search_youtube_single(query: str) -> Optional[Dict]:
     and YouTube Music WEB_REMIX (for official album singles).
     """
     cache_key = query.strip().lower()
-    if cache_key in _SEARCH_CACHE:
-        return dict(_SEARCH_CACHE[cache_key])
+    cached = _bounded_cache_get(_SEARCH_CACHE, cache_key, _SEARCH_CACHE_TTL, ts_map=_SEARCH_CACHE_TS)
+    if cached is not None:
+        return cached
 
     try:
         tokens = _query_tokens(query)
@@ -683,7 +812,7 @@ def search_youtube_single(query: str) -> Optional[Dict]:
         is_mix_query = any(k in query.lower() for k in mix_keywords)
 
         # 1. Fetch web search results (robust for long mixes, compilations, and accurate titles)
-        web_res = _yt_web_search(query, pages=1)
+        web_res = _yt_web_search(query, pages=1, allow_long_mix=is_mix_query)
         web_videos = web_res.get("videos", [])
         web_best = None
         if web_videos:
@@ -799,8 +928,8 @@ def search_youtube_single(query: str) -> Optional[Dict]:
             "url": f"https://www.youtube.com/watch?v={video_id}",
             "embed_url": f"https://www.youtube.com/embed/{video_id}?autoplay=1&enablejsapi=1",
         }
-        _SEARCH_CACHE[cache_key] = result
-        return dict(result)
+        _bounded_cache_set(_SEARCH_CACHE, cache_key, result, ts_map=_SEARCH_CACHE_TS)
+        return copy.deepcopy(result)
     except Exception as e:
         print(f"Search error for '{query}': {e}")
         return None
@@ -815,10 +944,9 @@ def browse_youtube_music_playlist(
     """
     if not browse_id:
         return []
-    now = time.time()
-    cached = _PLAYLIST_BROWSE_CACHE.get(browse_id)
-    if cached and (now - cached.get("ts", 0)) < 1800:
-        return list(cached["tracks"])
+    cached = _bounded_cache_get(_PLAYLIST_BROWSE_CACHE, browse_id, _PLAYLIST_BROWSE_CACHE_TTL)
+    if cached is not None:
+        return cached
 
     try:
         url = "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false"
@@ -892,8 +1020,8 @@ def browse_youtube_music_playlist(
             if len(tracks) >= max_tracks:
                 break
 
-        _PLAYLIST_BROWSE_CACHE[browse_id] = {"tracks": tracks, "ts": now}
-        return tracks
+        _bounded_cache_set(_PLAYLIST_BROWSE_CACHE, browse_id, tracks, wrapper_key="tracks")
+        return copy.deepcopy(tracks)
     except Exception as e:
         print(f"Playlist browse error for '{browse_id}': {e}")
         return []
@@ -1024,10 +1152,9 @@ def direct_search_youtube_music(query: str, mode: str = "auto") -> Dict[str, Any
         return {"playlist_title": "Direct Search", "tracks": [], "matched_playlists": [], "song_results": []}
 
     cache_key = f"{q_clean.lower()}::{mode}"
-    now = time.time()
-    cached = _DIRECT_SEARCH_CACHE.get(cache_key)
-    if cached and (now - cached.get("ts", 0)) < 1200:
-        return dict(cached["data"])
+    cached = _bounded_cache_get(_DIRECT_SEARCH_CACHE, cache_key, _DIRECT_SEARCH_CACHE_TTL)
+    if cached is not None:
+        return cached
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         f_yt = pool.submit(_yt_web_search, q_clean, 2)
@@ -1146,5 +1273,5 @@ def direct_search_youtube_music(query: str, mode: str = "auto") -> Dict[str, Any
         "song_results": final_songs,
         "tracks": tracks,
     }
-    _DIRECT_SEARCH_CACHE[cache_key] = {"data": result_payload, "ts": now}
-    return dict(result_payload)
+    _bounded_cache_set(_DIRECT_SEARCH_CACHE, cache_key, result_payload, wrapper_key="data")
+    return copy.deepcopy(result_payload)

@@ -8,7 +8,7 @@ import {
   NON_MUSIC_REGEX
 } from "../config/musicFilters.js"
 import { isStrictMusicTrack, isValidMusicTrack } from "./musicFilter.js"
-import { YTM_CONTEXT, browsePlaylistStandalone, directSearchStandalone } from "./innertubeClient.js"
+import { YTM_CONTEXT, browsePlaylistStandalone, directSearchStandalone, findNodes } from "./innertubeClient.js"
 
 // ---------------------------------------------------------------------------
 // Universal Fisher-Yates Queue & Track Shuffle
@@ -351,11 +351,11 @@ export async function buildHybridRediscoverBlock({
 
   addTracks(userTracks)
   try {
-    const rawFavs = localStorage.getItem('upbeat_favorites_v1')
+    const rawFavs = localStorage.getItem('argon_favs_v2') || localStorage.getItem('upbeat_favorites_v1')
     if (rawFavs) addTracks(JSON.parse(rawFavs))
   } catch {}
   try {
-    const rawSeeds = localStorage.getItem('upbeat_extracted_tracks_v1')
+    const rawSeeds = localStorage.getItem('argon_seeds_v2') || localStorage.getItem('upbeat_extracted_tracks_v1')
     if (rawSeeds) addTracks(JSON.parse(rawSeeds))
   } catch {}
 
@@ -640,11 +640,30 @@ const CHART_THUMB_POOLS = {
   ]
 }
 
+const LEGACY_CHART_ID_ALIASES = {
+  india: 'block_india_top_daily',
+  in: 'block_india_top_daily',
+  india_trendy: 'block_india_trendy',
+  global50: 'block_global_top_daily',
+  us_billboard: 'block_us_top_daily',
+  us: 'block_us_top_daily',
+  uk: 'block_uk_top_daily',
+  japan: 'block_japan_top_daily',
+  viral: 'block_viral_top_daily',
+  kpop: 'block_kpop_top_daily',
+  latin: 'block_latin_top_daily'
+}
+
 export function resolveRankedChartBlocks(cursor = 0) {
   let preferredChartIds = []
   try {
     const rawChartPrefs = localStorage.getItem('upbeat_chart_prefs_v1')
-    if (rawChartPrefs) preferredChartIds = JSON.parse(rawChartPrefs)
+    if (rawChartPrefs) {
+      const parsed = JSON.parse(rawChartPrefs)
+      if (Array.isArray(parsed)) {
+        preferredChartIds = parsed.map((id) => LEGACY_CHART_ID_ALIASES[id] || id)
+      }
+    }
   } catch {}
 
   let genres = []

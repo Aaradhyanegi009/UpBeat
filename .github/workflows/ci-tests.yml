@@ -62,3 +62,85 @@ jobs:
 
       - name: Run Python Backend Tests
         run: python -m unittest discover -s backend/tests -v
+
+  electron-and-parity-checks:
+    name: Electron Syntax, Server & Version Parity Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Check JS Syntax
+        run: |
+          node -c electron/main.cjs
+          node -c electron/preload.cjs
+          node -c electron/server.cjs
+          node -c frontend/src/otaUpdater.js
+
+      - name: Verify Electron Lockfile
+        run: npm --prefix electron ci --ignore-scripts
+
+      - name: Run Electron, OTA & Version Parity Tests
+        run: node --test electron/tests/*.test.mjs
+
+  android-checks:
+    name: Android Unit Tests & Java Compilation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Build Frontend & Sync Capacitor Android
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: Run Android Unit Tests & Compile Java
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest compileDebugJavaWithJavac compileDebugAndroidTestJavaWithJavac --no-daemon
+
+  macos-checks:
+    name: macOS Swift Typecheck & Plist Lint
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Lint Info.plist & Updater Script
+        run: |
+          plutil -lint macos/Info.plist
+          bash -n macos/update.sh
+
+      - name: Typecheck macOS Swift Wrapper
+        run: swiftc -typecheck macos/UpBeatApp.swift

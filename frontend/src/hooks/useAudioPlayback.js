@@ -53,6 +53,8 @@ export function useAudioPlayback({
   const isPlayingRef = useRef(isPlaying)
   const queueRef = useRef(queue)
   const repeatModeRef = useRef(repeatMode)
+  const isShuffleRef = useRef(isShuffle)
+  const activePlaybackContextRef = useRef(activePlaybackContext)
   const originalQueueRef = useRef(null)
   const originalContextRef = useRef(null)
   const handleNextRef = useRef(null)
@@ -62,22 +64,23 @@ export function useAudioPlayback({
   isPlayingRef.current = isPlaying
   queueRef.current = queue
   repeatModeRef.current = repeatMode
+  isShuffleRef.current = isShuffle
+  activePlaybackContextRef.current = activePlaybackContext
 
   const setRepeatMode = useCallback((valOrFn) => {
-    setRepeatModeState((prev) => {
-      const raw = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn
-      const next = raw === 'all' || raw === 'one' ? raw : 'off'
-      repeatModeRef.current = next
-      try {
-        localStorage.setItem('upbeat_repeat_mode', next)
-      } catch {}
-      try {
-        if (typeof window !== 'undefined' && typeof window.UpBeatNative?.syncRepeatMode === 'function') {
-          window.UpBeatNative.syncRepeatMode(next)
-        }
-      } catch {}
-      return next
-    })
+    const prev = repeatModeRef.current
+    const raw = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn
+    const next = raw === 'all' || raw === 'one' ? raw : 'off'
+    repeatModeRef.current = next
+    setRepeatModeState(next)
+    try {
+      localStorage.setItem('upbeat_repeat_mode', next)
+    } catch {}
+    try {
+      if (typeof window !== 'undefined' && typeof window.UpBeatNative?.syncRepeatMode === 'function') {
+        window.UpBeatNative.syncRepeatMode(next)
+      }
+    } catch {}
   }, [])
 
   const setCrossfadeSec = useCallback((val) => {
@@ -262,6 +265,8 @@ export function useAudioPlayback({
     if (queue.length > 0) {
       const nextTrack = queue[0]
       setQueue((prev) => prev.slice(1))
+      currentTrackRef.current = nextTrack
+      isPlayingRef.current = true
       setCurrentTrack(nextTrack)
       setIsPlaying(true)
       if (playbackMode === 'safari' && onPushToSafari) onPushToSafari(nextTrack)
@@ -285,9 +290,22 @@ export function useAudioPlayback({
       if (found >= 0) curIdx = found
     }
 
-    const nextIdx = (curIdx + 1) % list.length
+    let nextIdx = curIdx + 1
+    if (nextIdx >= list.length) {
+      if (repeatModeRef.current !== 'all') {
+        isPlayingRef.current = false
+        setIsPlaying(false)
+        try {
+          window.UpBeatControls?.forcePause?.()
+        } catch {}
+        return
+      }
+      nextIdx = 0
+    }
     const nextTrack = list[nextIdx]
     if (!nextTrack) return
+    currentTrackRef.current = nextTrack
+    isPlayingRef.current = true
     setCurrentTrack(nextTrack)
     setCurrentTrackIdx(nextIdx)
     setIsPlaying(true)
@@ -325,6 +343,8 @@ export function useAudioPlayback({
     const prevIdx = (curIdx - 1 + list.length) % list.length
     const prevTrack = list[prevIdx]
     if (!prevTrack) return
+    currentTrackRef.current = prevTrack
+    isPlayingRef.current = true
     setCurrentTrack(prevTrack)
     setCurrentTrackIdx(prevIdx)
     setIsPlaying(true)
@@ -335,7 +355,7 @@ export function useAudioPlayback({
 
   const handlePlayNext = useCallback((track) => {
     if (!track) return
-    setQueue((prev) => [track, ...prev.filter((t) => t.video_id !== track.video_id)])
+    setQueue((prev) => [track, ...prev.filter((t) => !sameTrack(t, track))])
     if (jamManager.state.active && !jamManager.state.isHost) jamManager.emitQueueAdd(track)
     showNotify(`"${track.title}" plays next`, 'info')
   }, [setQueue, showNotify])
@@ -360,41 +380,56 @@ export function useAudioPlayback({
   }, [setQueue, showNotify])
 
   const handleToggleShuffle = useCallback(() => {
-    setIsShuffle((prev) => {
-      const nextState = !prev
-      if (nextState) {
-        originalQueueRef.current = [...queue]
-        originalContextRef.current = activePlaybackContext ? [...activePlaybackContext] : null
-        if (queue.length > 0) setQueue(fisherYatesShuffle(queue))
-        if (activePlaybackContext && activePlaybackContext.length > 1) {
-          const remaining = activePlaybackContext.filter((t) =>
-            t.video_id && currentTrack?.video_id ? t.video_id !== currentTrack.video_id : t.title !== currentTrack?.title
-          )
-          const shuffled = fisherYatesShuffle(remaining)
-          setActivePlaybackContext(currentTrack ? [currentTrack, ...shuffled] : shuffled)
-          setCurrentTrackIdx(0)
-        }
-        showNotify('Shuffle on', 'info')
-      } else {
-        if (originalQueueRef.current) {
-          setQueue(originalQueueRef.current)
-          originalQueueRef.current = null
-        }
-        if (originalContextRef.current) {
-          setActivePlaybackContext(originalContextRef.current)
-          if (currentTrack) {
-            const idx = originalContextRef.current.findIndex((t) =>
-              t.video_id && currentTrack.video_id ? t.video_id === currentTrack.video_id : t.title === currentTrack.title
-            )
-            if (idx >= 0) setCurrentTrackIdx(idx)
-          }
-          originalContextRef.current = null
-        }
-        showNotify('Shuffle off', 'info')
+    const nextState = !isShuffleRef.current
+    isShuffleRef.current = nextState
+    setIsShuffle(nextState)
+
+    const curQueue = queueRef.current || []
+    const curCtx = activePlaybackContextRef.current
+    const curTrack = currentTrackRef.current
+
+    if (nextState) {
+      originalQueueRef.current = [...curQueue]
+      originalContextRef.current = curCtx ? [...curCtx] : null
+      if (curQueue.length > 0) setQueue(fisherYatesShuffle(curQueue))
+      if (curCtx && curCtx.length > 1) {
+        const remaining = curCtx.filter((t) => !sameTrack(t, curTrack))
+        const shuffled = fisherYatesShuffle(remaining)
+        setActivePlaybackContext(curTrack ? [curTrack, ...shuffled] : shuffled)
+        setCurrentTrackIdx(0)
       }
-      return nextState
-    })
-  }, [activePlaybackContext, currentTrack, queue, setQueue, showNotify])
+      showNotify('Shuffle on', 'info')
+    } else {
+      if (originalQueueRef.current !== null) {
+        const origQ = originalQueueRef.current
+        const pool = curQueue.map((item, idx) => ({ item, idx, used: false }))
+        const restored = []
+        let firstMatchedIdx = Infinity
+        for (const origTrack of origQ) {
+          const match = pool.find((p) => !p.used && (p.item === origTrack || sameTrack(p.item, origTrack)))
+          if (match) {
+            match.used = true
+            restored.push(match.item)
+            if (match.idx < firstMatchedIdx) firstMatchedIdx = match.idx
+          }
+        }
+        const frontAdded = pool.filter((p) => !p.used && p.idx < firstMatchedIdx).map((p) => p.item)
+        const backAdded = pool.filter((p) => !p.used && p.idx >= firstMatchedIdx).map((p) => p.item)
+        setQueue([...frontAdded, ...restored, ...backAdded])
+        originalQueueRef.current = null
+      }
+      if (originalContextRef.current) {
+        const origCtx = originalContextRef.current
+        setActivePlaybackContext(origCtx)
+        if (curTrack) {
+          const idx = origCtx.findIndex((t) => sameTrack(t, curTrack))
+          if (idx >= 0) setCurrentTrackIdx(idx)
+        }
+        originalContextRef.current = null
+      }
+      showNotify('Shuffle off', 'info')
+    }
+  }, [setQueue, showNotify])
 
   const handleShufflePlayAll = useCallback((customTracks) => {
     const target = customTracks || playlist?.tracks || []
@@ -402,6 +437,9 @@ export function useAudioPlayback({
     const shuffled = fisherYatesShuffle(target)
     originalContextRef.current = [...target]
     setActivePlaybackContext(shuffled)
+    currentTrackRef.current = shuffled[0]
+    isPlayingRef.current = true
+    isShuffleRef.current = true
     setCurrentTrack(shuffled[0])
     setCurrentTrackIdx(0)
     setQueue(shuffled.slice(1))
@@ -414,27 +452,41 @@ export function useAudioPlayback({
     const list = (tracks || []).filter(Boolean)
     if (!list.length) return
     if (shuffle) {
+      if (jamManager.state.active && !jamManager.state.isHost && jamManager.state.djMode === 'host_only' && !remoteJamGuardRef.current) {
+        jamManager.emitQueueAdd(list[0])
+        setQueue((prev) => [...prev, list[0]])
+        showNotify(`Host Only DJ mode: Added "${list[0].title}" to shared Jam queue`, 'info')
+        return
+      }
       const shuffled = fisherYatesShuffle(list)
       originalContextRef.current = [...list]
       setActivePlaybackContext(shuffled)
+      isShuffleRef.current = true
+      currentTrackRef.current = shuffled[0]
+      isPlayingRef.current = true
       setIsShuffle(true)
       setCurrentTrack(shuffled[0])
       setCurrentTrackIdx(0)
       setIsPlaying(true)
+      if (jamManager.state.active && !jamManager.state.isHost && !remoteJamGuardRef.current) {
+        jamManager.emitPlaybackControl('SELECT_TRACK', { track: shuffled[0], currentTime: 0 })
+      }
       if (playbackMode === 'safari' && onPushToSafari) onPushToSafari(shuffled[0])
     } else {
+      isShuffleRef.current = false
       setIsShuffle(false)
       originalContextRef.current = null
       if (sameTrack(currentTrack, list[0])) {
         setActivePlaybackContext(list)
         setCurrentTrackIdx(0)
+        isPlayingRef.current = true
         setIsPlaying(true)
       } else {
         handlePlayTrack(list[0], 0, list)
       }
     }
     setPlayingFrom?.(from)
-  }, [currentTrack, handlePlayTrack, onPushToSafari, playbackMode, setPlayingFrom])
+  }, [currentTrack, handlePlayTrack, onPushToSafari, playbackMode, remoteJamGuardRef, setPlayingFrom, setQueue, showNotify])
 
   const handleUserSeek = useCallback((targetSec) => {
     if (!jamManager.state.active || remoteJamGuardRef.current) return
@@ -505,14 +557,13 @@ export function useAudioPlayback({
   }, [activePlaybackContext, currentTrack, queue])
 
   const cycleRepeatMode = useCallback(() => {
-    setRepeatMode((prev) => {
-      const next = prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'
-      showNotify(
-        next === 'one' ? 'Looping current song' : next === 'all' ? 'Repeat all' : 'Repeat off',
-        'info'
-      )
-      return next
-    })
+    const prev = repeatModeRef.current
+    const next = prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'
+    setRepeatMode(next)
+    showNotify(
+      next === 'one' ? 'Looping current song' : next === 'all' ? 'Repeat all' : 'Repeat off',
+      'info'
+    )
   }, [setRepeatMode, showNotify])
 
   const toggleLoopSong = useCallback((targetTrack = null) => {

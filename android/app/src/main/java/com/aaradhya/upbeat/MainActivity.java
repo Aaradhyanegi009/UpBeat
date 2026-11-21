@@ -42,14 +42,6 @@ public class MainActivity extends BridgeActivity {
         sInstance = this;
         applyDarkSystemBars();
 
-        // Enable execution and media playback when device is locked in car
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true);
-            setTurnScreenOn(false);
-        } else {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
-        }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -168,9 +160,10 @@ public class MainActivity extends BridgeActivity {
             final java.util.List<String> batch = new java.util.ArrayList<>(sPendingDeepLinksQueue);
             StringBuilder sb = new StringBuilder();
             sb.append("(function() {");
+            sb.append("  if (typeof window.onUpBeatCarAction !== 'function') return 'retry';");
             for (String link : batch) {
-                String safe = link.replace("\\", "\\\\").replace("'", "\\'");
-                sb.append("  window.dispatchEvent(new CustomEvent('upbeat-deep-link', { detail: '").append(safe).append("' }));");
+                String safeLiteral = org.json.JSONObject.quote(link);
+                sb.append("  window.dispatchEvent(new CustomEvent('upbeat-deep-link', { detail: ").append(safeLiteral).append(" }));");
             }
             sb.append("  return 'ok';");
             sb.append("})();");
@@ -179,7 +172,7 @@ public class MainActivity extends BridgeActivity {
                 if (value != null && value.contains("ok")) {
                     sPendingDeepLinksQueue.removeAll(batch);
                 } else {
-                    if (attempt < 50) {
+                    if (attempt < 100) {
                         mHandler.postDelayed(() -> tryDeliverPendingDeepLink(attempt + 1), 350);
                     }
                 }
@@ -220,9 +213,9 @@ public class MainActivity extends BridgeActivity {
             sb.append("(function() {");
             sb.append("  if (typeof window.onUpBeatCarAction !== 'function') return 'retry';");
             for (CarActionItem item : batch) {
-                String safeAction = item.action.replace("'", "\\'");
-                String safePayload = item.payload.replace("'", "\\'");
-                sb.append("  window.onUpBeatCarAction('").append(safeAction).append("', '").append(safePayload).append("');");
+                String safeAction = org.json.JSONObject.quote(item.action);
+                String safePayload = org.json.JSONObject.quote(item.payload);
+                sb.append("  window.onUpBeatCarAction(").append(safeAction).append(", ").append(safePayload).append(");");
             }
             sb.append("  return 'ok';");
             sb.append("})();");
@@ -315,9 +308,16 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void openExternalUrl(String url) {
-            if (url == null || url.trim().isEmpty()) return;
+            if (url == null) return;
+            String trimmed = url.trim();
+            if (trimmed.isEmpty()) return;
             try {
-                Intent intent = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url.trim()));
+                android.net.Uri uri = android.net.Uri.parse(trimmed);
+                String scheme = uri.getScheme();
+                if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+                    return;
+                }
+                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 MainActivity.this.startActivity(intent);
             } catch (Exception ignored) {}

@@ -3,25 +3,34 @@
 import base64
 import json
 import os
+import re
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 try:
-    from routers import resolve_main_attr
+    from routers import require_local_origin, resolve_main_attr
     from routers.offline import DOWNLOADS_DIR
 except ImportError:
-    from backend.routers import resolve_main_attr
+    from backend.routers import require_local_origin, resolve_main_attr
     from backend.routers.offline import DOWNLOADS_DIR
 
 router = APIRouter()
 
+_SOCIAL_LOCK = threading.Lock()
+_PROFILE_LOCK = threading.Lock()
 _SOCIAL_MAILBOX: Dict[str, List[Dict[str, Any]]] = {}
 _SOCIAL_PRESENCE: Dict[str, Dict[str, Any]] = {}
 _JAM_ROOMS: Dict[str, List[Dict[str, Any]]] = {}
+_LAST_SERVER_TS = 0
+
+_SOCIAL_TTL_MS = 15 * 60 * 1000
+_JAM_TTL_MS = 2 * 3600 * 1000
 
 PROFILE_FILE = os.path.join(DOWNLOADS_DIR, "user_profile.json")
 
@@ -43,19 +52,45 @@ class JamRoomSendRequest(BaseModel):
     packet: Dict[str, Any]
 
 
-def _normalize_friend_code(code: str, auto_prefix: bool = False) -> str:
-    clean = str(code or "").strip().upper()
-    if auto_prefix and clean and not clean.startswith("UP-") and len(clean) == 6:
-        return f"UP-{clean}"
-    return clean
+def _next_push_ts(now_ms: Optional[int] = None) -> int:
+    """Monotonic server timestamp for pushed packets so same-ms packets are never skipped by `since`."""
+    global _LAST_SERVER_TS
+    cur = int(time.time() * 1000) if now_ms is None else now_ms
+    ts = max(cur, _LAST_SERVER_TS + 1)
+    _LAST_SERVER_TS = ts
+    return ts
 
 
-def _collect_online_presence(
-    friend_codes: List[str], now_ms: int, auto_prefix: bool = False, include_code: bool = False
+def _current_server_ts(now_ms: Optional[int] = None) -> int:
+    global _LAST_SERVER_TS
+    cur = int(time.time() * 1000) if now_ms is None else now_ms
+    ts = max(cur, _LAST_SERVER_TS)
+    _LAST_SERVER_TS = ts
+    return ts
+
+
+def _normalize_friend_code(code: str, auto_prefix: bool = True) -> str:
+    """Normalizes a friend code to canonical UP-XXXXXX format matching Edge & frontend."""
+    raw = str(code or "").strip().upper()
+    cleaned = re.sub(r"[^A-Z0-9-]", "", raw)
+    if not cleaned:
+        return ""
+    if cleaned.startswith("UP-"):
+        body = re.sub(r"[^A-Z0-9]", "", cleaned[3:])
+        return f"UP-{body[:6]}" if body else ""
+    alnum = re.sub(r"[^A-Z0-9]", "", cleaned)
+    body = alnum[2:] if alnum.startswith("UP") and len(alnum) > 6 else alnum
+    if not body:
+        return ""
+    return f"UP-{body[:6]}" if auto_prefix else body[:6]
+
+
+def _collect_online_presence_unlocked(
+    friend_codes: List[str], now_ms: int, include_code: bool = True
 ) -> List[Dict[str, Any]]:
     presence_list: List[Dict[str, Any]] = []
     for fc in friend_codes:
-        clean_fc = _normalize_friend_code(fc, auto_prefix=auto_prefix)
+        clean_fc = _normalize_friend_code(fc)
         if not clean_fc:
             continue
         pres = _SOCIAL_PRESENCE.get(clean_fc)
@@ -67,7 +102,7 @@ def _collect_online_presence(
     return presence_list
 
 
-def _append_mailbox_packet(target: str, pkt: Dict[str, Any], ttl_ms: int, dedup_id: Optional[str]) -> None:
+def _append_mailbox_packet_unlocked(target: str, pkt: Dict[str, Any], ttl_ms: int, dedup_id: Optional[str]) -> None:
     box = _SOCIAL_MAILBOX.setdefault(target, [])
     cutoff = pkt["_serverTs"] - ttl_ms
     box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
@@ -81,19 +116,24 @@ def _append_mailbox_packet(target: str, pkt: Dict[str, Any], ttl_ms: int, dedup_
 @router.post("/api/jam/social/send")
 def jam_social_send_endpoint(req: SocialSendRequest):
     """Enqueues a social/friend signaling packet into the recipient's mailbox."""
-    now_ms = int(time.time() * 1000)
-    target = _normalize_friend_code(req.targetFriendCode)
-    if not target:
-        return {"ok": False}
+    with _SOCIAL_LOCK:
+        now_ms = _next_push_ts()
+        target = _normalize_friend_code(req.targetFriendCode)
+        if not target:
+            return {"ok": False}
 
-    pkt = dict(req.packet or {})
-    pkt["_serverTs"] = now_ms
-    sender = pkt.get("from")
-    if isinstance(sender, dict) and sender.get("friendCode"):
-        s_code = _normalize_friend_code(sender["friendCode"])
-        _SOCIAL_PRESENCE[s_code] = {**sender, "lastSeen": now_ms}
+        pkt = dict(req.packet or {})
+        pkt["_serverTs"] = now_ms
+        pkt["targetFriendCode"] = target
+        sender = pkt.get("from")
+        if isinstance(sender, dict) and sender.get("friendCode"):
+            s_code = _normalize_friend_code(sender["friendCode"])
+            if s_code:
+                _SOCIAL_PRESENCE[s_code] = {**sender, "friendCode": s_code, "lastSeen": now_ms}
 
-    _append_mailbox_packet(target, pkt, ttl_ms=12 * 3600 * 1000, dedup_id=pkt.get("_packetId"))
+        _append_mailbox_packet_unlocked(
+            target, pkt, ttl_ms=_SOCIAL_TTL_MS, dedup_id=pkt.get("msgId") or pkt.get("_packetId")
+        )
 
     return {"ok": True, "serverTs": now_ms}
 
@@ -101,15 +141,22 @@ def jam_social_send_endpoint(req: SocialSendRequest):
 @router.post("/api/jam/social/poll")
 def jam_social_poll_endpoint(req: SocialPollRequest):
     """Updates sender presence and returns new mailbox packets plus online friend states."""
-    now_ms = int(time.time() * 1000)
-    my_code = _normalize_friend_code(req.friendCode)
-    if my_code and isinstance(req.summary, dict):
-        _SOCIAL_PRESENCE[my_code] = {**req.summary, "friendCode": my_code, "lastSeen": now_ms}
+    with _SOCIAL_LOCK:
+        now_ms = _current_server_ts()
+        my_code = _normalize_friend_code(req.friendCode)
+        if my_code:
+            existing = _SOCIAL_PRESENCE.get(my_code, {"friendCode": my_code})
+            if isinstance(req.summary, dict):
+                _SOCIAL_PRESENCE[my_code] = {**existing, **req.summary, "friendCode": my_code, "lastSeen": now_ms}
+            else:
+                _SOCIAL_PRESENCE[my_code] = {**existing, "friendCode": my_code, "lastSeen": now_ms}
 
-    box = _SOCIAL_MAILBOX.get(my_code, [])
-    since_ts = int(req.since or 0)
-    packets = [m for m in box if m.get("_serverTs", 0) > since_ts]
-    presence_list = _collect_online_presence(req.friendCodes or [], now_ms)
+        box = _SOCIAL_MAILBOX.get(my_code, [])
+        cutoff = now_ms - _SOCIAL_TTL_MS
+        box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
+        since_ts = int(req.since or 0)
+        packets = [dict(m) for m in box if m.get("_serverTs", 0) > since_ts]
+        presence_list = _collect_online_presence_unlocked(req.friendCodes or [], now_ms)
 
     return {
         "ok": True,
@@ -124,19 +171,25 @@ def jam_social_poll_endpoint(req: SocialPollRequest):
 @router.get("/api/social")
 def edge_social_get_endpoint(id: str = "", friendCode: str = "", friends: str = "", since: int = 0):
     """GET edge relay poll compatible with standalone/Vercel Edge Social API."""
-    now_ms = int(time.time() * 1000)
-    my_code = _normalize_friend_code(id or friendCode, auto_prefix=True)
+    with _SOCIAL_LOCK:
+        now_ms = _current_server_ts()
+        my_code = _normalize_friend_code(id or friendCode)
 
-    if my_code and my_code in _SOCIAL_PRESENCE:
-        _SOCIAL_PRESENCE[my_code]["lastSeen"] = now_ms
+        if my_code:
+            existing = _SOCIAL_PRESENCE.get(my_code)
+            if existing is None:
+                _SOCIAL_PRESENCE[my_code] = {"friendCode": my_code, "lastSeen": now_ms}
+            else:
+                existing["lastSeen"] = now_ms
 
-    box = _SOCIAL_MAILBOX.get(my_code, [])
-    cutoff = now_ms - (15 * 60 * 1000)
-    box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
-    packets = [m for m in box if m.get("_serverTs", 0) > int(since or 0)]
+        box = _SOCIAL_MAILBOX.get(my_code, [])
+        cutoff = now_ms - _SOCIAL_TTL_MS
+        box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
+        since_ts = int(since or 0)
+        packets = [dict(m) for m in box if m.get("_serverTs", 0) > since_ts]
 
-    friend_codes = [f.strip().upper() for f in (friends or "").split(",") if f.strip()]
-    presence_list = _collect_online_presence(friend_codes, now_ms, auto_prefix=True, include_code=True)
+        friend_codes = [f.strip() for f in (friends or "").split(",") if f.strip()]
+        presence_list = _collect_online_presence_unlocked(friend_codes, now_ms)
 
     return {
         "ok": True,
@@ -151,40 +204,56 @@ def edge_social_get_endpoint(id: str = "", friendCode: str = "", friends: str = 
 @router.post("/api/social")
 def edge_social_post_endpoint(body: Dict[str, Any]):
     """POST edge relay push/poll compatible with standalone/Vercel Edge Social API."""
-    now_ms = int(time.time() * 1000)
     action = body.get("action") or ("push" if (body.get("toId") or body.get("targetFriendCode")) else "poll")
 
     if action == "push":
-        target = _normalize_friend_code(
-            str(body.get("toId") or body.get("targetFriendCode") or ""), auto_prefix=True
-        )
-        pkt = dict(body.get("packet") or {})
-        pkt["_serverTs"] = now_ms
-        sender = pkt.get("from") or body.get("summary") or body.get("profile")
-        if isinstance(sender, dict) and sender.get("friendCode"):
-            s_code = _normalize_friend_code(sender["friendCode"])
-            _SOCIAL_PRESENCE[s_code] = {**sender, "friendCode": s_code, "lastSeen": now_ms}
-
-        if target and pkt:
-            _append_mailbox_packet(
-                target,
-                pkt,
-                ttl_ms=15 * 60 * 1000,
-                dedup_id=pkt.get("msgId") or pkt.get("_packetId"),
+        with _SOCIAL_LOCK:
+            now_ms = _next_push_ts()
+            target = _normalize_friend_code(
+                str(body.get("toId") or body.get("targetFriendCode") or (body.get("packet") or {}).get("targetFriendCode") or "")
             )
+            pkt = dict(body.get("packet") or {}) if isinstance(body.get("packet"), dict) else {}
+            pkt["_serverTs"] = now_ms
+            if target:
+                pkt["targetFriendCode"] = target
+
+            sender = pkt.get("from") or body.get("summary") or body.get("profile")
+            s_raw = (sender.get("friendCode") if isinstance(sender, dict) else None) or pkt.get("_fromFriendCode") or body.get("fromId")
+            s_code = _normalize_friend_code(str(s_raw or ""))
+            if s_code and isinstance(sender, dict):
+                existing = _SOCIAL_PRESENCE.get(s_code, {"friendCode": s_code})
+                _SOCIAL_PRESENCE[s_code] = {**existing, **sender, "friendCode": s_code, "lastSeen": now_ms}
+
+            if target and pkt:
+                _append_mailbox_packet_unlocked(
+                    target,
+                    pkt,
+                    ttl_ms=_SOCIAL_TTL_MS,
+                    dedup_id=pkt.get("msgId") or pkt.get("_packetId"),
+                )
         return {"ok": True, "serverTs": now_ms}
 
-    my_code = _normalize_friend_code(str(body.get("id") or body.get("friendCode") or ""))
-    summary = body.get("summary") or body.get("profile")
-    if my_code and isinstance(summary, dict):
-        _SOCIAL_PRESENCE[my_code] = {**summary, "friendCode": my_code, "lastSeen": now_ms}
+    with _SOCIAL_LOCK:
+        now_ms = _current_server_ts()
+        my_code = _normalize_friend_code(str(body.get("id") or body.get("friendCode") or ""))
+        summary = body.get("summary") or body.get("profile")
+        if my_code:
+            existing = _SOCIAL_PRESENCE.get(my_code, {"friendCode": my_code})
+            if isinstance(summary, dict):
+                _SOCIAL_PRESENCE[my_code] = {**existing, **summary, "friendCode": my_code, "lastSeen": now_ms}
+            else:
+                _SOCIAL_PRESENCE[my_code] = {**existing, "friendCode": my_code, "lastSeen": now_ms}
 
-    box = _SOCIAL_MAILBOX.get(my_code, [])
-    since_ts = int(body.get("since") or 0)
-    packets = [m for m in box if m.get("_serverTs", 0) > since_ts]
+        box = _SOCIAL_MAILBOX.get(my_code, [])
+        cutoff = now_ms - _SOCIAL_TTL_MS
+        box[:] = [m for m in box if m.get("_serverTs", 0) > cutoff]
+        since_ts = int(body.get("since") or 0)
+        packets = [dict(m) for m in box if m.get("_serverTs", 0) > since_ts]
 
-    raw_friends = body.get("friends") or body.get("friendCodes") or []
-    presence_list = _collect_online_presence(raw_friends, now_ms, auto_prefix=False, include_code=True)
+        raw_friends = body.get("friends") or body.get("friendCodes") or []
+        if not isinstance(raw_friends, list):
+            raw_friends = []
+        presence_list = _collect_online_presence_unlocked(raw_friends, now_ms)
 
     return {
         "ok": True,
@@ -199,23 +268,24 @@ def edge_social_post_endpoint(body: Dict[str, Any]):
 @router.post("/api/jam/room/send")
 def jam_room_send_endpoint(req: JamRoomSendRequest):
     """Appends a Jam room playback/chat event packet for polling clients."""
-    now_ms = int(time.time() * 1000)
-    room = (req.roomCode or "").strip().upper()
-    if not room:
-        return {"ok": False}
+    with _SOCIAL_LOCK:
+        now_ms = _next_push_ts()
+        room = (req.roomCode or "").strip().upper()
+        if not room:
+            return {"ok": False}
 
-    pkt = dict(req.packet or {})
-    pkt["_serverTs"] = now_ms
+        pkt = dict(req.packet or {})
+        pkt["_serverTs"] = now_ms
 
-    events = _JAM_ROOMS.setdefault(room, [])
-    cutoff = now_ms - (2 * 3600 * 1000)
-    events[:] = [e for e in events if e.get("_serverTs", 0) > cutoff]
+        events = _JAM_ROOMS.setdefault(room, [])
+        cutoff = now_ms - _JAM_TTL_MS
+        events[:] = [e for e in events if e.get("_serverTs", 0) > cutoff]
 
-    pkt_id = pkt.get("_packetId")
-    if not pkt_id or not any(e.get("_packetId") == pkt_id for e in events):
-        events.append(pkt)
-        if len(events) > 200:
-            del events[:-200]
+        pkt_id = pkt.get("_packetId")
+        if not pkt_id or not any(e.get("_packetId") == pkt_id for e in events):
+            events.append(pkt)
+            if len(events) > 200:
+                del events[:-200]
 
     return {"ok": True, "serverTs": now_ms}
 
@@ -223,10 +293,13 @@ def jam_room_send_endpoint(req: JamRoomSendRequest):
 @router.get("/api/jam/room/poll")
 def jam_room_poll_endpoint(roomCode: str = "", since: int = 0):
     """Returns Jam room events newer than since timestamp."""
-    now_ms = int(time.time() * 1000)
-    room = (roomCode or "").strip().upper()
-    events = _JAM_ROOMS.get(room, [])
-    packets = [e for e in events if e.get("_serverTs", 0) > since]
+    with _SOCIAL_LOCK:
+        now_ms = _current_server_ts()
+        room = (roomCode or "").strip().upper()
+        events = _JAM_ROOMS.get(room, [])
+        cutoff = now_ms - _JAM_TTL_MS
+        events[:] = [e for e in events if e.get("_serverTs", 0) > cutoff]
+        packets = [dict(e) for e in events if e.get("_serverTs", 0) > since]
     return {
         "ok": True,
         "serverTs": now_ms,
@@ -238,36 +311,65 @@ def jam_room_poll_endpoint(roomCode: str = "", since: int = 0):
 def get_user_profile_endpoint():
     """Returns persisted user profile JSON if present."""
     profile_path = resolve_main_attr("PROFILE_FILE", PROFILE_FILE)
-    if os.path.exists(profile_path):
-        try:
-            with open(profile_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    with _PROFILE_LOCK:
+        if os.path.exists(profile_path):
+            try:
+                with open(profile_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data if isinstance(data, dict) else {}
+            except Exception:
+                pass
     return {}
 
 
 @router.post("/api/profile")
 async def save_user_profile_endpoint(request: Request):
-    """Persists updated user profile JSON to disk."""
+    """Atomically persists updated user profile JSON to disk."""
     profile_path = resolve_main_attr("PROFILE_FILE", PROFILE_FILE)
     try:
-        payload = await request.json()
+        raw_body = await request.body()
+        if len(raw_body) > 2 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Profile payload too large")
+        payload = json.loads(raw_body.decode("utf-8"))
         if isinstance(payload, dict):
-            with open(profile_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False)
+            target_dir = os.path.dirname(os.path.abspath(profile_path))
+            tmp_path = ""
+            with _PROFILE_LOCK:
+                os.makedirs(target_dir, exist_ok=True)
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        "w", dir=target_dir, prefix=".profile_", suffix=".tmp", delete=False, encoding="utf-8"
+                    ) as tf:
+                        tmp_path = tf.name
+                        json.dump(payload, tf, ensure_ascii=False)
+                        tf.flush()
+                        os.fsync(tf.fileno())
+                    os.replace(tmp_path, profile_path)
+                except Exception:
+                    if tmp_path and os.path.exists(tmp_path):
+                        try:
+                            os.remove(tmp_path)
+                        except OSError:
+                            pass
+                    raise
             return {"ok": True, "profile": payload}
+    except HTTPException:
+        raise
     except Exception as e:
         return {"ok": False, "error": str(e)}
     return {"ok": False}
 
 
 @router.post("/api/profile/pick-photo")
-def pick_profile_photo_native_endpoint():
+def pick_profile_photo_native_endpoint(request: Request):
     """
     Opens a native macOS file chooser dialog via osascript and returns a
     downscaled 320x320 JPEG base64 data URL (supporting PNG, JPG, HEIC, WEBP, etc.).
     """
+    require_local_origin(request, require_loopback=True)
+    if sys.platform != "darwin" or os.environ.get("VERCEL"):
+        return {"ok": False, "error": "Native photo picker is only supported on macOS"}
+
     script = (
         'tell application "System Events"\n'
         '  activate\n'

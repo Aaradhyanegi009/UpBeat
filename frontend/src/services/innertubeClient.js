@@ -26,7 +26,7 @@ const PLAYLIST_KEYWORDS = [
   'mix', 'chart', 'trending', 'essentials'
 ]
 
-function* findNodes(obj, key) {
+export function* findNodes(obj, key) {
   if (Array.isArray(obj)) {
     for (const it of obj) yield* findNodes(it, key)
   } else if (obj && typeof obj === 'object') {
