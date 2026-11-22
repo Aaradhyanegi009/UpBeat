@@ -165,8 +165,9 @@ class TestCuratorAndYt(unittest.TestCase):
             self.assertEqual(out["tracks"][0]["video_id"], "uKxyi7m0001")
             self.assertEqual(out["tracks"][0]["duration_text"], "4:12")
 
-    def test_stream_resolver_prefers_fast_innertube_locally_and_respects_expire(self):
+    def test_stream_resolver_prefers_yt_dlp_locally_falls_back_to_innertube_and_respects_expire(self):
         future_exp = int(time.time()) + 120
+        ydl_url = f"https://rr1---sn.googlevideo.com/videoplayback?itag=140&clen=5347962&expire={future_exp}"
         fast_entry = {
             "url": f"https://redirector.googlevideo.com/videoplayback?expire={future_exp}",
             "mime": "audio/mp4",
@@ -175,15 +176,39 @@ class TestCuratorAndYt(unittest.TestCase):
             "duration": 200,
             "ts": time.time(),
         }
+        fake_ydl = MagicMock()
+        fake_ydl.extract_info.return_value = {
+            "url": ydl_url,
+            "ext": "m4a",
+            "filesize": 5347962,
+            "duration": 331,
+            "title": "LiSA - Gurenge",
+        }
         with patch.dict(os.environ, {}, clear=False), patch.object(
+            sr, "_get_ydl", return_value=fake_ydl
+        ) as mock_ydl, patch.object(
             sr, "_fast_innertube_audio", return_value=dict(fast_entry)
-        ) as mock_fast, patch.object(sr, "_get_ydl") as mock_ydl:
+        ) as mock_fast:
             os.environ.pop("VERCEL", None)
             got = sr.get_audio_stream_url("dQw4w9WgXcQ")
             self.assertIsNotNone(got)
-            self.assertEqual(got["url"], fast_entry["url"])
-            mock_fast.assert_called_once()
-            mock_ydl.assert_not_called()
+            self.assertEqual(got["url"], ydl_url)
+            self.assertEqual(got["mime"], "audio/mp4")
+            mock_ydl.assert_called_once()
+            mock_fast.assert_not_called()
+
+        # Verify fallback to _fast_innertube_audio when yt-dlp raises
+        ic._STREAM_CACHE.clear()
+        with patch.dict(os.environ, {}, clear=False), patch.object(
+            sr, "_get_ydl", side_effect=RuntimeError("yt-dlp unavailable")
+        ), patch.object(
+            sr, "_fast_innertube_audio", return_value=dict(fast_entry)
+        ) as mock_fast_fb:
+            os.environ.pop("VERCEL", None)
+            got_fb = sr.get_audio_stream_url("dQw4w9WgXcQ")
+            self.assertIsNotNone(got_fb)
+            self.assertEqual(got_fb["url"], fast_entry["url"])
+            mock_fast_fb.assert_called_once()
 
         # Verify expired URLs are not served from cache
         past_exp = int(time.time()) - 10

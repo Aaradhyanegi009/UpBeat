@@ -341,7 +341,7 @@ describe('All 6 Feature Pillars UI & Integration', () => {
     expect(rpReorder).toHaveBeenCalledWith(0, 1)
   })
 
-  it('PlayerBar preloads standby audio for upNextTrack cleanly without playing it and prunes idle Blob URLs', async () => {
+  it('PlayerBar keeps standby audio deck unloaded during active playback (v7.6.2 single-stream architecture) and prewarms metadata at cur > 5s', async () => {
     vi.useFakeTimers()
     localStorage.setItem('upbeat_server_url', 'http://localhost:8000')
     vi.stubGlobal('fetch', vi.fn(async (url) => {
@@ -367,13 +367,12 @@ describe('All 6 Feature Pillars UI & Integration', () => {
 
     const playTargets = []
     HTMLMediaElement.prototype.play = vi.fn(function () {
-      playTargets.push({ vid: this.dataset.vid || '', standbyVid: this.dataset.standbyVid || '' })
+      playTargets.push({ vid: this.dataset.vid || '' })
       return Promise.resolve()
     })
 
     const pruneSpy = vi.spyOn(offlineStorage, 'pruneIdleAudioUrls')
     const prewarmSpy = vi.spyOn(standaloneApi, 'prewarmTrack')
-    const cachedSpy = vi.spyOn(standaloneApi, 'getCachedAudioSource')
 
     const t1 = { video_id: 'trackAAA001', title: 'Track A', artist: 'Artist A', duration_text: '3:20' }
     const t2 = { video_id: 'trackBBB002', title: 'Track B', artist: 'Artist B', duration_text: '3:10' }
@@ -398,25 +397,21 @@ describe('All 6 Feature Pillars UI & Integration', () => {
     })
 
     expect(pruneSpy).toHaveBeenCalledWith(['trackAAA001', 'trackBBB002'])
-    expect(prewarmSpy).toHaveBeenCalledWith(t2)
-    expect(cachedSpy).toHaveBeenCalledWith('trackBBB002')
 
     const audios = Array.from(container.querySelectorAll('audio'))
     const activeDeck = audios.find((a) => a.dataset.vid === 'trackAAA001')
     const standbyDeck = audios.find((a) => a !== activeDeck)
     expect(activeDeck).toBeTruthy()
     expect(standbyDeck).toBeTruthy()
-    expect(standbyDeck.dataset.standbyVid).toBe('trackBBB002')
-    expect(standbyDeck.getAttribute('src')).toContain('trackBBB002')
-    expect(standbyDeck.preload).toBe('auto')
-    expect(playTargets.every((p) => p.vid === 'trackAAA001' && !p.standbyVid)).toBe(true)
+    // Standby deck must NOT open a concurrent /api/audio/ stream while active deck is playing
+    expect(standbyDeck.getAttribute('src')).toBeFalsy()
+    expect(playTargets.every((p) => p.vid === 'trackAAA001')).toBe(true)
 
-    // Firing browser loadeddata/canplay on the preloaded standby deck must NEVER trigger premature playback
-    standbyDeck.play = vi.fn(() => Promise.resolve())
-    fireEvent.loadedMetadata(standbyDeck)
-    fireEvent.loadedData(standbyDeck)
-    fireEvent.canPlay(standbyDeck)
-    expect(standbyDeck.play).not.toHaveBeenCalled()
+    // Once active deck progresses past 5s, upNextTrack metadata is prewarmed without loading standby deck
+    Object.defineProperty(activeDeck, 'currentTime', { value: 6, configurable: true })
+    fireEvent.timeUpdate(activeDeck)
+    expect(prewarmSpy).toHaveBeenCalledWith(t2)
+    expect(standbyDeck.getAttribute('src')).toBeFalsy()
   })
 
   it('NowPlayingView preserves Watch video &start= timestamp without reloading on tick and renders Jam reactions', () => {

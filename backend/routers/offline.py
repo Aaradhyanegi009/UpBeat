@@ -319,7 +319,7 @@ def stream_audio_endpoint(video_id: str, request: Request, title: str = "", arti
 
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
-        if (expected_duration > 60 and file_size < 800000) or file_size < 50000:
+        if (expected_duration > 60 and file_size < 800000) or file_size < 50000 or file_size == _STREAM_CHUNK_BYTES:
             try:
                 os.remove(local_path)
             except OSError:
@@ -525,7 +525,7 @@ def download_audio_endpoint(
 
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
-        if file_size < 50000:
+        if file_size < 50000 or file_size == _STREAM_CHUNK_BYTES:
             try:
                 os.remove(local_path)
             except OSError:

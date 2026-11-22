@@ -208,7 +208,7 @@ async function createWindow() {
       preferredPort: DEFAULT_PORT,
       staticDir,
       userDataDir,
-      version: app.getVersion() || '7.7.1'
+      version: app.getVersion() || '7.7.2'
     })
     internalServer = srv.server
     serverUrl = srv.url

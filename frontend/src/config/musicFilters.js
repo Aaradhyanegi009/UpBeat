@@ -2,7 +2,7 @@
 // Do not edit directly; modify shared/music_filters.json and re-run sync:shared.
 
 export const FILTER_RULES = {
-  "app_version": "7.7.1",
+  "app_version": "7.7.2",
   "min_duration_sec": 75,
   "max_duration_sec": 600,
   "video_id_pattern": "^[a-zA-Z0-9_-]{11}$",

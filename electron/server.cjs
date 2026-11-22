@@ -504,7 +504,7 @@ function startServer(options = {}) {
   const staticDir = path.resolve(options.staticDir || path.join(__dirname, '../frontend/dist'))
   const staticPrefix = staticDir.endsWith(path.sep) ? staticDir : `${staticDir}${path.sep}`
   const userDataDir = options.userDataDir || path.join(__dirname, 'userData')
-  const version = options.version || '7.7.1'
+  const version = options.version || '7.7.2'
 
   if (!fs.existsSync(userDataDir)) {
     try { fs.mkdirSync(userDataDir, { recursive: true }) } catch {}

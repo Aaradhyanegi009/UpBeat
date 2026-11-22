@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { CapacitorUpdater } from '@capgo/capacitor-updater'
 
 const GITHUB_REPO = 'AaradhyaNegi009/UpBeat'
-const CURRENT_BUILTIN_VERSION = 'v7.7.1'
+const CURRENT_BUILTIN_VERSION = 'v7.7.2'
 const SHA256_HEX_REGEX = /^[a-f0-9]{64}$/i
 const OTA_FETCH_TIMEOUT_MS = 8000
 

@@ -46,11 +46,6 @@ def _get_ydl() -> yt_dlp.YoutubeDL:
                 "cachedir": False,
                 "socket_timeout": 15,
                 "retries": 3,
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["android", "ios", "web"],
-                    }
-                },
             }
         )
         _YDL_LOCAL.ydl = ydl
@@ -336,27 +331,8 @@ def get_audio_stream_url(
     if cached:
         return cached
 
-    # Fast Innertube audio resolution (0.35s) FIRST on both local Mac and Vercel
-    try:
-        fast_info = _fast_innertube_audio(video_id)
-        if fast_info and fast_info.get("url"):
-            if os.environ.get("VERCEL"):
-                probe = _SESSION.get(
-                    fast_info["url"],
-                    headers={"User-Agent": fast_info.get("ua", "Mozilla/5.0"), "Range": "bytes=0-1"},
-                    stream=True,
-                    timeout=3.0,
-                )
-                probe.close()
-                if probe.status_code in (200, 206):
-                    _stream_cache_set(video_id, fast_info)
-                    return fast_info
-            else:
-                _stream_cache_set(video_id, fast_info)
-                return fast_info
-    except Exception as e:
-        print(f"Innertube audio error for {video_id}: {e}")
-
+    # 1. Local Mac backend: use yt-dlp first (extracts deciphered itag 140 .m4a audio/mp4 that streams
+    # 100% of the track without YouTube range-throttling or 2s/10s mid-stream cutoffs)
     if not os.environ.get("VERCEL"):
         try:
             ydl = _get_ydl()
@@ -376,11 +352,8 @@ def get_audio_stream_url(
             if stream_url:
                 ext = info.get("ext", "m4a")
                 mime = "audio/mp4" if ext == "m4a" else f"audio/{ext}"
-                clen = int(info.get("filesize") or info.get("filesize_approx") or 0)
-                if not clen:
-                    qs = urllib.parse.parse_qs(urllib.parse.urlparse(stream_url).query)
-                    if "clen" in qs:
-                        clen = int(qs["clen"][0])
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(stream_url).query)
+                clen = int(qs["clen"][0]) if ("clen" in qs and str(qs["clen"][0]).isdigit()) else int(info.get("filesize") or 0)
                 ua = (info.get("http_headers") or {}).get(
                     "User-Agent",
                     (
@@ -402,6 +375,27 @@ def get_audio_stream_url(
                 return entry
         except Exception as e:
             print(f"yt-dlp stream extraction error for {video_id}: {e}")
+
+    # 2. Fast Innertube audio resolution (primary on Vercel, fallback on local Mac)
+    try:
+        fast_info = _fast_innertube_audio(video_id)
+        if fast_info and fast_info.get("url"):
+            if os.environ.get("VERCEL"):
+                probe = _SESSION.get(
+                    fast_info["url"],
+                    headers={"User-Agent": fast_info.get("ua", "Mozilla/5.0"), "Range": "bytes=0-1"},
+                    stream=True,
+                    timeout=3.0,
+                )
+                probe.close()
+                if probe.status_code in (200, 206):
+                    _stream_cache_set(video_id, fast_info)
+                    return fast_info
+            else:
+                _stream_cache_set(video_id, fast_info)
+                return fast_info
+    except Exception as e:
+        print(f"Innertube audio error for {video_id}: {e}")
 
     try:
         cloud_info = _resolve_cloud_fallback_audio(
