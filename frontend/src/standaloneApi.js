@@ -52,6 +52,7 @@ export {
   prewarmTrack,
   getAudioSource,
   getCachedAudioSource,
+  invalidateCachedAudioSource,
   getTrackDownloadUrl,
   formatDurationSeconds
 } from './services/audioResolver.js'

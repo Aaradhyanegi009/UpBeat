@@ -422,7 +422,10 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
       const raw = await loader()
       if (token !== collectionTokenRef.current) return
       const tracks = (raw || []).filter(isValidMusicTrack)
-      const full = { ...base, tracks }
+      const leadCover = tracks[0]?.video_id
+        ? `https://i.ytimg.com/vi/${tracks[0].video_id}/maxresdefault.jpg`
+        : (tracks[0]?.thumbnail || base.cover || '')
+      const full = { ...base, tracks, cover: leadCover || base.cover || '' }
       setPlaylist(full)
       if (tracks.length) recordRecent(full)
     } catch {

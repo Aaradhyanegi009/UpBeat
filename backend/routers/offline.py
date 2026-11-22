@@ -442,7 +442,7 @@ def stream_audio_endpoint(video_id: str, request: Request, title: str = "", arti
         target_end = end
         active_url = stream_url
         active_ua = ua
-        retried_initial_expiry = False
+        stream_refresh_attempts = 0
         while target_end is None or pos <= target_end:
             chunk_end = (
                 min(pos + _STREAM_CHUNK_BYTES - 1, target_end)
@@ -458,8 +458,8 @@ def stream_audio_endpoint(video_id: str, request: Request, title: str = "", arti
             try:
                 if r.status_code in (403, 410):
                     invalidate_fn(video_id)
-                    if pos == start and not retried_initial_expiry:
-                        retried_initial_expiry = True
+                    if stream_refresh_attempts < 2:
+                        stream_refresh_attempts += 1
                         fresh = stream_lookup(video_id, title=title, artist=artist, expected_duration=expected_duration)
                         if fresh and fresh.get("url"):
                             active_url = fresh["url"]
@@ -474,6 +474,14 @@ def stream_audio_endpoint(video_id: str, request: Request, title: str = "", arti
                         received += len(piece)
                         yield piece
                 if received == 0:
+                    if target_end is not None and pos <= target_end and stream_refresh_attempts < 2:
+                        stream_refresh_attempts += 1
+                        invalidate_fn(video_id)
+                        fresh = stream_lookup(video_id, title=title, artist=artist, expected_duration=expected_duration)
+                        if fresh and fresh.get("url"):
+                            active_url = fresh["url"]
+                            active_ua = fresh.get("ua", active_ua)
+                            continue
                     break
                 pos += received
                 if target_end is None and received < _STREAM_CHUNK_BYTES:

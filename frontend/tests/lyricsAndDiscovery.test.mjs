@@ -275,10 +275,11 @@ test('fetchListenTogetherFeed respects onboarding genres/artists dynamically', a
     const tier2 = feed.filter((b) => b.tier === 2)
     assert.equal(tier2.length, 7)
     const blob = tier2.map((b) => `${b.title} ${b.query}`).join(' | ')
-    assert.equal(/j-?pop|anime|hindi|bollywood/i.test(blob), false)
+    assert.equal(/j-?pop|anime|yoasobi|hindi|bollywood|arijit/i.test(blob), false)
     assert.match(blob, /Hip-Hop/i)
     assert.match(blob, /R&B/i)
     assert.match(blob, /Kendrick Lamar/i)
+    assert.match(blob, /GTA VI/i)
   } finally {
     globalThis.fetch = prevFetch
     resetStorage()

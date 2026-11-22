@@ -9,6 +9,16 @@ const MAX_STREAM_CACHE = 200
 // In-memory cache in Edge worker (0ms hit for subsequent byte ranges and prewarmed songs)
 const streamCache = new Map() // videoId -> { streamUrl, userAgent, mimeType, contentLength, approxDurationMs, expiresAt, ts }
 
+const ANDROID_PLAYER_CLIENT = {
+  clientName: 'ANDROID',
+  clientVersion: '20.10.38',
+  osName: 'Android',
+  osVersion: '14',
+  androidSdkVersion: 34,
+  hl: 'en',
+  gl: 'US',
+}
+
 const ANDROID_VR_CLIENT = {
   clientName: 'ANDROID_VR',
   clientVersion: '1.60.19',
@@ -21,11 +31,11 @@ const ANDROID_VR_CLIENT = {
 
 const IOS_PLAYER_CLIENT = {
   clientName: 'IOS',
-  clientVersion: '19.45.4',
+  clientVersion: '20.10.4',
   deviceMake: 'Apple',
   deviceModel: 'iPhone16,2',
   osName: 'iPhone',
-  osVersion: '18.1.1',
+  osVersion: '18.3.2.22D82',
   hl: 'en',
   gl: 'US',
 }
@@ -75,13 +85,13 @@ function pickBestAudioFormat(adaptiveFormats = [], progressiveFormats = []) {
     .sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0))
 
   return (
+    progressive.find((f) => f.itag === 18) ||
+    progressive[0] ||
     nonHeM4a.find((f) => f.itag === 140) ||
     nonHeM4a.find((f) => (f.mimeType || '').includes('mp4a.40.2')) ||
     nonHeM4a[0] ||
     adaptive.find((f) => f.itag === 251) ||
-    progressive.find((f) => f.itag === 18) ||
     adaptive.find((f) => f.itag !== 139 && f.itag !== 599 && !(f.mimeType || '').includes('mp4a.40.5')) ||
-    progressive[0] ||
     adaptive[0] ||
     null
   )
@@ -108,15 +118,19 @@ async function resolveStreamUrl(videoId) {
     streamCache.delete(videoId)
   }
 
-  // Fast unthrottled clients: try ANDROID_VR first, then IOS fallback
+  // Fast unthrottled clients: try ANDROID (itag 18 full-range) first, then IOS & ANDROID_VR fallbacks
   const clients = [
     {
-      client: ANDROID_VR_CLIENT,
-      userAgent: 'Mozilla/5.0 (Linux; Android 14; Quest 3 Build/UQ1A.240205.004) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.35.48.568434778 SamsungBrowser/4.0 Chrome/122.0.6261.119 Mobile VR Safari/537.36',
+      client: ANDROID_PLAYER_CLIENT,
+      userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 14; en_US; Pixel 8 Build/UQ1A.240205.004) gzip',
     },
     {
       client: IOS_PLAYER_CLIENT,
-      userAgent: 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_1 like Mac OS X; US)',
+      userAgent: 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X; US)',
+    },
+    {
+      client: ANDROID_VR_CLIENT,
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Quest 3 Build/UQ1A.240205.004) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.35.48.568434778 SamsungBrowser/4.0 Chrome/122.0.6261.119 Mobile VR Safari/537.36',
     },
   ]
 
@@ -149,10 +163,11 @@ async function resolveStreamUrl(videoId) {
       if (chosen?.url) {
         const nowMs = Date.now()
         const expiresAt = computeStreamExpiresAt(chosen.url, nowMs)
+        const rawMime = chosen.mimeType ? chosen.mimeType.split(';')[0] : 'audio/mp4'
         const entry = {
           streamUrl: chosen.url,
           userAgent,
-          mimeType: chosen.mimeType ? chosen.mimeType.split(';')[0] : 'audio/mp4',
+          mimeType: rawMime.includes('mp4') ? 'audio/mp4' : rawMime,
           contentLength: chosen.contentLength || null,
           approxDurationMs: chosen.approxDurationMs || (data?.videoDetails?.lengthSeconds ? Number(data.videoDetails.lengthSeconds) * 1000 : 0),
           expiresAt,

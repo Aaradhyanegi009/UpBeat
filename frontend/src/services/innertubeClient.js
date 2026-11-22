@@ -626,25 +626,53 @@ export async function directSearchStandalone(query, mode = 'auto') {
   let ytmSongs = parseYtmSongs(ytmSongsRaw)
   let ytmPlaylists = parseYtmPlaylists(ytmAllRaw)
 
-  // Query Simplification Fallback: if over-constrained query yielded 0 tracks, retry with core keywords
-  if (youtubeResults.length === 0 && ytmSongs.length === 0) {
-    const strippedQuery = qClean
-      .replace(/\b(radio playlist|top charting rotation|latest hits|trending viral|essential mix|rotation|fresh picks 2026)\b/gi, '')
+  let validYtm = ytmSongs.filter(isValidMusicTrack)
+  let validYt = youtubeResults.filter(isValidMusicTrack)
+
+  // Query Simplification Fallback: if over-constrained / negative-operator query yielded < 5 valid music tracks,
+  // strip modifiers/negatives and query core artist/topic slices so multi-artist discovery mixes never collapse to 1 song.
+  if (validYtm.length + validYt.length < 5) {
+    const stripped = qClean
+      .replace(/(?:^|\s)-\S+/g, ' ')
+      .replace(/\b(official|songs?|radio|playlists?|mix|deep|cuts|rare|tracks|essentials?|anthems|vibes|hits|top|charting|rotation|latest|trending|viral|fresh|picks|2024|2025|2026|shorts|podcast|comedy|bhajan|aarti|devotional)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
       .trim()
-    const fallbackTokens = queryTokens(strippedQuery)
-    if (fallbackTokens.length > 0) {
-      const simplifiedQuery = fallbackTokens.slice(0, 3).join(' ')
-      if (simplifiedQuery && simplifiedQuery !== qClean.toLowerCase()) {
-        try {
-          const [ytFallback, ytmFallbackRaw] = await Promise.all([
-            ytWebSearch(simplifiedQuery, 2),
-            ytmSearchRaw(simplifiedQuery, true)
-          ])
-          if (ytFallback.videos?.length) youtubeResults = ytFallback.videos.slice(0, 40)
-          const parsedSongs = parseYtmSongs(ytmFallbackRaw)
-          if (parsedSongs.length) ytmSongs = parsedSongs
-        } catch {}
-      }
+    const coreWords = stripped.split(/\s+/).filter((w) => w.length >= 2)
+    const fallbackQueries = []
+    if (coreWords.length > 0) {
+      const q1 = coreWords.slice(0, 3).join(' ')
+      if (q1 && q1.toLowerCase() !== qClean.toLowerCase()) fallbackQueries.push(q1)
+    }
+    if (coreWords.length >= 4) {
+      const q2 = coreWords.slice(3, 6).join(' ')
+      if (q2 && q2.toLowerCase() !== qClean.toLowerCase()) fallbackQueries.push(q2)
+    }
+    if (!fallbackQueries.length && coreWords.length >= 2) {
+      fallbackQueries.push(coreWords.slice(0, 2).join(' '))
+    }
+
+    if (fallbackQueries.length > 0) {
+      try {
+        const subRuns = await Promise.all(
+          fallbackQueries.map((fq) =>
+            Promise.all([
+              ytWebSearch(fq, 1).catch(() => ({ videos: [], playlists: [] })),
+              ytmSearchRaw(fq, true).catch(() => null)
+            ])
+          )
+        )
+        for (const [ytFb, ytmFbRaw] of subRuns) {
+          if (ytFb?.videos?.length) {
+            youtubeResults = [...youtubeResults, ...ytFb.videos.slice(0, 25)]
+          }
+          const parsedFb = parseYtmSongs(ytmFbRaw)
+          if (parsedFb.length) {
+            ytmSongs = [...ytmSongs, ...parsedFb]
+          }
+        }
+        validYtm = ytmSongs.filter(isValidMusicTrack)
+        validYt = youtubeResults.filter(isValidMusicTrack)
+      } catch {}
     }
   }
 
@@ -665,9 +693,6 @@ export async function directSearchStandalone(query, mode = 'auto') {
   const hasExplicitPlaylistWords = EXPLICIT_PLAYLIST_INTENT_REGEX.test(qClean)
   const isPlaylistIntent = mode === 'playlists' || (mode === 'auto' && hasExplicitPlaylistWords)
 
-  const validYtm = ytmSongs.filter(isValidMusicTrack)
-  const validYt = youtubeResults.filter(isValidMusicTrack)
-
   // Build artist consensus across YouTube Music & YouTube Web top results
   const ytmTopArtists = new Set(validYtm.slice(0, 3).map((t) => canonicalArtistName(t.artist)).filter(Boolean))
   const ytTopArtists = new Set(validYt.slice(0, 3).map((t) => canonicalArtistName(t.artist)).filter(Boolean))
@@ -682,7 +707,7 @@ export async function directSearchStandalone(query, mode = 'auto') {
   const rankedSongs = deduplicateSearchSongs([...validYtm, ...validYt], qClean, consensusArtists)
 
   let finalSongs = rankedSongs
-  if (!isPlaylistIntent && !hasExplicitPlaylistWords && rankedSongs.length > 0 && rankedSongs[0].video_id) {
+  if (!isPlaylistIntent && rankedSongs.length > 0 && rankedSongs[0].video_id) {
     const topSong = rankedSongs[0]
     const topArtistRaw = String(topSong.artist || '').split(/,|&|\bfeat\.?|\bft\.?/i)[0].trim()
     const topArtistNorm = canonicalArtistName(topArtistRaw)
@@ -700,6 +725,20 @@ export async function directSearchStandalone(query, mode = 'auto') {
     ])
 
     finalSongs = buildCuratedSongResults(rankedSongs, sameArtistTracks, watchRadioTracks, qClean, 25)
+  }
+
+  if (!isPlaylistIntent && finalSongs.length < 10 && matchedPlaylists.length > 0) {
+    try {
+      const plTracks = await browsePlaylistStandalone(matchedPlaylists[0].browse_id, matchedPlaylists[0].title, matchedPlaylists[0].subtitle, 20)
+      const seenVids = new Set(finalSongs.map((t) => t.video_id).filter(Boolean))
+      for (const pt of plTracks) {
+        if (finalSongs.length >= 25) break
+        if (pt?.video_id && !seenVids.has(pt.video_id) && isValidMusicTrack(pt)) {
+          seenVids.add(pt.video_id)
+          finalSongs.push(pt)
+        }
+      }
+    } catch {}
   }
 
   // Default to curated, deduplicated song results (top match #1 + artist/vibe tracks)

@@ -79,9 +79,21 @@ export default function HomeView({
         .catch(() => {})
     }
     window.addEventListener('upbeat-onboarding-finished', onOnboardingFinished)
+    const onBlockHydrated = (ev) => {
+      const updated = ev?.detail
+      if (!alive || !updated?.id) return
+      delete pinnedCoversRef.current[updated.id]
+      setBlocks((prev) =>
+        Array.isArray(prev)
+          ? prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
+          : prev
+      )
+    }
+    window.addEventListener('upbeat-discovery-block-hydrated', onBlockHydrated)
     return () => {
       alive = false
       window.removeEventListener('upbeat-onboarding-finished', onOnboardingFinished)
+      window.removeEventListener('upbeat-discovery-block-hydrated', onBlockHydrated)
     }
   }, [])
 
@@ -205,15 +217,17 @@ export default function HomeView({
   const listening = friends.filter((f) => f.online && f.currentTrack)
   const onlineCount = friends.filter((f) => f.online).length
 
-  // Resolve and permanently pin high-res cover thumbnails to prevent 15-second flicker
+  // Resolve high-res cover thumbnails, keyed by hydrated track/thumbnail signature so live updates apply immediately
   const blockThumbMap = useMemo(() => {
     const used = new Set()
     const out = {}
     const all = [featured, ...moreForYou, ...charts].filter(Boolean)
     all.forEach((b, idx) => {
-      if (pinnedCoversRef.current[b.id]) {
-        out[b.id] = pinnedCoversRef.current[b.id]
-        used.add(pinnedCoversRef.current[b.id])
+      const pinKey = `${b.id}::${b.thumbnail || ''}::${b.preloadedTracks?.[0]?.video_id || ''}`
+      const pinned = pinnedCoversRef.current[b.id]
+      if (pinned && pinned.key === pinKey && pinned.url && !used.has(pinned.url)) {
+        out[b.id] = pinned.url
+        used.add(pinned.url)
         return
       }
 
@@ -222,26 +236,19 @@ export default function HomeView({
         const hi = artUrl(u, true)
         if (hi && !pool.includes(hi)) pool.push(hi)
       }
-      for (const u of b.thumbnailPool || []) addUrl(u)
-      for (const t of b.preloadedTracks || []) addUrl(t)
       if (b.thumbnail) addUrl(b.thumbnail)
+      for (const t of b.preloadedTracks || []) addUrl(t)
+      for (const u of b.thumbnailPool || []) addUrl(u)
 
       let chosen = ''
       if (pool.length > 0) {
-        for (let i = 0; i < pool.length; i++) {
-          const cand = pool[(idx + i) % pool.length]
-          if (!used.has(cand)) {
-            chosen = cand
-            break
-          }
-        }
-        if (!chosen) chosen = pool[0]
+        chosen = pool.find((cand) => !used.has(cand)) || pool[idx % pool.length] || pool[0]
       } else {
         chosen = artUrl({ thumbnail: b.thumbnail }, true)
       }
       if (chosen) {
         used.add(chosen)
-        pinnedCoversRef.current[b.id] = chosen
+        pinnedCoversRef.current[b.id] = { key: pinKey, url: chosen }
       }
       out[b.id] = chosen
     })

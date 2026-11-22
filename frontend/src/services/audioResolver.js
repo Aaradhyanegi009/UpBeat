@@ -61,6 +61,13 @@ export function getCachedAudioSource(videoId) {
   return cached
 }
 
+/** Clears cached stream URL & prewarm state for a videoId (e.g. after 403/premature EOF). */
+export function invalidateCachedAudioSource(videoId) {
+  if (!videoId || typeof videoId !== 'string') return
+  streamCache.delete(videoId)
+  prewarmedSet.delete(videoId)
+}
+
 /** Returns { url, duration, video_id } for a video id (works in the APK without the Mac). */
 export async function resolveStandaloneAudio(videoId, track = null) {
   if (!videoId) return null
@@ -99,9 +106,10 @@ export async function resolveStandaloneAudio(videoId, track = null) {
           return (b.bitrate || 0) - (a.bitrate || 0)
         })
 
-      // ANDROID adaptiveFormats require a poToken (403 without one), whereas ANDROID progressive (itag 18)
-      // and IOS adaptiveFormats work directly without poToken.
-      const chosen = client.clientName === 'ANDROID' ? (progressive[0] || adaptive[0]) : (adaptive[0] || progressive[0])
+      // ANDROID adaptiveFormats require a poToken (403 past ~10s without one), whereas ANDROID progressive (itag 18)
+      // streams the full track reliably without poToken.
+      const prog18 = progressive.find((f) => f.itag === 18) || progressive[0]
+      const chosen = prog18 || adaptive[0]
       if (!chosen?.url) continue
 
       const duration =
@@ -124,7 +132,7 @@ export async function resolveStandaloneAudio(videoId, track = null) {
       const candidateSongs = parseYtmSongs(searchRes)
       for (const cand of candidateSongs) {
         if (!cand?.video_id || cand.video_id === videoId) continue
-        for (const client of [IOS_PLAYER_CLIENT, ANDROID_PLAYER_CLIENT]) {
+        for (const client of [ANDROID_PLAYER_CLIENT, IOS_PLAYER_CLIENT]) {
           try {
             const resp = await callInnertube('player', {
               context: { client },
@@ -146,7 +154,7 @@ export async function resolveStandaloneAudio(videoId, track = null) {
                 return (b.bitrate || 0) - (a.bitrate || 0)
               })
 
-            const chosen = client.clientName === 'ANDROID' ? (progressive[0] || adaptive[0]) : (adaptive[0] || progressive[0])
+            const chosen = (progressive.find((f) => f.itag === 18) || progressive[0]) || adaptive[0]
             if (!chosen?.url) continue
 
             const duration =

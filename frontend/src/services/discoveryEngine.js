@@ -27,7 +27,7 @@ export function fisherYatesShuffle(array) {
 // UpBeat v5.5 Dynamic "Listen Together" / Home Discovery Engine (8–9 Live Blocks)
 // ---------------------------------------------------------------------------
 const ROTATION_CURSOR_KEY = 'upbeat_made_for_you_rotation_idx'
-const DISCOVERY_FEED_CACHE_KEY = 'upbeat_discovery_blocks_v632'
+const DISCOVERY_FEED_CACHE_KEY = 'upbeat_discovery_blocks_v771'
 const DISCOVERY_FEED_CACHE_TTL = 3 * 60 * 1000 // 3-minute stale-while-revalidate TTL
 let _discoveryFeedMemoryCache = null
 
@@ -83,18 +83,53 @@ const MOOD_VIBE_PRESETS = [
   { name: 'Moody Lo-Fi & Downtempo', desc: 'Relaxed chillhop textures and steady groove', query: 'lofi downtempo chill atmospheric study beats', color: 'from-indigo-600/40 to-black' }
 ]
 
-// UpBeat v7.5.1 Curated Starter Rotations (7 Structured Mood/Language & Library Mixes, zero gym/lofi/comedy)
+const GTA6_AND_LATEST_SEED_QUERIES = [
+  'GTAVI Original Score Flower In A Hurricane',
+  'Tom Petty Love Is A Long Road The Pointer Sisters Hot Together',
+  'Lady Gaga Bruno Mars Die With A Smile ROSÉ APT',
+  'The Weeknd Hurry Up Tomorrow Bad Bunny DtMF latest songs 2026'
+]
+
+const GTA6_AND_LATEST_THUMBS = [
+  'https://i.ytimg.com/vi/JWxoRY7AFSw/maxresdefault.jpg',
+  'https://i.ytimg.com/vi/H3Aay-47ZT0/maxresdefault.jpg',
+  'https://i.ytimg.com/vi/xAgUYyosqVM/maxresdefault.jpg',
+  'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg',
+  'https://i.ytimg.com/vi/p8_ugAjWI5I/maxresdefault.jpg',
+  'https://i.ytimg.com/vi/0lI_KzhfIBk/maxresdefault.jpg'
+]
+
+// UpBeat v7.7.1 Curated Starter Rotations (7 Structured Mood/Language, GTA VI & Latest Release Mixes)
 const STARTER_ROTATION_CYCLES = [
   [
+    {
+      id: 'block_gta6_latest_anthems',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'GTA VI & Latest Viral Anthems',
+      subtitle: 'GTA 6 soundtrack, Vice City classics & newly launched 2026 drops',
+      badge: 'NEW & GTA VI',
+      query: 'Tom Petty Love Is A Long Road GTAVI Original Score',
+      seedQueries: GTA6_AND_LATEST_SEED_QUERIES,
+      thumbnail: 'https://i.ytimg.com/vi/JWxoRY7AFSw/maxresdefault.jpg',
+      thumbnailPool: GTA6_AND_LATEST_THUMBS,
+      color: 'from-rose-600/40 to-black'
+    },
     {
       id: 'block_chill_late_night',
       tier: 2,
       isNewUserSeed: true,
       title: 'Chill & Late Night Vibes',
-      subtitle: 'Atmospheric, melodic & lo-fi chill tailored for you',
+      subtitle: 'Atmospheric, melodic & nocturnal chill tailored for you',
       badge: 'CHILL MIX',
-      query: 'Joji The Weeknd Keshi Cigarettes After Sex Billie Eilish chill late night vibes songs playlist -comedy -podcast',
-      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+      query: 'Joji Keshi Cigarettes After Sex late night vibes',
+      seedQueries: ['The Weeknd Hurry Up Tomorrow', 'Billie Eilish Birds of a Feather', 'Lana Del Rey Keshi chill songs'],
+      thumbnail: 'https://i.ytimg.com/vi/GT8ornYrDEs/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/GT8ornYrDEs/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/V9PVRfjEBTI/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg'
+      ],
       color: 'from-teal-600/40 to-black'
     },
     {
@@ -102,33 +137,34 @@ const STARTER_ROTATION_CYCLES = [
       tier: 2,
       isNewUserSeed: true,
       title: 'J-Pop & Anime Essentials',
-      subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
+      subtitle: 'Latest J-Pop drops, Tokyo hits & iconic anime OPs',
       badge: 'J-POP & ANIME',
-      query: 'YOASOBI Kenshi Yonezu Ado Eve King Gnu LiSA Fujii Kaze official anime jpop songs playlist -shorts',
-      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
-      color: 'from-rose-600/40 to-black'
+      query: 'Kenshi Yonezu Plazma YOASOBI latest songs',
+      seedQueries: ['Ado Eve King Gnu official songs', 'RADWIMPS LiSA anime official songs', 'Fujii Kaze Kenshi Yonezu latest'],
+      thumbnail: 'https://i.ytimg.com/vi/02Ap3uMNiw8/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/02Ap3uMNiw8/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/tpnu2s-Agjg/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg'
+      ],
+      color: 'from-fuchsia-600/40 to-black'
     },
     {
       id: 'block_hindi_indie_bollywood',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Hindi Indie & Bollywood Vibe',
-      subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
+      title: 'Hindi Latest & Indie Vibe',
+      subtitle: 'Newly launched Bollywood releases, Arijit & Hindi indie',
       badge: 'HINDI MIX',
-      query: 'Arijit Singh Prateek Kuhad Anuv Jain The Local Train Mitraz Aditya Rikhari soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy',
-      thumbnail: 'https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg',
+      query: 'Arijit Singh latest songs 2026',
+      seedQueries: ['Anuv Jain Prateek Kuhad hindi indie', 'Sai Abhyankkar Shashwat Sachdev new songs', 'Sachin-Jigar Pritam latest bollywood songs'],
+      thumbnail: 'https://i.ytimg.com/vi/i1o1p_DD6TU/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/i1o1p_DD6TU/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/uT_HXrrmHX8/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/tOaizzQG8Cw/maxresdefault.jpg'
+      ],
       color: 'from-amber-600/40 to-black'
-    },
-    {
-      id: 'block_english_pop_alt',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'English Pop & Alt Anthems',
-      subtitle: 'Chart-topping Western pop, alt-rock & synth',
-      badge: 'ENGLISH MIX',
-      query: 'Post Malone The Weeknd Maroon 5 Coldplay Imagine Dragons Dua Lipa Arctic Monkeys top western pop rock songs playlist -podcast',
-      thumbnail: 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
-      color: 'from-purple-600/40 to-black'
     },
     {
       id: 'block_rediscover_favorites',
@@ -137,44 +173,79 @@ const STARTER_ROTATION_CYCLES = [
       title: 'Rediscover Favorites Mix',
       subtitle: 'Shuffled liked songs + closely related tracks',
       badge: 'REDISCOVER',
-      query: 'Coldplay Imagine Dragons The Weeknd Post Malone official songs radio playlist',
-      thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
+      query: 'Coldplay Post Malone The Weeknd official songs',
+      seedQueries: ['Billie Eilish Dua Lipa Bruno Mars hits', 'Lady Gaga Bruno Mars Die With A Smile'],
+      thumbnail: 'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg'
+      ],
       color: 'from-pink-600/40 to-black',
       isHybridRediscover: true
     },
     {
-      id: 'block_on_repeat_vibes',
+      id: 'block_english_pop_alt',
       tier: 2,
       isNewUserSeed: true,
-      title: 'On Repeat & Similar Vibes',
-      subtitle: "Inspired by what you've been playing lately",
-      badge: 'HEAVY ROTATION',
-      query: 'Dua Lipa Harry Styles The Weeknd Post Malone heavy rotation pop hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg',
-      color: 'from-indigo-600/40 to-black'
+      title: 'Global New Releases & Pop',
+      subtitle: 'Freshly launched 2025–2026 pop, synth & global chart toppers',
+      badge: 'LATEST DROPS',
+      query: 'Lady Gaga Bruno Mars Die With A Smile ROSÉ APT',
+      seedQueries: ['The Weeknd São Paulo Hurry Up Tomorrow', 'Kendrick Lamar SZA luther', 'Sabrina Carpenter Billie Eilish new songs'],
+      thumbnail: 'https://i.ytimg.com/vi/u1iBReO1T9k/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/u1iBReO1T9k/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/p8_ugAjWI5I/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/TiebZllW8As/maxresdefault.jpg'
+      ],
+      color: 'from-purple-600/40 to-black'
     },
     {
       id: 'block_sonic_dna_radar',
       tier: 2,
       isNewUserSeed: true,
       title: 'Sonic DNA Radar',
-      subtitle: 'Fresh discoveries matching your core artists',
+      subtitle: 'Fresh discoveries & new releases matching your taste',
       badge: 'TASTE RADAR',
-      query: 'Arctic Monkeys The Neighbourhood Kendrick Lamar deep cuts alternative songs playlist',
-      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
+      query: 'Arctic Monkeys Tame Impala Justice alt hits',
+      seedQueries: ['The Neighbourhood Gorillaz alt songs', 'Tame Impala Neverender Justice'],
+      thumbnail: 'https://i.ytimg.com/vi/fPKVETKHwGk/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/fPKVETKHwGk/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/Ucmo6hDZRSY/maxresdefault.jpg'
+      ],
       color: 'from-cyan-600/40 to-black'
     }
   ],
   [
     {
+      id: 'block_gta6_latest_anthems',
+      tier: 2,
+      isNewUserSeed: true,
+      title: 'GTA VI & Vice City Radio',
+      subtitle: 'GTA 6 trailer anthems, Vice City classics & fresh 2026 drops',
+      badge: 'NEW & GTA VI',
+      query: 'The Pointer Sisters Hot Together GTA 6 soundtrack',
+      seedQueries: GTA6_AND_LATEST_SEED_QUERIES,
+      thumbnail: 'https://i.ytimg.com/vi/H3Aay-47ZT0/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/H3Aay-47ZT0/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/0lI_KzhfIBk/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/xAgUYyosqVM/maxresdefault.jpg'
+      ],
+      color: 'from-rose-600/40 to-black'
+    },
+    {
       id: 'block_chill_late_night',
       tier: 2,
       isNewUserSeed: true,
       title: 'Chill & Late Night Vibes',
-      subtitle: 'Atmospheric, melodic & lo-fi chill tailored for you',
+      subtitle: 'Atmospheric, melodic & nocturnal chill tailored for you',
       badge: 'CHILL MIX',
-      query: 'Lana Del Rey Cigarettes After Sex Joji Keshi late night dream pop chill hits playlist',
+      query: 'Lana Del Rey Cigarettes After Sex late night chill',
+      seedQueries: ['Joji Keshi Frank Ocean chill songs', 'Billie Eilish Wildflower atmospheric'],
       thumbnail: 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg',
+      thumbnailPool: ['https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg', 'https://i.ytimg.com/vi/GT8ornYrDEs/maxresdefault.jpg'],
       color: 'from-teal-600/40 to-black'
     },
     {
@@ -182,33 +253,26 @@ const STARTER_ROTATION_CYCLES = [
       tier: 2,
       isNewUserSeed: true,
       title: 'J-Pop & Anime Essentials',
-      subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
+      subtitle: 'Latest J-Pop drops, Tokyo hits & iconic anime OPs',
       badge: 'J-POP & ANIME',
-      query: 'Fujii Kaze Radwimps YOASOBI Kenshi Yonezu anime soundtrack hits playlist',
-      thumbnail: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg',
-      color: 'from-rose-600/40 to-black'
+      query: 'Fujii Kaze RADWIMPS YOASOBI official songs',
+      seedQueries: ['Kenshi Yonezu BOW AND ARROW Plazma', 'LiSA Ado anime official songs'],
+      thumbnail: 'https://i.ytimg.com/vi/tpnu2s-Agjg/maxresdefault.jpg',
+      thumbnailPool: ['https://i.ytimg.com/vi/tpnu2s-Agjg/maxresdefault.jpg', 'https://i.ytimg.com/vi/02Ap3uMNiw8/maxresdefault.jpg'],
+      color: 'from-fuchsia-600/40 to-black'
     },
     {
       id: 'block_hindi_indie_bollywood',
       tier: 2,
       isNewUserSeed: true,
-      title: 'Hindi Indie & Bollywood Vibe',
-      subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
+      title: 'Hindi Latest & Indie Vibe',
+      subtitle: 'Newly launched Bollywood releases, Arijit & Hindi indie',
       badge: 'HINDI MIX',
-      query: 'Prateek Kuhad Jasleen Royal Anuv Jain The Local Train modern acoustic hindi indie playlist',
-      thumbnail: 'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg',
+      query: 'Shashwat Sachdev Arijit Singh latest songs 2026',
+      seedQueries: ['Prateek Kuhad Anuv Jain hindi indie', 'Jasleen Royal Mitraz official songs'],
+      thumbnail: 'https://i.ytimg.com/vi/uT_HXrrmHX8/maxresdefault.jpg',
+      thumbnailPool: ['https://i.ytimg.com/vi/uT_HXrrmHX8/maxresdefault.jpg', 'https://i.ytimg.com/vi/i1o1p_DD6TU/maxresdefault.jpg'],
       color: 'from-amber-600/40 to-black'
-    },
-    {
-      id: 'block_english_pop_alt',
-      tier: 2,
-      isNewUserSeed: true,
-      title: 'English Pop & Alt Anthems',
-      subtitle: 'Chart-topping Western pop, alt-rock & synth',
-      badge: 'ENGLISH MIX',
-      query: 'Dua Lipa Elton John Harry Styles Bruno Mars Anderson Paak western pop anthems playlist',
-      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
-      color: 'from-purple-600/40 to-black'
     },
     {
       id: 'block_rediscover_favorites',
@@ -217,31 +281,37 @@ const STARTER_ROTATION_CYCLES = [
       title: 'Rediscover Favorites Mix',
       subtitle: 'Shuffled liked songs + closely related tracks',
       badge: 'REDISCOVER',
-      query: 'Maroon 5 Charlie Puth Shawn Mendes Ed Sheeran essential pop radio playlist',
+      query: 'Maroon 5 Ed Sheeran Dua Lipa pop hits',
+      seedQueries: ['Lady Gaga Bruno Mars Die With A Smile', 'The Weeknd Starboy Blinding Lights'],
       thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
+      thumbnailPool: ['https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg', 'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg'],
       color: 'from-pink-600/40 to-black',
       isHybridRediscover: true
     },
     {
-      id: 'block_on_repeat_vibes',
+      id: 'block_english_pop_alt',
       tier: 2,
       isNewUserSeed: true,
-      title: 'On Repeat & Similar Vibes',
-      subtitle: "Inspired by what you've been playing lately",
-      badge: 'HEAVY ROTATION',
-      query: 'Post Malone Swae Lee Kendrick Lamar SZA melodic hip hop and pop playlist',
-      thumbnail: 'https://i.ytimg.com/vi/T6eK-2OQtew/maxresdefault.jpg',
-      color: 'from-indigo-600/40 to-black'
+      title: 'Global New Releases & Pop',
+      subtitle: 'Freshly launched 2025–2026 pop, synth & global chart toppers',
+      badge: 'LATEST DROPS',
+      query: 'Bad Bunny DtMF NUEVAYoL latest songs',
+      seedQueries: ['The Weeknd São Paulo Hurry Up Tomorrow', 'ROSÉ Bruno Mars APT number one girl'],
+      thumbnail: 'https://i.ytimg.com/vi/TiebZllW8As/maxresdefault.jpg',
+      thumbnailPool: ['https://i.ytimg.com/vi/TiebZllW8As/maxresdefault.jpg', 'https://i.ytimg.com/vi/WdSGEvDGZAo/maxresdefault.jpg'],
+      color: 'from-purple-600/40 to-black'
     },
     {
       id: 'block_sonic_dna_radar',
       tier: 2,
       isNewUserSeed: true,
       title: 'Sonic DNA Radar',
-      subtitle: 'Fresh discoveries matching your core artists',
+      subtitle: 'Fresh discoveries & new releases matching your taste',
       badge: 'TASTE RADAR',
-      query: 'Billie Eilish Finneas Taylor Swift Gracie Abrams acoustic storytelling hits',
-      thumbnail: 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
+      query: 'Laura Branigan Self Control Anita Ward Ring My Bell',
+      seedQueries: ['Billie Eilish Gracie Abrams new songs', 'Kendrick Lamar SZA luther'],
+      thumbnail: 'https://i.ytimg.com/vi/Ucmo6hDZRSY/maxresdefault.jpg',
+      thumbnailPool: ['https://i.ytimg.com/vi/Ucmo6hDZRSY/maxresdefault.jpg', 'https://i.ytimg.com/vi/fPKVETKHwGk/maxresdefault.jpg'],
       color: 'from-cyan-600/40 to-black'
     }
   ]
@@ -252,69 +322,76 @@ const GENRE_MIX_CATALOG = {
     id: 'block_mix_rock',
     label: 'Rock & Alt',
     title: 'Rock & Alt Anthems',
-    subtitle: 'Driving guitars, iconic riffs & alt-rock staples',
+    subtitle: 'Driving guitars, latest alt releases & iconic riffs',
     badge: 'ROCK MIX',
-    query: 'Arctic Monkeys Coldplay Linkin Park Queen Foo Fighters alt rock anthems songs playlist -podcast',
+    query: 'Arctic Monkeys Linkin Park latest rock songs',
+    seedQueries: ['Linkin Park The Emptiness Machine latest', 'Coldplay Moon Music Arctic Monkeys AM', 'Foo Fighters Queen Imagine Dragons rock'],
     color: 'from-red-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg', 'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/SRXH9AbT280/maxresdefault.jpg', 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg', 'https://i.ytimg.com/vi/VsxlqmSDmBU/maxresdefault.jpg']
   },
   indie: {
     id: 'block_mix_indie',
     label: 'Indie & Acoustic',
     title: 'Indie & Acoustic Drift',
-    subtitle: 'Dreamy indie textures, warm guitars & late-night hooks',
+    subtitle: 'Dreamy indie textures, new alt releases & warm hooks',
     badge: 'INDIE MIX',
-    query: 'Tame Impala The 1975 Cigarettes After Sex Lana Del Rey indie acoustic songs playlist -podcast',
+    query: 'Tame Impala Cigarettes After Sex indie songs',
+    seedQueries: ['The 1975 Lana Del Rey indie hits', 'Justice Tame Impala Neverender', 'Clairo Beabadoobee latest indie songs'],
     color: 'from-teal-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg', 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/fPKVETKHwGk/maxresdefault.jpg', 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg', 'https://i.ytimg.com/vi/V9PVRfjEBTI/maxresdefault.jpg']
   },
   electronic: {
     id: 'block_mix_electronic',
     label: 'Electronic & Dance',
     title: 'Electronic & Synth Pulse',
-    subtitle: 'Euphoric drops, analog synths & dancefloor energy',
+    subtitle: 'Fresh electronic drops, analog synths & club energy',
     badge: 'ELECTRONIC',
-    query: 'Daft Punk Fred again Calvin Harris Avicii Martin Garrix electronic dance songs playlist -podcast',
+    query: 'Fred again Calvin Harris electronic dance songs',
+    seedQueries: ['Justice Tame Impala Neverender', 'Daft Punk Disclosure synth songs', 'Martin Garrix Avicii latest electronic'],
     color: 'from-cyan-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg', 'https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg', 'https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg', 'https://i.ytimg.com/vi/fPKVETKHwGk/maxresdefault.jpg']
   },
   hiphop: {
     id: 'block_mix_hiphop',
     label: 'Hip-Hop & Rap',
     title: 'Hip-Hop & Rap Rotation',
-    subtitle: 'Hard-hitting beats, razor-sharp flows & modern classics',
+    subtitle: 'Latest 2025–2026 rap drops, hard beats & flows',
     badge: 'HIP-HOP MIX',
-    query: 'Kendrick Lamar Travis Scott J Cole Drake Tyler The Creator hip hop rap songs playlist -podcast',
+    query: 'Kendrick Lamar Playboi Carti latest hip hop songs',
+    seedQueries: ['Kendrick Lamar SZA luther GNX', 'Travis Scott Future Metro Boomin songs', 'Drake J Cole Tyler The Creator'],
     color: 'from-amber-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/UNZqm3dxd2w/maxresdefault.jpg', 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/sNY_2TEmzho/maxresdefault.jpg', 'https://i.ytimg.com/vi/UNZqm3dxd2w/maxresdefault.jpg', 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg']
   },
   pop: {
     id: 'block_mix_pop',
     label: 'Pop',
     title: 'Modern Pop & Chart Mix',
-    subtitle: 'Hooks, synth-pop polish & global chart favorites',
+    subtitle: 'Latest global pop drops, hooks & chart favorites',
     badge: 'POP MIX',
-    query: 'The Weeknd Dua Lipa Taylor Swift Billie Eilish Post Malone pop hits songs playlist -podcast',
+    query: 'Lady Gaga Bruno Mars The Weeknd latest pop songs',
+    seedQueries: ['The Weeknd Hurry Up Tomorrow São Paulo', 'Sabrina Carpenter Dua Lipa Taylor Swift', 'ROSÉ Bruno Mars APT Billie Eilish'],
     color: 'from-purple-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg', 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg', 'https://i.ytimg.com/vi/p8_ugAjWI5I/maxresdefault.jpg', 'https://i.ytimg.com/vi/eVli-tstM5E/maxresdefault.jpg']
   },
   rnb: {
     id: 'block_mix_rnb',
     label: 'R&B & Soul',
     title: 'R&B & Neo-Soul Grooves',
-    subtitle: 'Velvet vocals, lush chords & midnight R&B',
+    subtitle: 'Velvet vocals, new R&B releases & midnight grooves',
     badge: 'R&B SOUL',
-    query: 'SZA Frank Ocean Daniel Caesar Giveon Bruno Mars modern r&b soul songs playlist -podcast',
+    query: 'SZA Frank Ocean Bruno Mars r&b songs',
+    seedQueries: ['Daniel Caesar Giveon Summer Walker', 'The Weeknd SZA Die For You Snooze', 'Silk Sonic Anderson Paak Bruno Mars'],
     color: 'from-rose-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg', 'https://i.ytimg.com/vi/T6eK-2OQtew/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/adLGHcj_fmA/maxresdefault.jpg', 'https://i.ytimg.com/vi/T6eK-2OQtew/maxresdefault.jpg', 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg']
   },
   jazz: {
     id: 'block_mix_jazz',
     label: 'Jazz',
     title: 'Jazz & Nu-Jazz Sessions',
-    subtitle: 'Smoky brass, improvised grooves & timeless standards',
+    subtitle: 'Smoky brass, Laufey classics & modern jazz grooves',
     badge: 'JAZZ MIX',
-    query: 'Kamasi Washington Robert Glasper Miles Davis Laufey modern jazz fusion songs playlist -podcast',
+    query: 'Laufey Kamasi Washington modern jazz songs',
+    seedQueries: ['Robert Glasper Miles Davis jazz', 'Laufey From The Start Bewitched', 'Norah Jones Chet Baker jazz'],
     color: 'from-yellow-600/40 to-black',
     thumbs: ['https://i.ytimg.com/vi/H5v3kku4y6Q/maxresdefault.jpg', 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg']
   },
@@ -322,11 +399,12 @@ const GENRE_MIX_CATALOG = {
     id: 'block_mix_classical',
     label: 'Classical & Film Score',
     title: 'Orchestral & Score Epics',
-    subtitle: 'Sweeping strings, piano minimalism & film scores',
+    subtitle: 'Sweeping strings, piano minimalism & iconic scores',
     badge: 'CLASSICAL SCORE',
-    query: 'Hans Zimmer Ludovico Einaudi Max Richter Joe Hisaishi orchestral classical soundtrack songs playlist -podcast',
+    query: 'Hans Zimmer Ludovico Einaudi soundtrack themes',
+    seedQueries: ['Ludovico Einaudi Max Richter piano', 'Two Steps From Hell Thomas Bergersen epic score', 'Hans Zimmer Interstellar Inception theme'],
     color: 'from-sky-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg', 'https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/ahDLQbhgW5Y/maxresdefault.jpg', 'https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg']
   },
   metal: {
     id: 'block_mix_metal',
@@ -334,19 +412,21 @@ const GENRE_MIX_CATALOG = {
     title: 'Heavy Riffs & Metalcore',
     subtitle: 'Crushing guitars, double-kick precision & raw energy',
     badge: 'METAL MIX',
-    query: 'Metallica Bring Me The Horizon Slipknot Avenged Sevenfold metal rock songs playlist -podcast',
+    query: 'Metallica Bring Me The Horizon metal songs',
+    seedQueries: ['Slipknot Avenged Sevenfold metal', 'Spiritbox Sleep Token latest songs'],
     color: 'from-zinc-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg', 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg', 'https://i.ytimg.com/vi/SRXH9AbT280/maxresdefault.jpg']
   },
   country: {
     id: 'block_mix_country',
     label: 'Country & Folk',
     title: 'Country, Roots & Folk',
-    subtitle: 'Storytelling acoustics, heartland anthems & Americana',
+    subtitle: 'Storytelling acoustics, GTA VI & Americana anthems',
     badge: 'COUNTRY FOLK',
-    query: 'Zach Bryan Chris Stapleton Morgan Wallen Luke Combs country folk songs playlist -podcast',
+    query: 'Tom Petty Zach Bryan Morgan Wallen songs',
+    seedQueries: ['Chris Stapleton Luke Combs country', 'Tom Petty Love Is A Long Road classics'],
     color: 'from-orange-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg', 'https://i.ytimg.com/vi/JGwWNGJdvx8/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/xAgUYyosqVM/maxresdefault.jpg', 'https://i.ytimg.com/vi/PIuAFrLeXfY/maxresdefault.jpg']
   },
   chill: {
     id: 'block_chill_late_night',
@@ -354,27 +434,30 @@ const GENRE_MIX_CATALOG = {
     title: 'Chill & Late Night Vibes',
     subtitle: 'Atmospheric, melodic & nocturnal chill tailored for you',
     badge: 'CHILL MIX',
-    query: 'Joji The Weeknd Keshi Cigarettes After Sex Billie Eilish chill late night vibes songs playlist -comedy -podcast',
+    query: 'Joji Keshi Cigarettes After Sex chill songs',
+    seedQueries: ['Billie Eilish Lana Del Rey chill', 'The Weeknd Late Night R&B songs'],
     color: 'from-teal-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg', 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/GT8ornYrDEs/maxresdefault.jpg', 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg']
   },
   bollywood: {
     id: 'block_hindi_indie_bollywood',
     label: 'Hindi & Bollywood',
-    title: 'Hindi Indie & Bollywood Vibe',
-    subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
+    title: 'Hindi Latest & Indie Vibe',
+    subtitle: 'Newly launched Bollywood releases, Arijit & Hindi indie',
     badge: 'HINDI MIX',
-    query: 'Arijit Singh Prateek Kuhad Anuv Jain The Local Train Mitraz Aditya Rikhari soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy',
+    query: 'Arijit Singh latest songs 2026',
+    seedQueries: ['Prateek Kuhad Anuv Jain hindi indie', 'Shashwat Sachdev Sai Abhyankkar new songs', 'AR Rahman Pritam Bollywood songs'],
     color: 'from-amber-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg', 'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/i1o1p_DD6TU/maxresdefault.jpg', 'https://i.ytimg.com/vi/uT_HXrrmHX8/maxresdefault.jpg', 'https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg']
   },
   punjabi: {
     id: 'block_mix_punjabi',
     label: 'Punjabi & Desi',
     title: 'Punjabi & Desi Heat',
-    subtitle: 'Bhangra basslines, modern Punjabi pop & drive hits',
+    subtitle: 'New Punjabi drops, Karan Aujla & Diljit drive hits',
     badge: 'PUNJABI MIX',
-    query: 'Diljit Dosanjh Karan Aujla AP Dhillon Sidhu Moose Wala punjabi songs playlist -podcast',
+    query: 'Diljit Dosanjh Karan Aujla latest punjabi songs',
+    seedQueries: ['AP Dhillon Shubh punjabi hits', 'Sidhu Moose Wala latest hits'],
     color: 'from-emerald-600/40 to-black',
     thumbs: ['https://i.ytimg.com/vi/RLzC55ai0eo/maxresdefault.jpg', 'https://i.ytimg.com/vi/VuG7ge_8I2Y/maxresdefault.jpg']
   },
@@ -382,31 +465,34 @@ const GENRE_MIX_CATALOG = {
     id: 'block_jpop_anime',
     label: 'J-Pop & Anime',
     title: 'J-Pop & Anime Essentials',
-    subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
+    subtitle: 'Latest J-Pop releases, Tokyo hits & iconic anime OPs',
     badge: 'J-POP & ANIME',
-    query: 'YOASOBI Kenshi Yonezu Ado Eve King Gnu LiSA Fujii Kaze official anime jpop songs playlist -shorts',
+    query: 'Kenshi Yonezu Plazma YOASOBI latest songs',
+    seedQueries: ['Ado Eve King Gnu official songs', 'RADWIMPS LiSA Hiroyuki Sawano anime', 'Fujii Kaze YUI anime soundtrack'],
     color: 'from-rose-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg', 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/02Ap3uMNiw8/maxresdefault.jpg', 'https://i.ytimg.com/vi/tpnu2s-Agjg/maxresdefault.jpg', 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg']
   },
   kpop: {
     id: 'block_mix_kpop',
     label: 'K-Pop',
     title: 'K-Pop & Seoul Spotlight',
-    subtitle: 'Chart-topping K-Pop hooks, choreography & B-sides',
+    subtitle: 'Latest K-Pop releases, ROSÉ, NewJeans & BTS hits',
     badge: 'K-POP MIX',
-    query: 'NewJeans BTS BLACKPINK Stray Kids TWICE kpop hits songs playlist -podcast',
+    query: 'ROSÉ APT NewJeans aespa latest kpop songs',
+    seedQueries: ['BTS BLACKPINK Stray Kids TWICE songs', 'aespa LE SSERAFIM ILLIT latest'],
     color: 'from-fuchsia-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/js1CtxSY38I/maxresdefault.jpg', 'https://i.ytimg.com/vi/gdZLi9oWNZg/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/ekr2nIex040/maxresdefault.jpg', 'https://i.ytimg.com/vi/js1CtxSY38I/maxresdefault.jpg', 'https://i.ytimg.com/vi/gdZLi9oWNZg/maxresdefault.jpg']
   },
   latin: {
     id: 'block_mix_latin',
     label: 'Latin & Reggaeton',
     title: 'Latin & Reggaeton Fuego',
-    subtitle: 'Dembow rhythms, Latin pop & sun-soaked grooves',
+    subtitle: 'New Bad Bunny DtMF drops, Karol G & reggaeton rhythms',
     badge: 'LATIN MIX',
-    query: 'Bad Bunny Karol G Shakira J Balvin Peso Pluma latin reggaeton songs playlist -podcast',
+    query: 'Bad Bunny DtMF NUEVAYoL latest latin songs',
+    seedQueries: ['Karol G Feid Rauw Alejandro reggaeton', 'Shakira J Balvin Peso Pluma'],
     color: 'from-orange-600/40 to-black',
-    thumbs: ['https://i.ytimg.com/vi/kJQP7kiw5Fk/maxresdefault.jpg', 'https://i.ytimg.com/vi/CocEMWdc7Ck/maxresdefault.jpg']
+    thumbs: ['https://i.ytimg.com/vi/TiebZllW8As/maxresdefault.jpg', 'https://i.ytimg.com/vi/WdSGEvDGZAo/maxresdefault.jpg', 'https://i.ytimg.com/vi/kJQP7kiw5Fk/maxresdefault.jpg']
   }
 }
 
@@ -572,16 +658,26 @@ function buildDynamicTier2Blocks({
     'https://i.ytimg.com/vi/UNZqm3dxd2w/maxresdefault.jpg'
   ]
 
-  for (let i = 0; i < genreTokens.length && groupABlocks.length < 4; i++) {
+  for (let i = 0; i < genreTokens.length && groupABlocks.length < 3; i++) {
     const { key, raw } = genreTokens[i]
     const preset = GENRE_MIX_CATALOG[key]
     const matchingArtists = artistPool.filter((a) =>
       ARTIST_GENRE_HINTS.some(([re, k]) => k === key && re.test(a))
     )
-    const artistHint = (matchingArtists.length ? matchingArtists : artistPool).slice(0, 3).join(' ')
+    const leadArtists = (matchingArtists.length ? matchingArtists : artistPool).slice(0, 2)
+    const artistHint = leadArtists.join(' ')
+    const artistThumbPool = userTracks
+      .filter((t) => leadArtists.some((a) => String(t?.artist || '').toLowerCase().includes(a.toLowerCase())))
+      .map((t) => (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg` : t.thumbnail))
+      .filter(Boolean)
+
     if (preset && !usedIds.has(preset.id)) {
       usedIds.add(preset.id)
-      const thumbPool = preset.thumbs
+      const thumbPool = [...new Set([...artistThumbPool, ...preset.thumbs])]
+      const seedQueries = [
+        ...(leadArtists[0] ? [`${leadArtists[0]} latest songs`, `${leadArtists[0]} top songs`] : []),
+        ...(preset.seedQueries || [])
+      ]
       groupABlocks.push({
         id: preset.id,
         tier: 2,
@@ -591,7 +687,8 @@ function buildDynamicTier2Blocks({
           ? `${matchingArtists.slice(0, 2).join(', ')} & ${preset.label} favorites`
           : preset.subtitle,
         badge: preset.badge,
-        query: artistHint ? `${artistHint} ${preset.query}` : preset.query,
+        query: artistHint ? `${artistHint} ${preset.label} songs` : preset.query,
+        seedQueries,
         thumbnail: thumbPool[cursor % thumbPool.length],
         thumbnailPool: thumbPool,
         color: preset.color
@@ -600,7 +697,8 @@ function buildDynamicTier2Blocks({
       const cleanLabel = raw.replace(/[^a-zA-Z0-9\s&-]/g, '').trim() || key
       const blockId = `block_mix_${key.replace(/[^a-z0-9]+/g, '_')}`
       usedIds.add(blockId)
-      const thumb = defaultThumbs[(cursor + i) % defaultThumbs.length]
+      const thumbPool = [...new Set([...artistThumbPool, ...defaultThumbs])]
+      const thumb = thumbPool[(cursor + i) % thumbPool.length]
       groupABlocks.push({
         id: blockId,
         tier: 2,
@@ -608,9 +706,13 @@ function buildDynamicTier2Blocks({
         title: `${cleanLabel} Essentials`,
         subtitle: artistHint ? `Curated ${cleanLabel} & ${artistPool.slice(0, 2).join(', ')}` : `Tailored ${cleanLabel} songs & deep cuts`,
         badge: `${cleanLabel.slice(0, 12).toUpperCase()} MIX`,
-        query: `${artistHint} ${cleanLabel} official songs playlist -podcast`.trim(),
+        query: `${artistHint} ${cleanLabel} official songs`.trim(),
+        seedQueries: [
+          `${cleanLabel} latest releases 2026`,
+          ...(leadArtists[0] ? [`${leadArtists[0]} top songs`] : [])
+        ],
         thumbnail: thumb,
-        thumbnailPool: [thumb],
+        thumbnailPool: thumbPool,
         color: 'from-indigo-600/40 to-black'
       })
     }
@@ -619,7 +721,7 @@ function buildDynamicTier2Blocks({
   // Fill remaining slots up to 4 purely from the user's own artists, primary genre mood variants, or neutral mood presets (never unrelated J-Pop/Hindi!)
   const primaryGenreObj = genreTokens[0]
   const primaryLabel = GENRE_MIX_CATALOG[primaryGenreObj?.key]?.label || primaryGenreObj?.raw || 'Your Taste'
-  const primaryArtistStr = artistPool.slice(0, 4).join(' ')
+  const primaryArtistsPair = artistPool.slice(0, 2).join(' ')
   const fillerCandidates = []
 
   if (artistPool.length > 0) {
@@ -628,8 +730,14 @@ function buildDynamicTier2Blocks({
       title: `${artistPool.slice(0, 2).join(' & ')} Radio`,
       subtitle: `Built from your favorite artists`,
       badge: 'ARTIST MIX',
-      query: `${primaryArtistStr} official songs radio playlist -podcast`,
-      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg',
+      query: `${artistPool[0]} latest top songs`,
+      seedQueries: [
+        ...artistPool.slice(0, 3).map((a) => `${a} official songs`),
+        `${primaryArtistsPair} radio songs`
+      ],
+      thumbnail: userTracks[0]?.video_id
+        ? `https://i.ytimg.com/vi/${userTracks[0].video_id}/maxresdefault.jpg`
+        : 'https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg',
       color: 'from-violet-600/40 to-black'
     })
   }
@@ -642,8 +750,12 @@ function buildDynamicTier2Blocks({
         ? `Atmospheric ${primaryLabel} with ${artistPool[0]}`
         : `Atmospheric ${primaryLabel} & nocturnal grooves`,
       badge: 'CHILL MIX',
-      query: `${primaryArtistStr} ${primaryLabel} chill atmospheric late night songs playlist -podcast`.trim(),
-      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+      query: `${primaryArtistsPair} ${primaryLabel} chill songs`.trim(),
+      seedQueries: [
+        `${primaryLabel} late night chill songs`,
+        ...(artistPool[0] ? [`${artistPool[0]} acoustic chill songs`] : [])
+      ],
+      thumbnail: 'https://i.ytimg.com/vi/GT8ornYrDEs/maxresdefault.jpg',
       color: 'from-teal-600/40 to-black'
     },
     {
@@ -653,7 +765,11 @@ function buildDynamicTier2Blocks({
         ? `Up-tempo picks inspired by ${artistPool.slice(0, 2).join(' & ')}`
         : `Driving rhythms & upbeat ${primaryLabel} anthems`,
       badge: 'ENERGY MIX',
-      query: `${primaryArtistStr} ${primaryLabel} upbeat high energy hits playlist -podcast`.trim(),
+      query: `${primaryArtistsPair} ${primaryLabel} upbeat songs`.trim(),
+      seedQueries: [
+        `${primaryLabel} high energy hits`,
+        ...(artistPool[1] ? [`${artistPool[1]} upbeat songs`] : [])
+      ],
       thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
       color: 'from-emerald-600/40 to-black'
     },
@@ -662,7 +778,8 @@ function buildDynamicTier2Blocks({
       title: `${primaryLabel} Deep Cuts`,
       subtitle: 'Hidden gems & B-sides matching your sound',
       badge: 'DEEP CUTS',
-      query: `${primaryArtistStr} ${primaryLabel} deep cuts essential tracks playlist -podcast`.trim(),
+      query: `${primaryArtistsPair} ${primaryLabel} deep cuts songs`.trim(),
+      seedQueries: [`${primaryLabel} underrated songs`, `${artistPool[0] || primaryLabel} album tracks`],
       thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
       color: 'from-cyan-600/40 to-black'
     }
@@ -680,9 +797,9 @@ function buildDynamicTier2Blocks({
     })
   }
 
-  // Group B (3 blocks): Rediscover + On Repeat + Sonic DNA Radar
+  // Group B (3 blocks): Rediscover + GTA VI & Latest Releases + Sonic DNA Radar
   const genreLabelsQuery = genreTokens
-    .slice(0, 3)
+    .slice(0, 2)
     .map((g) => GENRE_MIX_CATALOG[g.key]?.label || g.raw)
     .join(' ')
 
@@ -695,41 +812,47 @@ function buildDynamicTier2Blocks({
       ? `Shuffled favorites & ${artistPool.slice(0, 2).join(', ')} radio`
       : 'Shuffled liked songs + closely related tracks',
     badge: 'REDISCOVER',
-    query: `${primaryArtistStr} ${genreLabelsQuery} official songs radio playlist -podcast`.trim(),
+    query: `${primaryArtistsPair || genreLabelsQuery} official songs`.trim(),
+    seedQueries: artistPool.slice(0, 2).map((a) => `${a} top songs`),
     thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
     thumbnailPool: ['https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg'],
     color: 'from-pink-600/40 to-black',
     isHybridRediscover: true
   }
 
-  const recentTrack = userTracks[0] || null
-  const onRepeatQuery = recentTrack
-    ? `${recentTrack.artist} ${recentTrack.title} radio songs playlist -comedy -podcast -bhajan`
-    : `${primaryArtistStr} ${genreLabelsQuery} heavy rotation hits playlist -podcast`.trim()
-  const onRepeatThumb = (recentTrack?.thumbnail && !recentTrack.thumbnail.includes('default'))
-    ? recentTrack.thumbnail
-    : 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'
+  const gtaQuery = cursor % 2 === 0
+    ? 'Tom Petty Love Is A Long Road GTAVI Original Score'
+    : 'The Pointer Sisters Hot Together GTA 6 soundtrack'
+  const gtaSeedQueries = [
+    ...(artistPool[0] ? [`${artistPool[0]} latest songs 2026`] : []),
+    ...GTA6_AND_LATEST_SEED_QUERIES
+  ]
 
   const radarQuery = artistPool.length
-    ? `${artistPool.slice(0, 3).join(' ')} ${genreLabelsQuery} deep cuts rare tracks official songs playlist -comedy -podcast -bhajan`.trim()
-    : `${genreLabelsQuery} deep cuts rare tracks official songs playlist -podcast`.trim()
+    ? `${artistPool[0]} ${genreLabelsQuery} new songs`.trim()
+    : `${genreLabelsQuery} official songs`.trim()
+  const radarSeedQueries = [
+    ...(artistPool.slice(1, 3).map((a) => `${a} top songs`)),
+    ...(genreTokens.slice(0, 2).map((g) => `${GENRE_MIX_CATALOG[g.key]?.label || g.raw} latest songs`))
+  ]
 
   return [
     ...groupABlocks.slice(0, 4),
     slot5Rediscover,
     {
-      id: 'block_on_repeat_vibes',
+      id: 'block_gta6_latest_anthems',
       tier: 2,
       ...(isSeed ? { isNewUserSeed: true } : {}),
-      title: 'On Repeat & Similar Vibes',
+      title: 'GTA VI & Latest Viral Anthems',
       subtitle: artistPool.length
-        ? `Heavy rotation around ${artistPool.slice(0, 2).join(' & ')}`
-        : "Inspired by what you've been playing lately",
-      badge: 'HEAVY ROTATION',
-      query: onRepeatQuery,
-      thumbnail: onRepeatThumb,
-      thumbnailPool: [onRepeatThumb, 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'],
-      color: 'from-indigo-600/40 to-black'
+        ? `New 2026 album launches, GTA VI soundtrack & ${artistPool[0]}`
+        : 'GTA 6 soundtrack hits, Vice City radio & newly launched 2026 drops',
+      badge: 'NEW & GTA VI',
+      query: gtaQuery,
+      seedQueries: gtaSeedQueries,
+      thumbnail: GTA6_AND_LATEST_THUMBS[cursor % GTA6_AND_LATEST_THUMBS.length],
+      thumbnailPool: GTA6_AND_LATEST_THUMBS,
+      color: 'from-rose-600/40 to-black'
     },
     {
       id: 'block_sonic_dna_radar',
@@ -741,8 +864,13 @@ function buildDynamicTier2Blocks({
         : 'Fresh discoveries matching your core artists',
       badge: 'TASTE RADAR',
       query: radarQuery,
-      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
-      thumbnailPool: ['https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg', 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'],
+      seedQueries: radarSeedQueries,
+      thumbnail: 'https://i.ytimg.com/vi/fPKVETKHwGk/maxresdefault.jpg',
+      thumbnailPool: [
+        'https://i.ytimg.com/vi/fPKVETKHwGk/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/p8_ugAjWI5I/maxresdefault.jpg',
+        'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'
+      ],
       color: 'from-cyan-600/40 to-black'
     }
   ]
@@ -887,9 +1015,12 @@ export async function buildHybridRediscoverBlock({
       { video_id: 'TUVcZfQe-Kw', title: 'Levitating', artist: 'Dua Lipa', duration_text: '3:23', thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg' },
       { video_id: 'dvgZkm1xWPE', title: 'Viva La Vida', artist: 'Coldplay', duration_text: '4:02', thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/hqdefault.jpg' }
     ]
-    coreAnchors = fisherYatesShuffle(starterSeeds).slice(0, 4)
+    coreAnchors = fisherYatesShuffle(pool.length > 0 ? [...pool, ...starterSeeds.filter((s) => !seen.has(s.video_id))].slice(0, 4) : starterSeeds).slice(0, 4)
+    if (pool.length > 0) {
+      coreAnchors = [...pool, ...coreAnchors.filter((s) => !seen.has(s.video_id))].slice(0, 4)
+    }
     try {
-      companionTracks = await fetchRelatedCompanionTracks(coreAnchors.slice(0, 2), 8)
+      companionTracks = await fetchRelatedCompanionTracks(coreAnchors.slice(0, 2), 14)
     } catch {}
   }
 
@@ -1239,6 +1370,133 @@ export function getInitialDiscoveryBlocks() {
 export const THIRTY_MINUTES_MS = 30 * 60 * 1000 // 1,800,000ms
 let hasBootRefreshedThisSession = false
 
+async function withTimeoutClean(promise, ms) {
+  let timerId
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => {
+        timerId = setTimeout(() => resolve(null), ms)
+      })
+    ])
+  } finally {
+    if (timerId) clearTimeout(timerId)
+  }
+}
+
+function canonicalTitleKey(t) {
+  const title = String(t?.title || '')
+    .replace(/(\([^)]*\)|\[[^\]]*\])/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+  const artist = String(t?.artist || '').split(',')[0].trim().toLowerCase()
+  return title ? `${title}::${artist}` : (t?.video_id || '')
+}
+
+function dedupeAndInterleaveTracks(lists = [], maxTracks = 25) {
+  const out = []
+  const seenVids = new Set()
+  const seenKeys = new Set()
+  const maxLen = lists.reduce((m, l) => Math.max(m, Array.isArray(l) ? l.length : 0), 0)
+
+  for (let i = 0; i < maxLen && out.length < maxTracks; i++) {
+    for (const list of lists) {
+      if (out.length >= maxTracks) break
+      if (!Array.isArray(list) || i >= list.length) continue
+      const t = list[i]
+      if (!t?.video_id || seenVids.has(t.video_id) || !isStrictMusicTrack(t)) continue
+      const key = canonicalTitleKey(t)
+      if (key && seenKeys.has(key)) continue
+      seenVids.add(t.video_id)
+      if (key) seenKeys.add(key)
+      out.push(t)
+    }
+  }
+  return out
+}
+
+function updateBlockArtworkFromTracks(block, tracks = [], usedCovers = null) {
+  if (!block || !Array.isArray(tracks) || tracks.length === 0) return block
+  const freshPool = []
+  for (const t of tracks) {
+    const thumb = t?.video_id
+      ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg`
+      : (t?.thumbnail || '')
+    if (thumb && !freshPool.includes(thumb)) freshPool.push(thumb)
+    if (freshPool.length >= 8) break
+  }
+  for (const oldThumb of (block.thumbnailPool || [])) {
+    if (oldThumb && !freshPool.includes(oldThumb)) freshPool.push(oldThumb)
+  }
+  if (freshPool.length > 0) {
+    block.thumbnailPool = freshPool
+    let chosen = ''
+    if (usedCovers) {
+      chosen = freshPool.find((u) => !usedCovers.has(u)) || ''
+    }
+    block.thumbnail = chosen || freshPool[0]
+    if (usedCovers && block.thumbnail) usedCovers.add(block.thumbnail)
+  }
+  return block
+}
+
+function dedupeBlockCovers(blocks = [], startCursor = 0) {
+  const used = new Set()
+  for (let idx = 0; idx < blocks.length; idx++) {
+    const b = blocks[idx]
+    if (!b) continue
+    const pool = []
+    if (Array.isArray(b.preloadedTracks)) {
+      for (const t of b.preloadedTracks) {
+        const u = t?.video_id ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg` : t?.thumbnail
+        if (u && !pool.includes(u)) pool.push(u)
+      }
+    }
+    if (b.thumbnail && !pool.includes(b.thumbnail)) pool.push(b.thumbnail)
+    for (const u of (b.thumbnailPool || [])) {
+      if (u && !pool.includes(u)) pool.push(u)
+    }
+
+    let chosen = ''
+    if (pool.length > 0) {
+      for (let i = 0; i < pool.length; i++) {
+        const cand = pool[(startCursor + i) % pool.length]
+        if (cand && !used.has(cand)) {
+          chosen = cand
+          break
+        }
+      }
+      if (!chosen) chosen = pool[0]
+    }
+    if (chosen) {
+      b.thumbnail = chosen
+      b.thumbnailPool = pool
+      used.add(chosen)
+    }
+  }
+  return used
+}
+
+function syncBlockHydrationToCache(block) {
+  if (!block?.id) return
+  if (_discoveryFeedMemoryCache?.blocks) {
+    const idx = _discoveryFeedMemoryCache.blocks.findIndex((b) => b.id === block.id)
+    if (idx !== -1) {
+      _discoveryFeedMemoryCache.blocks[idx] = { ..._discoveryFeedMemoryCache.blocks[idx], ...block }
+      try {
+        sessionStorage.setItem(DISCOVERY_FEED_CACHE_KEY, JSON.stringify(_discoveryFeedMemoryCache))
+      } catch {}
+    }
+  }
+  if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
+    try {
+      window.dispatchEvent(new CustomEvent('upbeat-discovery-block-hydrated', { detail: block }))
+    } catch {}
+  }
+}
+
 export async function fetchListenTogetherFeed({
   userTracks = [],
   tasteDna = null,
@@ -1250,6 +1508,10 @@ export async function fetchListenTogetherFeed({
   const lastRefresh = Number(localStorage.getItem('upbeat_last_discovery_refresh') || 0)
   const isColdBoot = !hasBootRefreshedThisSession
   const hasExpired = now - lastRefresh >= THIRTY_MINUTES_MS
+
+  try {
+    sessionStorage.removeItem('upbeat_discovery_blocks_v632')
+  } catch {}
 
   if (isColdBoot) {
     hasBootRefreshedThisSession = true
@@ -1309,6 +1571,21 @@ export async function fetchListenTogetherFeed({
   })
 
   const allBlocks = [...tier1Blocks, ...tier2Blocks]
+  dedupeBlockCovers(allBlocks, cursor)
+
+  // Live background-safe parallel hydration so cards preload 18-25 valid songs and live updated covers
+  await withTimeoutClean(
+    Promise.allSettled([
+      ...tier2Blocks
+        .filter((b) => !(b.preloadedTracks && b.preloadedTracks.length >= 16))
+        .map((b) => loadBlockTracks(b, { maxQueries: 2 })),
+      ...tier1Blocks.slice(0, 4).map((b) => loadBlockTracks(b, { maxQueries: 1 }))
+    ]),
+    4200
+  )
+
+  dedupeBlockCovers(allBlocks, cursor)
+
   _discoveryFeedMemoryCache = { blocks: allBlocks, isNewUser, ts: now }
   try {
     sessionStorage.setItem(DISCOVERY_FEED_CACHE_KEY, JSON.stringify(_discoveryFeedMemoryCache))
@@ -1324,7 +1601,7 @@ export async function rerollDiscoveryBlock(blockId, { userTracks = [], tasteDna 
   if (existingIdx === -1) return null
 
   // 1. Rediscover Mix: Trigger freshly shuffled favorites + newly fetched companion radio tracks (< 1s)
-  if (blockId === 'block_rediscover') {
+  if (blockId === 'block_rediscover' || blockId === 'block_rediscover_favorites') {
     const usedCovers = new Set(currentFeed.filter((b) => b.id !== blockId).map((b) => b.thumbnail))
     const nextCursor = advanceRotationCursor(1)
     const freshRediscover = await buildHybridRediscoverBlock({
@@ -1341,18 +1618,21 @@ export async function rerollDiscoveryBlock(blockId, { userTracks = [], tasteDna 
     return freshRediscover
   }
 
-  // 2. Other Tier 2 & Tier 1 blocks: Advance cursor and query fresh candidate tracks/artwork
+  // 2. Other Tier 2 & Tier 1 blocks: Rotate tag/seed query and reload fresh tracks + thumbnail
   const block = { ...currentFeed[existingIdx] }
-  advanceRotationCursor(1)
-  block.query = `${block.query.replace(/\s+(latest hits|trending viral|top charting rotation|essential mix|heavy rotation radio|fresh picks 2026)/g, '')} ${getRandomRotationTag()}`
+  const nextCursor = advanceRotationCursor(1)
+  const usedCovers = new Set(currentFeed.filter((b) => b.id !== blockId).map((b) => b.thumbnail))
+  const cleanBaseQuery = String(block.query || '').replace(/\s+(latest hits|trending viral|top charting rotation|essential mix|heavy rotation radio|fresh picks 2026)/gi, '').trim()
+  const seedPool = Array.isArray(block.seedQueries) ? block.seedQueries : []
+  const nextPrimary = seedPool.length ? seedPool[nextCursor % seedPool.length] : cleanBaseQuery
+  block.query = `${nextPrimary} ${getRandomRotationTag()}`.trim()
+  block.preloadedTracks = []
 
   try {
-    const freshRes = await directSearchStandalone(block.query, 'songs')
-    const candidateTracks = freshRes?.tracks || []
-    if (candidateTracks.length > 0) {
-      const topThumb = candidateTracks[0]?.thumbnail || (candidateTracks[0]?.video_id ? `https://i.ytimg.com/vi/${candidateTracks[0].video_id}/hqdefault.jpg` : '')
-      if (topThumb) block.thumbnail = topThumb
-      block.preloadedTracks = candidateTracks
+    const freshTracks = await loadBlockTracks(block, { force: true, maxQueries: 3 })
+    if (freshTracks.length > 0) {
+      updateBlockArtworkFromTracks(block, freshTracks, usedCovers)
+      block.preloadedTracks = freshTracks
     }
   } catch {}
 
@@ -1365,35 +1645,76 @@ export async function rerollDiscoveryBlock(blockId, { userTracks = [], tasteDna 
   return block
 }
 
-export async function loadBlockTracks(block) {
+export async function loadBlockTracks(block, { force = false, maxQueries = 4 } = {}) {
   if (!block) return []
-  if (block.preloadedTracks && block.preloadedTracks.length > 0) {
-    return block.preloadedTracks.filter(isStrictMusicTrack)
+  const existingValid = Array.isArray(block.preloadedTracks)
+    ? block.preloadedTracks.filter(isStrictMusicTrack)
+    : []
+  if (!force && existingValid.length >= 18) {
+    return existingValid
+  }
+
+  const candidateLists = []
+  if (existingValid.length > 0) {
+    candidateLists.push(existingValid)
   }
 
   // Hybrid rediscover mix on-demand generation
-  if (block.id === 'block_rediscover' || block.id === 'block_rediscover_favorites') {
-    const hybrid = await buildHybridRediscoverBlock()
-    if (hybrid?.preloadedTracks?.length > 0) {
-      return hybrid.preloadedTracks.filter(isStrictMusicTrack)
+  if ((block.id === 'block_rediscover' || block.id === 'block_rediscover_favorites') && existingValid.length === 0) {
+    try {
+      const hybrid = await buildHybridRediscoverBlock()
+      const hybValid = (hybrid?.preloadedTracks || []).filter(isStrictMusicTrack)
+      if (hybValid.length > 0) candidateLists.push(hybValid)
+    } catch {}
+  }
+
+  // Tier 1 official charts: try playlist browse alongside queries
+  const browsePromise = block.browse_id
+    ? browsePlaylistStandalone(block.browse_id, block.title, block.subtitle, 25).catch(() => [])
+    : Promise.resolve([])
+
+  const searchQueries = [
+    block.query,
+    ...(Array.isArray(block.seedQueries) ? block.seedQueries : [])
+  ]
+    .filter(Boolean)
+    .filter((q, idx, arr) => arr.indexOf(q) === idx)
+    .slice(0, maxQueries)
+
+  const [plTracks, ...searchResults] = await Promise.all([
+    browsePromise,
+    ...searchQueries.map((q) => directSearchStandalone(q, 'songs').catch(() => null))
+  ])
+
+  if (block.tier === 1 && Array.isArray(plTracks) && plTracks.length > 0) {
+    candidateLists.push(plTracks)
+  }
+  for (const res of searchResults) {
+    if (Array.isArray(res?.tracks) && res.tracks.length > 0) {
+      candidateLists.push(res.tracks)
     }
   }
+  if (block.tier !== 1 && Array.isArray(plTracks) && plTracks.length > 0) {
+    candidateLists.push(plTracks)
+  }
 
-  // 1. Direct search (fastest, most reliable across all environments)
-  if (block.query) {
+  let merged = dedupeAndInterleaveTracks(candidateLists, 25)
+
+  // If still fewer than 15 tracks and we have at least 1 anchor track, supplement via Watch Radio
+  if (merged.length > 0 && merged.length < 15) {
     try {
-      const res = await directSearchStandalone(block.query, 'songs')
-      if (res?.tracks?.length > 0) return res.tracks.filter(isStrictMusicTrack)
+      const extra = await fetchRelatedCompanionTracks(merged.slice(0, 3), 20)
+      if (extra.length > 0) {
+        merged = dedupeAndInterleaveTracks([merged, extra], 25)
+      }
     } catch {}
   }
 
-  // 2. Playlist browse fallback
-  if (block.browse_id) {
-    try {
-      const plTracks = await browsePlaylistStandalone(block.browse_id, block.title, block.subtitle)
-      if (plTracks && plTracks.length > 0) return plTracks.filter(isStrictMusicTrack)
-    } catch {}
+  if (merged.length > 0) {
+    block.preloadedTracks = merged
+    updateBlockArtworkFromTracks(block, merged)
+    syncBlockHydrationToCache(block)
   }
 
-  return []
+  return merged
 }

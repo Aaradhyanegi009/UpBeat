@@ -84,7 +84,7 @@ test('getCurrentOtaVersion prioritizes CapacitorUpdater.current() and clears mas
   localStorage.setItem('upbeat_ota_version', 'v9.9.9')
 
   const verAfterRollback = await getCurrentOtaVersion()
-  assert.equal(verAfterRollback, 'v7.7.0')
+  assert.equal(verAfterRollback, 'v7.7.1')
   assert.equal(localStorage.getItem('upbeat_ota_version'), null)
 
   capState.currentVersion = 'v7.8.0'

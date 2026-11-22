@@ -47,6 +47,27 @@ const MIME_TYPES = {
   '.webm': 'audio/webm'
 }
 
+const ANDROID_PLAYER_CLIENT = {
+  clientName: 'ANDROID',
+  clientVersion: '20.10.38',
+  osName: 'Android',
+  osVersion: '14',
+  androidSdkVersion: 34,
+  hl: 'en',
+  gl: 'US'
+}
+
+const IOS_PLAYER_CLIENT = {
+  clientName: 'IOS',
+  clientVersion: '20.10.4',
+  deviceMake: 'Apple',
+  deviceModel: 'iPhone16,2',
+  osName: 'iPhone',
+  osVersion: '18.3.2.22D82',
+  hl: 'en',
+  gl: 'US'
+}
+
 const ANDROID_VR_CLIENT = {
   clientName: 'ANDROID_VR',
   clientVersion: '1.60.19',
@@ -57,16 +78,8 @@ const ANDROID_VR_CLIENT = {
   gl: 'US'
 }
 
-const IOS_PLAYER_CLIENT = {
-  clientName: 'IOS',
-  clientVersion: '19.45.4',
-  deviceMake: 'Apple',
-  deviceModel: 'iPhone16,2',
-  osName: 'iPhone',
-  osVersion: '18.1.1',
-  hl: 'en',
-  gl: 'US'
-}
+const ANDROID_PLAYER_UA =
+  'com.google.android.youtube/20.10.38 (Linux; U; Android 14; en_US; Pixel 8 Build/UQ1A.240205.004) gzip'
 
 const DESKTOP_CHROME_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
@@ -259,13 +272,17 @@ async function resolveStreamUrl(videoId, { bypassCache = false } = {}) {
 
   const clients = [
     {
-      client: ANDROID_VR_CLIENT,
-      userAgent:
-        'Mozilla/5.0 (Linux; Android 14; Quest 3 Build/UQ1A.240205.004) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.35.48.568434778 SamsungBrowser/4.0 Chrome/122.0.6261.119 Mobile VR Safari/537.36'
+      client: ANDROID_PLAYER_CLIENT,
+      userAgent: ANDROID_PLAYER_UA
     },
     {
       client: IOS_PLAYER_CLIENT,
-      userAgent: 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_1 like Mac OS X; US)'
+      userAgent: 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X; US)'
+    },
+    {
+      client: ANDROID_VR_CLIENT,
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Quest 3 Build/UQ1A.240205.004) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.35.48.568434778 SamsungBrowser/4.0 Chrome/122.0.6261.119 Mobile VR Safari/537.36'
     }
   ]
 
@@ -302,17 +319,20 @@ async function resolveStreamUrl(videoId, { bypassCache = false } = {}) {
       const progressive = (data?.streamingData?.formats || []).filter((f) => f.url)
 
       const chosen =
+        progressive.find((f) => f.itag === 18) ||
+        progressive[0] ||
         adaptive.find((f) => f.itag === 140) ||
         adaptive.find((f) => (f.mimeType || '').includes('mp4a.40.2')) ||
         adaptive.find((f) => f.itag === 251) ||
-        progressive.find((f) => f.itag === 18) ||
         adaptive[0] ||
-        progressive[0]
+        null
 
       if (chosen?.url) {
+        const rawMime = chosen.mimeType ? chosen.mimeType.split(';')[0] : 'audio/mp4'
         const entry = {
           streamUrl: chosen.url,
-          mimeType: chosen.mimeType ? chosen.mimeType.split(';')[0] : 'audio/mp4',
+          userAgent,
+          mimeType: rawMime.includes('mp4') ? 'audio/mp4' : rawMime,
           contentLength: chosen.contentLength ? Number(chosen.contentLength) : null,
           duration:
             Number(data?.videoDetails?.lengthSeconds || 0) ||
@@ -381,7 +401,7 @@ async function proxyUpstreamMedia({ videoId, req, res, rangeHeader = null, extra
   })
 
   const openUpstream = async (targetStream) => {
-    const upstreamHeaders = { 'User-Agent': DESKTOP_CHROME_UA }
+    const upstreamHeaders = { 'User-Agent': targetStream.userAgent || DESKTOP_CHROME_UA }
     if (rangeHeader) {
       upstreamHeaders['Range'] = rangeHeader
     }
@@ -484,7 +504,7 @@ function startServer(options = {}) {
   const staticDir = path.resolve(options.staticDir || path.join(__dirname, '../frontend/dist'))
   const staticPrefix = staticDir.endsWith(path.sep) ? staticDir : `${staticDir}${path.sep}`
   const userDataDir = options.userDataDir || path.join(__dirname, 'userData')
-  const version = options.version || '7.7.0'
+  const version = options.version || '7.7.1'
 
   if (!fs.existsSync(userDataDir)) {
     try { fs.mkdirSync(userDataDir, { recursive: true }) } catch {}

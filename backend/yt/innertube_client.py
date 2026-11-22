@@ -203,8 +203,8 @@ _ANDROID_CLIENT_CONTEXT = {
     "gl": "US",
 }
 _ANDROID_UA = (
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+    "com.google.android.youtube/20.10.38 "
+    "(Linux; U; Android 14; en_US; Pixel 8 Build/UQ1A.240205.004) gzip"
 )
 
 _YT_WEB_CONTEXT = {
@@ -568,15 +568,56 @@ def get_video_duration(video_id: str) -> str:
     return ""
 
 
+def _probe_stream_full_range(url: str, ua: str, declared_clen: int = 0) -> Optional[int]:
+    """
+    Verifies an upstream googlevideo URL can serve both byte 0 and past the ~1MB
+    poToken cutoff (~10s of AAC audio). Returns resolved total byte length, or None if blocked (403/410).
+    """
+    try:
+        r0 = _SESSION.get(
+            url,
+            headers={"User-Agent": ua, "Range": "bytes=0-0"},
+            stream=True,
+            timeout=4.0,
+        )
+        st0 = r0.status_code
+        cr0 = r0.headers.get("Content-Range", "")
+        r0.close()
+        if st0 in (403, 410) or st0 >= 400:
+            return None
+        total = declared_clen
+        if "/" in cr0:
+            try:
+                parsed = int(cr0.split("/")[-1])
+                if parsed > 0:
+                    total = parsed
+            except ValueError:
+                pass
+        if total > 1048576:
+            rmid = _SESSION.get(
+                url,
+                headers={"User-Agent": ua, "Range": "bytes=1048576-1048576"},
+                stream=True,
+                timeout=4.0,
+            )
+            st_mid = rmid.status_code
+            rmid.close()
+            if st_mid in (403, 410) or st_mid >= 400:
+                return None
+        return total
+    except Exception:
+        return declared_clen if declared_clen > 0 else 0
+
+
 def _fast_innertube_audio(video_id: str) -> Optional[Dict[str, Any]]:
     """
-    Ultra-fast stream resolution (0.35s) using direct Innertube player API
-    (iOS and Android clients). Bypasses slow yt-dlp scraping entirely.
+    Ultra-fast stream resolution using direct Innertube player API
+    (Android and iOS clients). Verifies mid-file byte ranges to avoid ~10s 403 cutoffs.
     """
     now = time.time()
     clients = [
-        (_IOS_CLIENT_CONTEXT, _IOS_UA),
         (_ANDROID_CLIENT_CONTEXT, _ANDROID_UA),
+        (_IOS_CLIENT_CONTEXT, _IOS_UA),
     ]
     for client_ctx, ua in clients:
         try:
@@ -592,37 +633,63 @@ def _fast_innertube_audio(video_id: str) -> Optional[Dict[str, Any]]:
                 headers={"User-Agent": ua, "Content-Type": "application/json"},
                 timeout=4.0,
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("playabilityStatus", {}).get("status") == "OK":
-                    formats = data.get("streamingData", {}).get("adaptiveFormats", [])
-                    audio_formats = [
-                        f for f in formats
-                        if (f.get("mimeType") or "").startswith("audio/") and f.get("url")
-                    ]
-                    if audio_formats:
-                        # Prioritize AAC LC m4a (itag 140 / mp4a.40.2) and deprioritize HE-AAC (itag 139/599)
-                        m4a = [f for f in audio_formats if "audio/mp4" in (f.get("mimeType") or "")]
-                        non_he_m4a = [
-                            f for f in m4a
-                            if f.get("itag") not in (139, 599) and "mp4a.40.5" not in (f.get("mimeType") or "")
-                        ]
-                        cand = non_he_m4a or m4a or audio_formats
-                        cand.sort(key=lambda x: -int(x.get("bitrate") or 0))
-                        best = cand[0]
-                        vdetails = data.get("videoDetails", {})
-                        sec = int(vdetails.get("lengthSeconds") or 0)
-                        clen = int(best.get("contentLength") or 0)
-                        return {
-                            "url": best["url"],
-                            "mime": best.get("mimeType", "audio/mp4").split(";")[0],
-                            "clen": clen,
-                            "ua": ua,
-                            "title": vdetails.get("title", ""),
-                            "uploader": vdetails.get("author", ""),
-                            "duration": sec,
-                            "ts": now,
-                        }
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            if data.get("playabilityStatus", {}).get("status") != "OK":
+                continue
+
+            streaming_data = data.get("streamingData", {})
+            progressive_formats = [
+                f for f in (streaming_data.get("formats") or []) if f.get("url")
+            ]
+            adaptive_formats = [
+                f
+                for f in (streaming_data.get("adaptiveFormats") or [])
+                if (f.get("mimeType") or "").startswith("audio/") and f.get("url")
+            ]
+            m4a = [f for f in adaptive_formats if "audio/mp4" in (f.get("mimeType") or "")]
+            non_he_m4a = sorted(
+                [
+                    f
+                    for f in m4a
+                    if f.get("itag") not in (139, 599)
+                    and "mp4a.40.5" not in (f.get("mimeType") or "")
+                ],
+                key=lambda x: -int(x.get("bitrate") or 0),
+            )
+            other_audio = sorted(
+                [f for f in adaptive_formats if f not in non_he_m4a],
+                key=lambda x: -int(x.get("bitrate") or 0),
+            )
+            prog_18 = [f for f in progressive_formats if f.get("itag") == 18]
+            prog_other = [f for f in progressive_formats if f.get("itag") != 18]
+
+            # Progressive itag 18 (MP4/AAC) does not suffer YouTube's 10s un-tokenized adaptive 403 cutoff;
+            # adaptive non-HE M4A and other audio formats serve as verified fallbacks.
+            candidates = prog_18 + prog_other + non_he_m4a + other_audio
+            if not candidates:
+                continue
+
+            vdetails = data.get("videoDetails", {})
+            sec = int(vdetails.get("lengthSeconds") or 0)
+            for cand in candidates:
+                declared_clen = int(cand.get("contentLength") or 0)
+                verified_clen = _probe_stream_full_range(cand["url"], ua, declared_clen)
+                if verified_clen is None:
+                    continue
+                raw_mime = (cand.get("mimeType") or "audio/mp4").split(";")[0].strip()
+                mime = "audio/mp4" if "mp4" in raw_mime else raw_mime
+                return {
+                    "url": cand["url"],
+                    "mime": mime,
+                    "clen": verified_clen,
+                    "ua": ua,
+                    "title": vdetails.get("title", ""),
+                    "uploader": vdetails.get("author", ""),
+                    "duration": sec,
+                    "ts": now,
+                }
         except Exception:
             pass
     return None
@@ -1167,6 +1234,39 @@ def direct_search_youtube_music(query: str, mode: str = "auto") -> Dict[str, Any
     youtube_results = yt["videos"][:40]
     tokens = _query_tokens(q_clean)
 
+    valid_ytm = [t for t in ytm_songs if is_valid_music_track(t)]
+    valid_yt = [t for t in youtube_results if is_valid_music_track(t)]
+
+    if len(valid_ytm) + len(valid_yt) < 5:
+        stripped = re.sub(r"(?:^|\s)-\S+", " ", q_clean)
+        stripped = re.sub(
+            r"\b(official|songs?|radio|playlists?|mix|deep|cuts|rare|tracks|essentials?|anthems|vibes|hits|top|charting|rotation|latest|trending|viral|fresh|picks|2024|2025|2026|shorts|podcast|comedy|bhajan|aarti|devotional)\b",
+            " ",
+            stripped,
+            flags=re.I,
+        )
+        core_words = [w for w in stripped.split() if len(w) >= 2]
+        fb_queries: List[str] = []
+        if core_words:
+            q1 = " ".join(core_words[:3])
+            if q1 and q1.lower() != q_clean.lower():
+                fb_queries.append(q1)
+        if len(core_words) >= 4:
+            q2 = " ".join(core_words[3:6])
+            if q2 and q2.lower() != q_clean.lower():
+                fb_queries.append(q2)
+        for fq in fb_queries:
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as fb_pool:
+                    f_fb_yt = fb_pool.submit(_yt_web_search, fq, 1)
+                    f_fb_ytm = fb_pool.submit(_ytm_search, fq, True)
+                    youtube_results = youtube_results + f_fb_yt.result().get("videos", [])[:25]
+                    ytm_songs = ytm_songs + _parse_ytm_songs(f_fb_ytm.result())
+            except Exception:
+                pass
+        valid_ytm = [t for t in ytm_songs if is_valid_music_track(t)]
+        valid_yt = [t for t in youtube_results if is_valid_music_track(t)]
+
     candidate_pls = yt["playlists"] + ytm_playlists
     matched_playlists: List[Dict[str, Any]] = []
     seen_titles = set()
@@ -1182,9 +1282,6 @@ def direct_search_youtube_music(query: str, mode: str = "auto") -> Dict[str, Any
         matched_playlists.append(pl)
     matched_playlists.sort(key=lambda p: -p["relevance"])
     matched_playlists = matched_playlists[:6]
-
-    valid_ytm = [t for t in ytm_songs if is_valid_music_track(t)]
-    valid_yt = [t for t in youtube_results if is_valid_music_track(t)]
 
     has_explicit_playlist_words = bool(_EXPLICIT_PLAYLIST_INTENT_RE.search(q_clean))
     wants_playlist = mode == "playlists" or (mode == "auto" and has_explicit_playlist_words)
@@ -1203,7 +1300,7 @@ def direct_search_youtube_music(query: str, mode: str = "auto") -> Dict[str, Any
     ranked_songs = deduplicate_search_songs(valid_ytm + valid_yt, q_clean, consensus_artists)
 
     final_songs = ranked_songs
-    if not wants_playlist and not has_explicit_playlist_words and ranked_songs and ranked_songs[0].get("video_id"):
+    if not wants_playlist and ranked_songs and ranked_songs[0].get("video_id"):
         top_song = ranked_songs[0]
         top_artist_raw = re.split(r",|&|\bfeat\.?|\bft\.?", str(top_song.get("artist") or ""), maxsplit=1, flags=re.I)[0].strip()
         top_artist_norm = canonical_artist_name(top_artist_raw)

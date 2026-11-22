@@ -5,9 +5,9 @@ import audioInfoHandler from '../../api/audio-info.js'
 import audioHandler from '../../api/audio.js'
 import socialHandler, { createSocialSessionToken } from '../../api/social.js'
 
-const IOS_UA = 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_1 like Mac OS X; US)'
-const ANDROID_VR_UA =
-  'Mozilla/5.0 (Linux; Android 14; Quest 3 Build/UQ1A.240205.004) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.35.48.568434778 SamsungBrowser/4.0 Chrome/122.0.6261.119 Mobile VR Safari/537.36'
+const IOS_UA = 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X; US)'
+const ANDROID_UA =
+  'com.google.android.youtube/20.10.38 (Linux; U; Android 14; en_US; Pixel 8 Build/UQ1A.240205.004) gzip'
 
 test('api/innertube enforces endpoint and service allowlist', async () => {
   const badEndpoint = await innertubeHandler(
@@ -132,11 +132,11 @@ test('api/audio supports path & query, passes matching UA, handles HEAD, and nev
   }
 
   try {
-    // 1. Path param GET without Range -> 200 OK with matching ANDROID_VR UA
+    // 1. Path param GET without Range -> 200 OK with matching ANDROID UA
     const res200 = await audioHandler(new Request('https://upbeat.local/api/audio/8SbUC-UaAxE'))
     assert.equal(res200.status, 200)
     assert.equal(await res200.text(), 'ABCD')
-    assert.equal(seenAudioUAs[0], ANDROID_VR_UA)
+    assert.equal(seenAudioUAs[0], ANDROID_UA)
     assert.notEqual(seenAudioUAs[0], IOS_UA)
 
     // 2. Query param GET with Range -> 206 Partial Content

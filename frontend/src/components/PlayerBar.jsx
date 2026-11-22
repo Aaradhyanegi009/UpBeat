@@ -4,7 +4,7 @@ import {
   Music, Heart, Loader2, ListMusic, Moon, Shuffle, Repeat, Repeat1, Users, Maximize2, MessageSquareQuote
 } from 'lucide-react'
 import { artUrl } from '../ui/primitives'
-import { getApiBase, hasBackend, getAudioSource, getCachedAudioSource, resolveStandaloneAudio, searchYouTubeStandalone, getTrackDownloadUrl, openExternalUrl, prewarmTrack } from '../standaloneApi'
+import { getApiBase, hasBackend, getAudioSource, getCachedAudioSource, invalidateCachedAudioSource, resolveStandaloneAudio, searchYouTubeStandalone, getTrackDownloadUrl, openExternalUrl, prewarmTrack } from '../standaloneApi'
 import { isTrackDownloaded, saveTrackOffline, createOfflineAudioUrl, subscribeOfflineChanges, pruneIdleAudioUrls } from '../offlineStorage'
 import { useAlbumColor, DEFAULT_LAVENDER_THEME } from '../utils/colorExtractor'
 import NowPlayingView from './NowPlayingView'
@@ -746,6 +746,7 @@ export default function PlayerBar({
   }, [primeAudioEngines])
 
   const pendingSeekSecRef = useRef(null)
+  const prematureRetryVidRef = useRef('')
   const commitSeekRef = useRef(null)
 
   const commitSeek = (targetSec, fromRemoteJam = false) => {
@@ -998,6 +999,7 @@ export default function PlayerBar({
   useEffect(() => {
     clearEndTriggered()
     clearNearEndStallCheck()
+    prematureRetryVidRef.current = ''
     currentTimeRef.current = 0
     setCurrentTime(0)
     setScrubTime(0)
@@ -1758,12 +1760,72 @@ export default function PlayerBar({
 
   useEffect(() => () => clearNearEndStallCheck(), [])
 
+  const recoverStreamAtCurrentTime = async (audioEl, deck, vid) => {
+    if (!audioEl || !vid) return false
+    if (prematureRetryVidRef.current === vid) return false
+    prematureRetryVidRef.current = vid
+    invalidateCachedAudioSource(vid)
+
+    const resumeAt = audioEl.currentTime || currentTimeRef.current || 0
+    pendingSeekSecRef.current = resumeAt > 1 ? resumeAt : null
+
+    try {
+      let nextUrl = ''
+      if (hasBackend() && (audioEl.src || '').includes('/api/audio/')) {
+        nextUrl = `${getApiBase()}/audio/${vid}?retry=${Date.now()}`
+      } else {
+        const direct = await resolveStandaloneAudio(vid, trackRef.current)
+        nextUrl = direct?.url || ''
+      }
+      if (!nextUrl || activeDeckRef.current !== deck || audioEl.dataset.vid !== resolvedVidRef.current) {
+        return false
+      }
+      audioEl.src = nextUrl
+      audioEl.load()
+      if (isPlayingRef.current && !showVideoRef.current) {
+        audioEl.play().catch(() => {})
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const scheduleNearEndStallCheck = (audioEl, deck, vid) => {
     if (!audioEl || !vid) return
     const cur = audioEl.currentTime || 0
     const targetDur = duration > 0 ? duration : (authoritativeDurationRef.current || parseDurationText(trackRef.current?.duration_text))
     const rawDur = audioEl.duration
     const effectiveEndDur = (typeof rawDur === 'number' && isFinite(rawDur) && rawDur > targetDur) ? rawDur : targetDur
+
+    // Early stall recovery (e.g. upstream stream truncated at ~10s boundary)
+    if (
+      effectiveEndDur > 60 &&
+      cur > 3 &&
+      cur < 45 &&
+      prematureRetryVidRef.current !== vid &&
+      !nearEndStallTimerRef.current
+    ) {
+      nearEndStallTimerRef.current = setTimeout(() => {
+        nearEndStallTimerRef.current = null
+        if (
+          activeDeckRef.current !== deck ||
+          !isPlayingRef.current ||
+          isScrubbingRef.current ||
+          showVideoRef.current ||
+          useIframeFallbackRef.current
+        ) {
+          return
+        }
+        if (audioEl.dataset.vid !== resolvedVidRef.current || audioEl.dataset.vid !== vid) return
+        const liveCur = audioEl.currentTime || 0
+        if (Math.abs(liveCur - cur) < 0.25 && (audioEl.ended || audioEl.paused || audioEl.readyState < 3)) {
+          recoverStreamAtCurrentTime(audioEl, deck, vid)
+        }
+      }, 4000)
+      return
+    }
+
     if (!(effectiveEndDur > 5 && cur > 5 && cur >= effectiveEndDur - 2.0) || isEndTriggered(vid)) {
       return
     }
@@ -1939,10 +2001,17 @@ export default function PlayerBar({
               scheduleNearEndStallCheck(e.currentTarget, deck, e.currentTarget.dataset.vid)
             }
           }}
-          onEnded={(e) => {
+          onEnded={async (e) => {
             clearNearEndStallCheck()
-            if (activeDeckRef.current === deck && e.currentTarget.dataset.vid === resolvedVidRef.current && !isEndTriggered(e.currentTarget.dataset.vid)) {
-              markEndTriggered(e.currentTarget.dataset.vid)
+            const curVid = e.currentTarget.dataset.vid
+            if (activeDeckRef.current === deck && curVid === resolvedVidRef.current && !isEndTriggered(curVid)) {
+              const endedAt = e.currentTarget.currentTime || 0
+              const effDur = effectiveDurationRef.current || 0
+              if (endedAt > 3 && endedAt < 45 && effDur > 60 && prematureRetryVidRef.current !== curVid) {
+                const recovered = await recoverStreamAtCurrentTime(e.currentTarget, deck, curVid)
+                if (recovered) return
+              }
+              markEndTriggered(curVid)
               if (handleTrackEndedRef.current?.()) return
               onNextRef.current()
             }

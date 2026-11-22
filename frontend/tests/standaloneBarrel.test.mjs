@@ -49,6 +49,7 @@ const EXPECTED_BARREL_EXPORTS = [
   'getTrackDownloadUrl',
   'hasBackend',
   'importYouTubePlaylistStandalone',
+  'invalidateCachedAudioSource',
   'isConfigured',
   'isNativeApp',
   'isStrictArtistName',

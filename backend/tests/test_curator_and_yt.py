@@ -246,6 +246,51 @@ class TestCuratorAndYt(unittest.TestCase):
         poll2 = client.get(f"/api/social?id=UP-ABC123&since={poll1['serverTs']}").json()
         self.assertEqual([m["msgId"] for m in poll2["inbox"]], ["m2"])
 
+    def test_fast_innertube_audio_skips_1mb_throttled_adaptive_and_picks_full_range_stream(self):
+        fake_player_resp = MagicMock()
+        fake_player_resp.status_code = 200
+        fake_player_resp.json.return_value = {
+            "playabilityStatus": {"status": "OK"},
+            "videoDetails": {"lengthSeconds": "330", "title": "Gurenge", "author": "LiSA"},
+            "streamingData": {
+                "formats": [
+                    {
+                        "itag": 18,
+                        "mimeType": 'video/mp4; codecs="avc1.42001E, mp4a.40.2"',
+                        "url": "https://gv.test/prog18",
+                    }
+                ],
+                "adaptiveFormats": [
+                    {
+                        "itag": 140,
+                        "mimeType": 'audio/mp4; codecs="mp4a.40.2"',
+                        "contentLength": "5347962",
+                        "url": "https://gv.test/adaptive140",
+                    }
+                ],
+            },
+        }
+
+        def fake_range_probe(url, headers=None, stream=True, timeout=4.0):
+            rng = (headers or {}).get("Range", "")
+            r = MagicMock()
+            if url == "https://gv.test/adaptive140" and "1048576" in rng:
+                r.status_code = 403
+                r.headers = {}
+                return r
+            r.status_code = 206
+            r.headers = {"Content-Range": "bytes 0-0/11682069"}
+            return r
+
+        with patch.object(ic._SESSION, "post", return_value=fake_player_resp), patch.object(
+            ic._SESSION, "get", side_effect=fake_range_probe
+        ):
+            out = ic._fast_innertube_audio("MpYy6wwqxoo")
+            self.assertIsNotNone(out)
+            self.assertEqual(out["url"], "https://gv.test/prog18")
+            self.assertEqual(out["clen"], 11682069)
+            self.assertEqual(out["mime"], "audio/mp4")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -165,6 +165,42 @@ class TestStreamingAndOffline(unittest.TestCase):
             self.assertEqual(r_retry.content, b"Z" * 100)
             self.assertNotIn(vid, _STREAM_CACHE)
 
+    def test_upstream_stream_refreshes_on_midstream_403_after_first_chunk(self):
+        vid = "MpYy6wwqxoo"
+        chunk_sz = offline_mod._STREAM_CHUNK_BYTES
+        chunk_1 = b"A" * chunk_sz
+        chunk_2 = b"B" * 250
+        total_len = chunk_sz + len(chunk_2)
+
+        initial_info = {
+            "url": "https://redirector.googlevideo.com/chunked-throttled",
+            "mime": "audio/mp4",
+            "clen": total_len,
+            "ua": "ANDROID-UA",
+            "duration": 330,
+        }
+        refreshed_info = dict(initial_info, url="https://redirector.googlevideo.com/chunked-fresh")
+        _STREAM_CACHE[vid] = dict(initial_info)
+
+        def fake_get(url, headers=None, stream=True, timeout=15):
+            rng = (headers or {}).get("Range", "")
+            if rng == f"bytes=0-{chunk_sz - 1}":
+                return _FakeUpstreamResponse(206, chunks=[chunk_1])
+            if url.endswith("throttled"):
+                return _FakeUpstreamResponse(403)
+            return _FakeUpstreamResponse(206, chunks=[chunk_2])
+
+        with patch.object(
+            main_mod, "get_audio_stream_url", side_effect=[initial_info, refreshed_info]
+        ) as mock_lookup, patch.object(
+            offline_mod._STREAM_HTTP_SESSION, "get", side_effect=fake_get
+        ):
+            r = self.client.get(f"/api/audio/{vid}", headers={"Range": "bytes=0-"})
+            self.assertEqual(r.status_code, 206)
+            self.assertEqual(len(r.content), total_len)
+            self.assertEqual(r.content, chunk_1 + chunk_2)
+            self.assertEqual(mock_lookup.call_count, 2)
+
     def test_download_never_promotes_truncated_or_failed_partial_file(self):
         vid = "BddP6PYo2gs"
         chunk_1 = b"B" * offline_mod._STREAM_CHUNK_BYTES
