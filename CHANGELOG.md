@@ -4,6 +4,20 @@ All notable changes to the UpBeat client, backend, and native apps are documente
 
 ---
 
+## [v7.7.0] - 2026-11-22
+
+### ✨ AI Curation, Gapless Queue & Discovery Upgrades
+- **Smarter AI Curation (`geminiCurator.js`, `geminiClient.js`, `curator.py`, `CreateView.jsx`, `CollectionView.jsx`, `App.jsx`)**: Grounded YouTube Music catalog matches (`video_id`, `duration_text`) now hydrate directly without redundant YouTube searches; added 60s per-model `429` cooldowns on standalone Gemini requests, verified model labels, live multi-stage progress (`"Curating with AI…"` -> `"Resolving tracks…"`), and one-tap refinement chips (`More upbeat`, `90s acoustic`, `Instrumental only`, `Late-night chill`, `Deep cuts`).
+- **Gapless Preload, Autoplay & Queue Tools (`audioResolver.js`, `PlayerBar.jsx`, `useAudioPlayback.js`, `QueueDrawer.jsx`, `Panels.jsx`, `NowPlayingView.jsx`)**: Upgraded `prewarmTrack` / `getCachedAudioSource` to prepare `upNextTrack` on the standby `<audio>` deck, added persisted **Autoplay radio** (`RDAMVM` continuation via `fetchRelatedCompanionTracks` when `repeatMode === 'off'`), added drag-and-drop & Move Up/Down queue reordering + **Save queue as playlist**, and preserved playback timestamp (`&start=`) when switching into `Watch video`.
+- **Personalized Discovery & Sonic DNA (`discoveryEngine.js`, `SonicDnaView.jsx`, `LibraryView.jsx`, `ProfileEditModal.jsx`, `HomeView.jsx`)**: Exposed `/you` across `LibraryView`, `ProfileEditModal`, `HomeView`, and `Shell`, removed dead duplicated `favorites` code in `SonicDnaView`, added per-card `rerollDiscoveryBlock` refresh buttons on Home, and refactored `getInitialDiscoveryBlocks` to personalize Tier-2 `Made For You` mixes from onboarding genre/artist picks and Taste DNA.
+
+### 🔥 Jam Reactions, Offline Downloads, Android Auto & Shortcuts
+- **Live Jam & Cloud KV (`JamModal.jsx`, `NowPlayingView.jsx`, `qrSvg.js`, `roomController.js`, `useJamSync.js`, `api/social.js`, `backend/routers/social.py`)**: Added floating animated emoji reactions + reaction bar, live sync health + `Resync now` button, offline pure-JS SVG QR codes (`qrSvg.js` replacing `api.qrserver.com`), optional Redis/Vercel KV REST backing, Jam room relay on `/api/social`, and optional `UPBEAT_SOCIAL_SECRET` HMAC session guards.
+- **Offline Downloads & Android Auto (`offlineStorage.js`, `useLibraryStorage.js`, `SettingsView.jsx`, `MainActivity.java`, `UpBeatMediaService.java`)**: Added streaming per-track `%` download progress (`ReadableStream`), `Cancel` job controls, interactive `Offline Mode` switch + banner/guards, `pruneIdleAudioUrls` cleanup, `UpBeatNative.syncDownloads`, and Android Auto `Downloads & Offline` (`lib_downloads`) browse + Play/Shuffle All + local `.m4a` cache fallback.
+- **Lyrics & Keyboard Shortcuts (`lyricsClient.js`, `backend/routers/music.py`, `electron/server.cjs`, `ShortcutModal.jsx`, `Shell.jsx`)**: Added duration-matched `/api/get` LRCLIB lookup with 200-entry frontend LRU cache and 6h hit / 5m negative-miss backend caches; added `?` `ShortcutModal`, `ArrowLeft`/`ArrowRight` (±10s), `M` mute, `N`/`P` next/prev, and independent left (`Cmd/Ctrl+B`) / right (`Cmd/Ctrl+\`) panel toggles with TopBar reopen buttons.
+
+---
+
 ## [v7.6.2] - 2026-11-22
 
 ### 🛡️ Security, Signing & OTA Integrity Hardening

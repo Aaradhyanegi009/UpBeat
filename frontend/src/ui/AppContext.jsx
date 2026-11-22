@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from 'react'
-import { ListEnd, ListPlus, ListMusic, Download, Radio, User, Heart, Trash2, CircleCheck, Play, Repeat1 } from 'lucide-react'
-import { TrackRow, Art } from './primitives'
+import { ListEnd, ListPlus, ListMusic, Download, Radio, User, Heart, Trash2, CircleCheck, Play, Repeat1, RefreshCw } from 'lucide-react'
+import { TrackRow, Art, IconButton } from './primitives'
 
 /**
  * Everything a screen needs to act on songs, provided once by App.
@@ -73,7 +73,7 @@ export function SongRow({ track, list, index = 0, showIndex = false, extraMenu =
 }
 
 /** Square card for mixes, charts and playlists. */
-export function MediaCard({ title, subtitle, track, src, label, onOpen, onPlay, round = false, className = '' }) {
+export function MediaCard({ title, subtitle, track, src, label, onOpen, onPlay, onRefresh, refreshing = false, round = false, className = '' }) {
   return (
     <div className={`group min-w-0 ${className}`}>
       <div className="relative">
@@ -86,6 +86,22 @@ export function MediaCard({ title, subtitle, track, src, label, onOpen, onPlay, 
             </>
           )}
         </button>
+        {onRefresh && (
+          <IconButton
+            label={`Refresh ${title}`}
+            size={32}
+            disabled={refreshing}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRefresh(e)
+            }}
+            className={`!absolute right-2 top-2 !bg-black/65 hover:!bg-black/85 !text-white backdrop-blur-md ring-1 ring-white/15 z-10 transition-opacity ${
+              refreshing ? 'opacity-100' : 'opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100'
+            }`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          </IconButton>
+        )}
         {onPlay && (
           <button
             type="button"

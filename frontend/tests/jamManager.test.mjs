@@ -448,3 +448,82 @@ test('roomController conn close cleans up guest state when no relay is active an
     resetStorage()
   }
 })
+
+test('resyncNow triggers immediate host sync or guest JAM_PING + JAM_RESYNC_REQUEST roundtrip', async () => {
+  resetStorage()
+  const MockPeer = createMockPeerClass()
+  const hostPosted = []
+  const guestPosted = []
+
+  const hostFetch = async (url, init = {}) => {
+    if (init.method === 'POST' && init.body) {
+      hostPosted.push({ url: String(url), payload: JSON.parse(init.body) })
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' }
+  }
+
+  const guestFetch = async (url, init = {}) => {
+    if (init.method === 'POST' && init.body) {
+      guestPosted.push({ url: String(url), payload: JSON.parse(init.body) })
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' }
+  }
+
+  const host = new JamSessionManager({ autoInit: false, PeerClass: MockPeer, fetchImpl: hostFetch })
+  host.updateUserProfile({ friendCode: 'UP-HST999', name: 'Host' })
+  host.setHandlers({
+    getHostPlaybackSnapshot: () => ({
+      track: { video_id: 'dQw4w9WgXcQ', title: 'Sync Track', artist: 'Artist' },
+      isPlaying: true,
+      currentTime: 42,
+      queue: []
+    })
+  })
+
+  const guest = new JamSessionManager({ autoInit: false, PeerClass: MockPeer, fetchImpl: guestFetch })
+  guest.updateUserProfile({ friendCode: 'UP-GST999', name: 'Guest' })
+
+  try {
+    // Inactive returns false
+    assert.equal(host.resyncNow(), false)
+    assert.equal(guest.resyncNow(), false)
+
+    // Host resyncNow broadcasts JAM_SYNC + JAM_PARTICIPANTS
+    const code = await host.createJam(null, 'open_party')
+    hostPosted.length = 0
+    assert.equal(host.resyncNow(), true)
+    assert.ok(hostPosted.some((p) => p.payload?.type === 'JAM_SYNC' && p.payload?.currentTime === 42))
+    assert.ok(hostPosted.some((p) => p.payload?.type === 'JAM_PARTICIPANTS'))
+
+    // Guest resyncNow emits JAM_PING + JAM_RESYNC_REQUEST
+    guest.updateState({
+      active: true,
+      isHost: false,
+      role: 'guest',
+      roomCode: code,
+      status: 'CONNECTED'
+    })
+    guestPosted.length = 0
+    assert.equal(guest.resyncNow(), true)
+    assert.ok(guestPosted.some((p) => p.payload?.type === 'JAM_PING'))
+    const req = guestPosted.find((p) => p.payload?.type === 'JAM_RESYNC_REQUEST')
+    assert.ok(req)
+
+    // Host handling JAM_RESYNC_REQUEST broadcasts JAM_SYNC immediately
+    hostPosted.length = 0
+    host.handleIncomingPacket(
+      {
+        ...req.payload,
+        _fromRole: 'guest',
+        _senderInstanceId: guest.instanceId
+      },
+      null
+    )
+    assert.ok(hostPosted.some((p) => p.payload?.type === 'JAM_SYNC'))
+    assert.ok(hostPosted.some((p) => p.payload?.type === 'JAM_PARTICIPANTS'))
+  } finally {
+    host.destroy()
+    guest.destroy()
+    resetStorage()
+  }
+})

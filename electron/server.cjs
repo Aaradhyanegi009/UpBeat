@@ -19,6 +19,9 @@ const ALLOWED_SERVICES = new Set(['music', 'youtube'])
 const MAX_JSON_BODY_BYTES = 1024 * 1024 // 1 MB
 const UPSTREAM_TIMEOUT_MS = 10000 // 10 seconds
 const MAX_STREAM_CACHE_SIZE = 200
+const MAX_LYRICS_CACHE_SIZE = 500
+const LYRICS_CACHE_HIT_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
+const LYRICS_CACHE_MISS_TTL_MS = 5 * 60 * 1000 // 5 minutes
 const MAX_SOCIAL_KEYS = 500
 const CACHE_TTL_MS = 45 * 60 * 1000
 
@@ -481,7 +484,7 @@ function startServer(options = {}) {
   const staticDir = path.resolve(options.staticDir || path.join(__dirname, '../frontend/dist'))
   const staticPrefix = staticDir.endsWith(path.sep) ? staticDir : `${staticDir}${path.sep}`
   const userDataDir = options.userDataDir || path.join(__dirname, 'userData')
-  const version = options.version || '7.6.2'
+  const version = options.version || '7.7.0'
 
   if (!fs.existsSync(userDataDir)) {
     try { fs.mkdirSync(userDataDir, { recursive: true }) } catch {}
@@ -489,6 +492,40 @@ function startServer(options = {}) {
 
   const favoritesFile = path.join(userDataDir, 'favorites.json')
   const profileFile = path.join(userDataDir, 'profile.json')
+  const lyricsCache = new Map()
+
+  function getCachedLyrics(cacheKey) {
+    const entry = lyricsCache.get(cacheKey)
+    if (!entry) return null
+    if (Date.now() >= entry.expiresAt) {
+      lyricsCache.delete(cacheKey)
+      return null
+    }
+    lyricsCache.delete(cacheKey)
+    lyricsCache.set(cacheKey, entry)
+    return entry.data.map((item) => (item && typeof item === 'object' ? { ...item } : item))
+  }
+
+  function setCachedLyrics(cacheKey, data, ttlMs) {
+    const now = Date.now()
+    if (lyricsCache.has(cacheKey)) {
+      lyricsCache.delete(cacheKey)
+    }
+    if (lyricsCache.size >= MAX_LYRICS_CACHE_SIZE) {
+      for (const [k, v] of lyricsCache.entries()) {
+        if (now >= v.expiresAt) lyricsCache.delete(k)
+      }
+    }
+    while (lyricsCache.size >= MAX_LYRICS_CACHE_SIZE) {
+      const oldestKey = lyricsCache.keys().next().value
+      if (oldestKey === undefined) break
+      lyricsCache.delete(oldestKey)
+    }
+    const cloned = Array.isArray(data)
+      ? data.map((item) => (item && typeof item === 'object' ? { ...item } : item))
+      : []
+    lyricsCache.set(cacheKey, { expiresAt: now + ttlMs, data: cloned })
+  }
 
   const server = http.createServer(async (req, res) => {
     const corsAllowed = applyCorsHeaders(req, res)
@@ -579,20 +616,69 @@ function startServer(options = {}) {
       return
     }
 
-    // 2b. /api/lyrics (LRCLIB proxy parity route)
+    // 2b. /api/lyrics (LRCLIB /api/get duration-matched lookup + /api/search fallback with bounded TTL cache)
     if (pathname === '/api/lyrics' && req.method === 'GET') {
-      const q = parsedUrl.searchParams.get('q') || ''
-      const trackName = parsedUrl.searchParams.get('track_name') || ''
-      const artistName = parsedUrl.searchParams.get('artist_name') || ''
+      const q = (parsedUrl.searchParams.get('q') || '').trim()
+      const trackName = (parsedUrl.searchParams.get('track_name') || '').trim()
+      const artistName = (parsedUrl.searchParams.get('artist_name') || '').trim()
+      const rawDuration = Number(parsedUrl.searchParams.get('duration') || 0)
+      const durInt = Number.isFinite(rawDuration) && rawDuration > 15 ? Math.round(rawDuration) : 0
+
+      if (!q && !trackName && !artistName) {
+        sendJson(res, 200, [])
+        return
+      }
+
+      const cacheKey = JSON.stringify([q.toLowerCase(), trackName.toLowerCase(), artistName.toLowerCase(), durInt])
+      const cached = getCachedLyrics(cacheKey)
+      if (cached !== null) {
+        sendJson(res, 200, cached)
+        return
+      }
+
+      const lrclibHeaders = {
+        'User-Agent': `UpBeat/${version} (https://upbeat.app)`
+      }
+
+      if (trackName && artistName) {
+        const getParams = new URLSearchParams({
+          track_name: trackName,
+          artist_name: artistName
+        })
+        if (durInt > 15) {
+          getParams.set('duration', String(durInt))
+        }
+        let getCleanup = () => {}
+        try {
+          const getResult = await fetchWithTimeout(
+            `https://lrclib.net/api/get?${getParams.toString()}`,
+            { method: 'GET', headers: lrclibHeaders },
+            UPSTREAM_TIMEOUT_MS
+          )
+          getCleanup = getResult.cleanup
+          if (getResult.resp.ok) {
+            const getData = await getResult.resp.json()
+            if (
+              getData &&
+              typeof getData === 'object' &&
+              !Array.isArray(getData) &&
+              (getData.syncedLyrics || getData.plainLyrics)
+            ) {
+              const wrapped = [getData]
+              setCachedLyrics(cacheKey, wrapped, LYRICS_CACHE_HIT_TTL_MS)
+              sendJson(res, 200, wrapped)
+              return
+            }
+          }
+        } catch {} finally {
+          getCleanup()
+        }
+      }
+
       const searchParams = new URLSearchParams()
       if (q) searchParams.set('q', q)
       if (trackName) searchParams.set('track_name', trackName)
       if (artistName) searchParams.set('artist_name', artistName)
-
-      if (!searchParams.toString()) {
-        sendJson(res, 200, [])
-        return
-      }
 
       let cleanup = () => {}
       try {
@@ -600,17 +686,24 @@ function startServer(options = {}) {
           `https://lrclib.net/api/search?${searchParams.toString()}`,
           {
             method: 'GET',
-            headers: {
-              'User-Agent': `UpBeat/${version} (https://upbeat.app)`
-            }
+            headers: lrclibHeaders
           },
           UPSTREAM_TIMEOUT_MS
         )
         cleanup = result.cleanup
         if (result.resp.ok) {
           const lyricsData = await result.resp.json()
-          sendJson(res, 200, Array.isArray(lyricsData) ? lyricsData : [])
+          const normalized = Array.isArray(lyricsData) ? lyricsData : []
+          setCachedLyrics(
+            cacheKey,
+            normalized,
+            normalized.length > 0 ? LYRICS_CACHE_HIT_TTL_MS : LYRICS_CACHE_MISS_TTL_MS
+          )
+          sendJson(res, 200, normalized)
           return
+        }
+        if (result.resp.status === 404) {
+          setCachedLyrics(cacheKey, [], LYRICS_CACHE_MISS_TTL_MS)
         }
       } catch {} finally {
         cleanup()
@@ -1064,5 +1157,8 @@ module.exports = {
   resolveStreamUrl,
   DEFAULT_PORT,
   ALLOWED_INNERTUBE_ENDPOINTS,
-  isAllowedCorsOrigin
+  isAllowedCorsOrigin,
+  MAX_LYRICS_CACHE_SIZE,
+  LYRICS_CACHE_HIT_TTL_MS,
+  LYRICS_CACHE_MISS_TTL_MS
 }

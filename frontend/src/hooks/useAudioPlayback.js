@@ -8,7 +8,9 @@ import {
   getApiBase,
   hasBackend,
   formatDurationSeconds,
-  fisherYatesShuffle
+  fisherYatesShuffle,
+  fetchRelatedCompanionTracks,
+  directSearchStandalone
 } from '../standaloneApi'
 
 export function useAudioPlayback({
@@ -48,23 +50,34 @@ export function useAudioPlayback({
       return 5
     }
   })
+  const [autoplay, setAutoplayState] = useState(() => {
+    try {
+      return localStorage.getItem('upbeat_autoplay') === 'true'
+    } catch {
+      return false
+    }
+  })
 
   const currentTrackRef = useRef(currentTrack)
   const isPlayingRef = useRef(isPlaying)
   const queueRef = useRef(queue)
   const repeatModeRef = useRef(repeatMode)
   const isShuffleRef = useRef(isShuffle)
+  const autoplayRef = useRef(autoplay)
   const activePlaybackContextRef = useRef(activePlaybackContext)
   const originalQueueRef = useRef(null)
   const originalContextRef = useRef(null)
   const handleNextRef = useRef(null)
   const handlePrevRef = useRef(null)
+  const autoplayTokenRef = useRef(0)
+  const autoplayBusyRef = useRef(false)
 
   currentTrackRef.current = currentTrack
   isPlayingRef.current = isPlaying
   queueRef.current = queue
   repeatModeRef.current = repeatMode
   isShuffleRef.current = isShuffle
+  autoplayRef.current = autoplay
   activePlaybackContextRef.current = activePlaybackContext
 
   const setRepeatMode = useCallback((valOrFn) => {
@@ -90,6 +103,23 @@ export function useAudioPlayback({
       localStorage.setItem('upbeat_crossfade_sec', String(clean))
     } catch {}
   }, [])
+
+  const setAutoplay = useCallback((valOrFn) => {
+    const prev = autoplayRef.current
+    const raw = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn
+    const next = Boolean(raw)
+    autoplayRef.current = next
+    setAutoplayState(next)
+    try {
+      localStorage.setItem('upbeat_autoplay', next ? 'true' : 'false')
+    } catch {}
+  }, [])
+
+  const toggleAutoplay = useCallback(() => {
+    const next = !autoplayRef.current
+    setAutoplay(next)
+    showNotify?.(next ? 'Autoplay radio on' : 'Autoplay radio off', 'info')
+  }, [setAutoplay, showNotify])
 
   const isTrackFavorite = useCallback((track) => {
     if (!track || !favorites.length) return false
@@ -213,6 +243,8 @@ export function useAudioPlayback({
       return
     }
 
+    autoplayTokenRef.current++
+    autoplayBusyRef.current = false
     currentTrackRef.current = track
     isPlayingRef.current = true
     setCurrentTrack(track)
@@ -263,6 +295,8 @@ export function useAudioPlayback({
       jamManager.emitPlaybackControl('NEXT', {})
     }
     if (queue.length > 0) {
+      autoplayTokenRef.current++
+      autoplayBusyRef.current = false
       const nextTrack = queue[0]
       setQueue((prev) => prev.slice(1))
       currentTrackRef.current = nextTrack
@@ -293,6 +327,95 @@ export function useAudioPlayback({
     let nextIdx = curIdx + 1
     if (nextIdx >= list.length) {
       if (repeatModeRef.current !== 'all') {
+        if (autoplayRef.current && currentTrack) {
+          if (autoplayBusyRef.current) return
+          autoplayBusyRef.current = true
+          const reqToken = ++autoplayTokenRef.current
+          const anchor = currentTrack
+          const snapshotList = [...list]
+          return (async () => {
+            try {
+              let related = []
+              try {
+                related = await fetchRelatedCompanionTracks([anchor], 12)
+              } catch {}
+              let fresh = (related || []).filter(
+                (cand) =>
+                  cand &&
+                  (cand.video_id || cand.title) &&
+                  !sameTrack(cand, anchor) &&
+                  !snapshotList.some((existing) => sameTrack(existing, cand))
+              )
+              if (!fresh.length) {
+                try {
+                  const q = `${anchor.artist || ''} ${anchor.title || ''} radio mix`.trim()
+                  if (q) {
+                    const searchRes = await directSearchStandalone(q, 'songs')
+                    const searchCandidates = searchRes?.tracks || searchRes?.song_results || []
+                    fresh = searchCandidates.filter(
+                      (cand) =>
+                        cand &&
+                        (cand.video_id || cand.title) &&
+                        !sameTrack(cand, anchor) &&
+                        !snapshotList.some((existing) => sameTrack(existing, cand))
+                    )
+                  }
+                } catch {}
+              }
+              if (autoplayTokenRef.current !== reqToken || !autoplayRef.current) {
+                return
+              }
+              if (fresh.length > 0) {
+                const seenNew = new Set()
+                const uniqueFresh = []
+                for (const item of fresh) {
+                  const key = item.video_id || `${item.title}::${item.artist || ''}`
+                  if (seenNew.has(key)) continue
+                  seenNew.add(key)
+                  uniqueFresh.push(item)
+                }
+                const extendedList = [...snapshotList, ...uniqueFresh]
+                activePlaybackContextRef.current = extendedList
+                setActivePlaybackContext(extendedList)
+                if (originalContextRef.current) {
+                  const toAppendOrig = uniqueFresh.filter(
+                    (nt) => !originalContextRef.current.some((et) => sameTrack(et, nt))
+                  )
+                  if (toAppendOrig.length) {
+                    originalContextRef.current = [...originalContextRef.current, ...toAppendOrig]
+                  }
+                }
+                setPlaylist?.((prev) => {
+                  if (!prev || !Array.isArray(prev.tracks)) return prev
+                  const toAppend = uniqueFresh.filter(
+                    (nt) => !prev.tracks.some((et) => sameTrack(et, nt))
+                  )
+                  if (!toAppend.length) return prev
+                  return { ...prev, tracks: [...prev.tracks, ...toAppend] }
+                })
+                const nextAutoTrack = uniqueFresh[0]
+                currentTrackRef.current = nextAutoTrack
+                isPlayingRef.current = true
+                setCurrentTrack(nextAutoTrack)
+                setCurrentTrackIdx(snapshotList.length)
+                setIsPlaying(true)
+                if (playbackMode === 'safari' && onPushToSafari) onPushToSafari(nextAutoTrack)
+                return
+              }
+            } finally {
+              if (autoplayTokenRef.current === reqToken) {
+                autoplayBusyRef.current = false
+              }
+            }
+            if (autoplayTokenRef.current === reqToken) {
+              isPlayingRef.current = false
+              setIsPlaying(false)
+              try {
+                window.UpBeatControls?.forcePause?.()
+              } catch {}
+            }
+          })()
+        }
         isPlayingRef.current = false
         setIsPlaying(false)
         try {
@@ -302,6 +425,8 @@ export function useAudioPlayback({
       }
       nextIdx = 0
     }
+    autoplayTokenRef.current++
+    autoplayBusyRef.current = false
     const nextTrack = list[nextIdx]
     if (!nextTrack) return
     currentTrackRef.current = nextTrack
@@ -310,7 +435,7 @@ export function useAudioPlayback({
     setCurrentTrackIdx(nextIdx)
     setIsPlaying(true)
     if (playbackMode === 'safari' && onPushToSafari) onPushToSafari(nextTrack)
-  }, [currentTrack, currentTrackIdx, getActiveTrackList, onPushToSafari, playbackMode, queue, remoteJamGuardRef, setQueue, showNotify])
+  }, [currentTrack, currentTrackIdx, getActiveTrackList, onPushToSafari, playbackMode, queue, remoteJamGuardRef, setPlaylist, setQueue, showNotify])
 
   handleNextRef.current = handleNext
 
@@ -343,6 +468,8 @@ export function useAudioPlayback({
     const prevIdx = (curIdx - 1 + list.length) % list.length
     const prevTrack = list[prevIdx]
     if (!prevTrack) return
+    autoplayTokenRef.current++
+    autoplayBusyRef.current = false
     currentTrackRef.current = prevTrack
     isPlayingRef.current = true
     setCurrentTrack(prevTrack)
@@ -372,6 +499,22 @@ export function useAudioPlayback({
 
   const handleRemoveFromQueue = useCallback((idx) => {
     setQueue((prev) => prev.filter((_, i) => i !== idx))
+  }, [setQueue])
+
+  const reorderQueue = useCallback((fromIdx, toIdx) => {
+    setQueue((prev) => {
+      if (!Array.isArray(prev) || prev.length < 2) return prev
+      const from = Number(fromIdx)
+      const to = Number(toIdx)
+      if (!Number.isInteger(from) || !Number.isInteger(to)) return prev
+      if (from < 0 || from >= prev.length || to < 0 || to >= prev.length || from === to) {
+        return prev
+      }
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
   }, [setQueue])
 
   const handleClearQueue = useCallback(() => {
@@ -434,6 +577,8 @@ export function useAudioPlayback({
   const handleShufflePlayAll = useCallback((customTracks) => {
     const target = customTracks || playlist?.tracks || []
     if (!target || target.length === 0) return
+    autoplayTokenRef.current++
+    autoplayBusyRef.current = false
     const shuffled = fisherYatesShuffle(target)
     originalContextRef.current = [...target]
     setActivePlaybackContext(shuffled)
@@ -451,6 +596,8 @@ export function useAudioPlayback({
   const playList = useCallback((tracks, { shuffle = false, from = null } = {}) => {
     const list = (tracks || []).filter(Boolean)
     if (!list.length) return
+    autoplayTokenRef.current++
+    autoplayBusyRef.current = false
     if (shuffle) {
       if (jamManager.state.active && !jamManager.state.isHost && jamManager.state.djMode === 'host_only' && !remoteJamGuardRef.current) {
         jamManager.emitQueueAdd(list[0])
@@ -600,6 +747,10 @@ export function useAudioPlayback({
     repeatModeRef,
     crossfadeSec,
     setCrossfadeSec,
+    autoplay,
+    autoplayRef,
+    setAutoplay,
+    toggleAutoplay,
     currentTrackRef,
     isPlayingRef,
     queueRef,
@@ -615,6 +766,7 @@ export function useAudioPlayback({
     handlePlayNext,
     handleAddToQueue,
     handleRemoveFromQueue,
+    reorderQueue,
     handleClearQueue,
     handleToggleShuffle,
     cycleRepeatMode,

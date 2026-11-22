@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import innertubeHandler from '../../api/innertube.js'
 import audioInfoHandler from '../../api/audio-info.js'
 import audioHandler from '../../api/audio.js'
-import socialHandler from '../../api/social.js'
+import socialHandler, { createSocialSessionToken } from '../../api/social.js'
 
 const IOS_UA = 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_1 like Mac OS X; US)'
 const ANDROID_VR_UA =
@@ -222,4 +222,171 @@ test('api/social retains packets across polls and filters strictly by since curs
     postPoll.inbox.map((m) => m.msgId),
     ['pkt-2']
   )
+})
+
+test('api/social supports Jam room relay, Upstash/Vercel KV REST backing, and UPBEAT_SOCIAL_SECRET HMAC guard', async () => {
+  globalThis.__UPBEAT_SOCIAL_BOX__?.clear?.()
+  globalThis.__UPBEAT_JAM_ROOMS__?.clear?.()
+
+  // 1. In-memory Jam room relay via POST room_send / room_poll and GET ?roomCode=
+  const rSend = await socialHandler(
+    new Request('https://upbeat.local/api/social', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'room_send',
+        roomCode: 'jam-4242',
+        packet: { _packetId: 'room-p1', type: 'PLAY', position: 12 }
+      })
+    })
+  )
+  assert.equal(rSend.status, 200)
+  const rSendJson = await rSend.json()
+  assert.equal(rSendJson.ok, true)
+  assert.equal(rSendJson.roomCode, 'JAM-4242')
+
+  const rPollGet = await (
+    await socialHandler(new Request('https://upbeat.local/api/social?roomCode=JAM-4242&since=0'))
+  ).json()
+  assert.equal(rPollGet.events.length, 1)
+  assert.equal(rPollGet.packets[0]._packetId, 'room-p1')
+
+  const rPollPost = await (
+    await socialHandler(
+      new Request('https://upbeat.local/api/social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'room_poll', roomCode: 'JAM-4242', since: rPollGet.serverTs })
+      })
+    )
+  ).json()
+  assert.equal(rPollPost.events.length, 0)
+
+  // 2. Mocked Upstash/Vercel KV REST store isolates across empty in-memory maps
+  const kvStore = new Map()
+  const kvTtls = new Map()
+  const origFetch = globalThis.fetch
+  const origEnv = {
+    KV_REST_API_URL: process.env.KV_REST_API_URL,
+    KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
+    UPBEAT_SOCIAL_SECRET: process.env.UPBEAT_SOCIAL_SECRET
+  }
+
+  globalThis.__UPBEAT_SOCIAL_BOX__?.clear?.()
+  globalThis.__UPBEAT_JAM_ROOMS__?.clear?.()
+  process.env.KV_REST_API_URL = 'https://kv.upstash.test'
+  process.env.KV_REST_API_TOKEN = 'edge-kv-token'
+
+  globalThis.fetch = async (url, opts = {}) => {
+    assert.equal(String(url), 'https://kv.upstash.test')
+    assert.equal(opts.headers?.Authorization, 'Bearer edge-kv-token')
+    const cmd = JSON.parse(opts.body)
+    const op = String(cmd[0]).toUpperCase()
+    if (op === 'GET') {
+      return new Response(JSON.stringify({ result: kvStore.get(cmd[1]) ?? null }), { status: 200 })
+    }
+    if (op === 'MGET') {
+      return new Response(JSON.stringify({ result: cmd.slice(1).map((k) => kvStore.get(k) ?? null) }), {
+        status: 200
+      })
+    }
+    if (op === 'SET') {
+      kvStore.set(cmd[1], cmd[2])
+      if (String(cmd[3]).toUpperCase() === 'EX') kvTtls.set(cmd[1], Number(cmd[4]))
+      return new Response(JSON.stringify({ result: 'OK' }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ error: 'unsupported' }), { status: 400 })
+  }
+
+  try {
+    const kvPush = await (
+      await socialHandler(
+        new Request('https://upbeat.local/api/social', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'push',
+            toId: 'UP-KV0001',
+            packet: { msgId: 'kv-pkt-1', type: 'HELLO', from: { friendCode: 'UP-KV0002', name: 'KV Peer' } }
+          })
+        })
+      )
+    ).json()
+    assert.equal(kvPush.ok, true)
+    assert.equal(globalThis.__UPBEAT_SOCIAL_BOX__.size, 0)
+    assert.equal(kvTtls.get('upbeat:social:box:UP-KV0001'), 900)
+
+    const kvPoll = await (
+      await socialHandler(new Request('https://upbeat.local/api/social?id=UP-KV0001&friends=UP-KV0002&since=0'))
+    ).json()
+    assert.equal(kvPoll.inbox.length, 1)
+    assert.equal(kvPoll.inbox[0].msgId, 'kv-pkt-1')
+    assert.equal(kvPoll.friends[0].online, true)
+
+    await socialHandler(
+      new Request('https://upbeat.local/api/social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'room_send',
+          roomCode: 'JAM-KV01',
+          packet: { _packetId: 'kv-rp1', type: 'SYNC' }
+        })
+      })
+    )
+    assert.equal(kvTtls.get('upbeat:jam:room:JAM-KV01'), 7200)
+    const kvRoomPoll = await (
+      await socialHandler(new Request('https://upbeat.local/api/social?roomCode=JAM-KV01&since=0'))
+    ).json()
+    assert.equal(kvRoomPoll.events.length, 1)
+    assert.equal(kvRoomPoll.events[0]._packetId, 'kv-rp1')
+
+    // 3. Optional UPBEAT_SOCIAL_SECRET HMAC session token guard + CORS header check
+    const optRes = await socialHandler(new Request('https://upbeat.local/api/social', { method: 'OPTIONS' }))
+    assert.equal(optRes.status, 204)
+    assert.match(optRes.headers.get('Access-Control-Allow-Headers') || '', /X-UpBeat-Session/)
+
+    const secret = 'edge-social-hmac-secret'
+    process.env.UPBEAT_SOCIAL_SECRET = secret
+    const validToken = await createSocialSessionToken(
+      { sub: 'UP-KV0001', exp: Date.now() + 60_000 },
+      secret
+    )
+    const expiredToken = await createSocialSessionToken(
+      { sub: 'UP-KV0001', exp: Date.now() - 5_000 },
+      secret
+    )
+
+    const unauthRes = await socialHandler(new Request('https://upbeat.local/api/social?id=UP-KV0001&since=0'))
+    assert.equal(unauthRes.status, 401)
+
+    const expiredRes = await socialHandler(
+      new Request('https://upbeat.local/api/social?id=UP-KV0001&since=0', {
+        headers: { 'X-UpBeat-Session': expiredToken }
+      })
+    )
+    assert.equal(expiredRes.status, 401)
+
+    const mismatchRes = await socialHandler(
+      new Request('https://upbeat.local/api/social?id=UP-OTHER9&since=0', {
+        headers: { 'X-UpBeat-Session': validToken }
+      })
+    )
+    assert.equal(mismatchRes.status, 403)
+
+    const authOkRes = await socialHandler(
+      new Request('https://upbeat.local/api/social?id=UP-KV0001&since=0', {
+        headers: { 'X-UpBeat-Session': validToken }
+      })
+    )
+    assert.equal(authOkRes.status, 200)
+    const authOkJson = await authOkRes.json()
+    assert.equal(authOkJson.inbox.length, 1)
+  } finally {
+    globalThis.fetch = origFetch
+    for (const [k, v] of Object.entries(origEnv)) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+  }
 })

@@ -136,7 +136,7 @@ def _resolve_app_version() -> str:
                 return str(ver)
     except Exception:
         pass
-    return "7.6.2"
+    return "7.7.0"
 
 
 APP_VERSION = _resolve_app_version()

@@ -53,14 +53,11 @@ def get_status():
         "status": "online",
         "app": "UpBeat",
         "models": [
-            {"id": "gemini-4-argon", "name": "Gemini 4 Argon (⚡ 1s Fastest)", "recommended": True},
-            {"id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite (2s Fast)", "recommended": False},
-            {"id": "gemini-3.5-flash-lite", "name": "Gemini 3.5 Flash Lite (Active)", "recommended": False},
+            {"id": "gemini-4-argon", "name": "Gemini 2.5 Flash Lite (Fastest)", "recommended": True},
+            {"id": "gemini-2.5-flash-lite", "name": "Gemini 2.5 Flash Lite", "recommended": False},
             {"id": "gemini-flash-lite-latest", "name": "Gemini Flash Lite Latest", "recommended": False},
-            {"id": "gemini-3-flash-preview", "name": "Gemini 3 Flash Preview", "recommended": False},
             {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "recommended": False},
-            {"id": "gemma-4-26b-a4b-it", "name": "Gemma 4 26B MoE", "recommended": False},
-            {"id": "gemini-3.8-flash", "name": "Gemini 3.8 Flash (Legacy)", "recommended": False},
+            {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash", "recommended": False},
         ],
     }
 

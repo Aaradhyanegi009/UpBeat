@@ -64,15 +64,61 @@ class TestCuratorAndYt(unittest.TestCase):
             return {"playlist_title": "Healthy Mix", "tracks": []}
 
         with patch.object(curator, "_call_gemini_rest", side_effect=fake_rest):
+            self.assertEqual(curator.MODEL_429_COOLDOWN_SEC, 60.0)
             r1 = curator.generate_fast_with_fallback("p1", preferred_model="gemini-4-argon")
-            self.assertEqual(r1["used_model"], "gemini-3.1-flash-lite")
-            self.assertEqual(calls, ["gemini-4-argon", "gemini-3.1-flash-lite"])
+            self.assertEqual(r1["used_model"], "gemini-flash-lite-latest")
+            self.assertEqual(calls, ["gemini-4-argon", "gemini-flash-lite-latest"])
 
-            # Second call within 60s should skip gemini-4-argon completely
+            # Second call within 60s should skip gemini-4-argon AND its alias gemini-2.5-flash-lite
             calls.clear()
             r2 = curator.generate_fast_with_fallback("p2", preferred_model="gemini-4-argon")
-            self.assertEqual(r2["used_model"], "gemini-3.1-flash-lite")
-            self.assertEqual(calls, ["gemini-3.1-flash-lite"])
+            self.assertEqual(r2["used_model"], "gemini-flash-lite-latest")
+            self.assertEqual(calls, ["gemini-flash-lite-latest"])
+
+            calls.clear()
+            r3 = curator.generate_fast_with_fallback("p3", preferred_model="gemini-2.5-flash-lite")
+            self.assertEqual(r3["used_model"], "gemini-flash-lite-latest")
+            self.assertEqual(calls, ["gemini-flash-lite-latest"])
+
+    def test_verified_gemini_aliases_and_no_speculative_fallback_ids(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "candidates": [{"content": {"parts": [{"text": '{"tracks": []}'}]}}]
+        }
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "k-test"}), patch.object(
+            curator._HTTP, "post", return_value=mock_resp
+        ) as mock_post:
+            curator._call_gemini_rest("gemini-4-argon", "prompt")
+            called_url = mock_post.call_args[0][0]
+            self.assertIn("/models/gemini-2.5-flash-lite:generateContent", called_url)
+
+        seen_models = []
+
+        def fail_all(model_id, prompt, timeout=14.0):
+            seen_models.append(model_id)
+            raise RuntimeError("HTTP 404")
+
+        with patch.dict(os.environ, {"GROQ_API_KEY": "", "OPENROUTER_API_KEY": ""}), patch.object(
+            curator, "GROQ_API_KEY", ""
+        ), patch.object(curator, "OPENROUTER_API_KEY", ""), patch.object(
+            curator, "_call_gemini_rest", side_effect=fail_all
+        ):
+            with self.assertRaises(RuntimeError):
+                curator.generate_fast_with_fallback("prompt")
+
+        dead_ids = {
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3-flash-preview",
+            "gemma-4-26b-a4b-it",
+            "gemini-3.8-flash",
+        }
+        self.assertTrue(dead_ids.isdisjoint(set(seen_models)))
+        self.assertEqual(
+            seen_models,
+            ["gemini-4-argon", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.0-flash"],
+        )
 
     def test_clean_json_response_handles_prose_and_markdown(self):
         prose = 'Here is your playlist:\n```json\n{"playlist_title": "Night", "tracks": []}\n```\nEnjoy!'

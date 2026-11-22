@@ -786,6 +786,14 @@ export class RoomController {
         break
       }
 
+      case 'JAM_RESYNC_REQUEST': {
+        if (this.mgr.state.role === 'host') {
+          this.mgr.broadcastSyncNow(null, { useCloud: true })
+          this.mgr.broadcastParticipants()
+        }
+        break
+      }
+
       default:
         break
     }
@@ -895,6 +903,41 @@ export class RoomController {
         syncTier: cleanTier
       })
     }
+  }
+
+  resyncNow() {
+    if (!this.mgr.state.active) return false
+    if (this.mgr.state.role === 'host') {
+      this.mgr.broadcastHostSync()
+      this.mgr.broadcastParticipants()
+      return true
+    }
+    if (this.mgr.state.role === 'guest') {
+      this.mgr.sendToHost(
+        {
+          type: 'JAM_PING',
+          t1: Date.now(),
+          senderId: this.mgr.getSelfParticipantId()
+        },
+        { useCloud: true }
+      )
+      this.mgr.sendToHost(
+        {
+          type: 'JAM_RESYNC_REQUEST',
+          senderId: this.mgr.getSelfParticipantId(),
+          _packetId: makePacketId()
+        },
+        { useCloud: true }
+      )
+      if (this.mgr.state.roomCode) {
+        try {
+          this.mgr.pollBackendRoom?.(this.mgr.state.roomCode)
+          this.mgr.pollCloudRoom?.(this.mgr.state.roomCode)
+        } catch {}
+      }
+      return true
+    }
+    return false
   }
 
   leaveJam(silent = false) {

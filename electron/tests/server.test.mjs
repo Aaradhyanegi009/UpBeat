@@ -86,7 +86,7 @@ test('microserver enforces CORS, 404 JSON on unknown /api/*, and path traversal 
     portCandidates: [port],
     staticDir: ws.staticDir,
     userDataDir: ws.userDataDir,
-    version: '7.6.2'
+    version: '7.7.0'
   })
 
   try {
@@ -94,7 +94,7 @@ test('microserver enforces CORS, 404 JSON on unknown /api/*, and path traversal 
     const statusRes = await fetch(`${url}/api/status`)
     assert.equal(statusRes.status, 200)
     const statusJson = await statusRes.json()
-    assert.equal(statusJson.version, '7.6.2')
+    assert.equal(statusJson.version, '7.7.0')
     assert.equal(statusJson.capabilities.download, true)
     assert.equal(statusJson.capabilities.lyrics, true)
     assert.equal(statusJson.capabilities.curate, false)
@@ -300,6 +300,101 @@ test('innertube endpoint allowlist, lyrics proxy, download attachment, and 403 c
     assert.equal(await dlRes.text(), 'AUDIO_BYTES')
     assert.equal(playerCallCount, 2)
     assert.equal(audioFetchCalls, 2)
+  } finally {
+    globalThis.fetch = origFetch
+    server.closeAllConnections?.()
+    await new Promise((r) => server.close(r))
+    fs.rmSync(ws.root, { recursive: true, force: true })
+  }
+})
+
+test('lyrics endpoint supports /api/get duration lookup, /api/search fallback, and hit/negative TTL caching', async () => {
+  const ws = createTempWorkspace()
+  const port = await getFreePort()
+  const { server, url } = await startServer({
+    portCandidates: [port],
+    staticDir: ws.staticDir,
+    userDataDir: ws.userDataDir
+  })
+
+  const origFetch = globalThis.fetch
+  const upstreamCalls = []
+
+  try {
+    globalThis.fetch = async (target, opts) => {
+      const targetStr = String(target)
+      if (targetStr.startsWith(url)) {
+        return origFetch(target, opts)
+      }
+      upstreamCalls.push(targetStr)
+
+      if (targetStr.startsWith('https://lrclib.net/api/get')) {
+        const u = new URL(targetStr)
+        if (u.searchParams.get('track_name') === 'Starboy') {
+          return new Response(
+            JSON.stringify({
+              id: 101,
+              trackName: 'Starboy',
+              artistName: 'The Weeknd',
+              duration: 230,
+              syncedLyrics: '[00:01.00] Look what you done'
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+        return new Response('Not Found', { status: 404 })
+      }
+
+      if (targetStr.startsWith('https://lrclib.net/api/search')) {
+        const u = new URL(targetStr)
+        if (u.searchParams.get('track_name') === 'Fallback Song') {
+          return new Response(
+            JSON.stringify([{ id: 202, trackName: 'Fallback Song', plainLyrics: 'Line 1' }]),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
+
+      throw new Error(`Unexpected upstream URL: ${targetStr}`)
+    }
+
+    // 1. /api/get hit wraps JSON object as 1-element array and caches subsequent call
+    const r1 = await origFetch(`${url}/api/lyrics?track_name=Starboy&artist_name=The%20Weeknd&duration=230`)
+    assert.equal(r1.status, 200)
+    const j1 = await r1.json()
+    assert.equal(Array.isArray(j1), true)
+    assert.equal(j1.length, 1)
+    assert.equal(j1[0].id, 101)
+    assert.equal(upstreamCalls.length, 1)
+    assert.match(upstreamCalls[0], /^https:\/\/lrclib\.net\/api\/get\?/)
+    assert.match(upstreamCalls[0], /duration=230/)
+
+    const r2 = await origFetch(`${url}/api/lyrics?track_name=starboy&artist_name=the%20weeknd&duration=230`)
+    assert.equal(r2.status, 200)
+    assert.deepEqual(await r2.json(), j1)
+    assert.equal(upstreamCalls.length, 1, 'Repeated lookup should hit lyrics cache')
+
+    // 2. /api/get 404 falls back to /api/search
+    const r3 = await origFetch(`${url}/api/lyrics?track_name=Fallback%20Song&artist_name=Someone&duration=180`)
+    assert.equal(r3.status, 200)
+    const j3 = await r3.json()
+    assert.equal(j3.length, 1)
+    assert.equal(j3[0].id, 202)
+    assert.equal(upstreamCalls.length, 3)
+    assert.match(upstreamCalls[1], /^https:\/\/lrclib\.net\/api\/get\?/)
+    assert.match(upstreamCalls[2], /^https:\/\/lrclib\.net\/api\/search\?/)
+
+    // 3. Negative empty miss caches for 5m without hammering LRCLIB
+    const m1 = await origFetch(`${url}/api/lyrics?q=NoLyricsTrackXYZ`)
+    assert.deepEqual(await m1.json(), [])
+    const callsAfterMiss = upstreamCalls.length
+    const m2 = await origFetch(`${url}/api/lyrics?q=nolyricstrackxyz`)
+    assert.deepEqual(await m2.json(), [])
+    assert.equal(upstreamCalls.length, callsAfterMiss, 'Repeated empty miss should hit negative cache')
   } finally {
     globalThis.fetch = origFetch
     server.closeAllConnections?.()

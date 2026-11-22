@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { X, Copy, Check, Share2, QrCode, UserPlus, Trash2, LogOut, Radio, Users, Crown, Play } from 'lucide-react'
+import { X, Copy, Check, Share2, QrCode, UserPlus, Trash2, LogOut, Radio, Users, Crown, Play, RefreshCw } from 'lucide-react'
 import { jamManager, loadJamUserProfile, normalizeFriendCode, normalizeFriendId, normalizeRoomCode, buildJamInviteUrl, buildFriendInviteUrl, sortFriendsDeterministically } from '../jamEngine'
+import { renderQrDataUri } from '../utils/qrSvg'
 import { Avatar, Art, Chip, IconButton, ActionMenu, Spinner } from '../ui/primitives'
 
 function lastSeen(ts) {
@@ -27,12 +28,24 @@ async function shareOrCopy({ title, text, url }, onCopied) {
   } catch {}
 }
 
-function qrUrl(data) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(data)}`
-}
+const JAM_REACTION_EMOJIS = ['🔥', '💜', '🎧', '✨', '🙌']
 
-/** Friends & Jam hub. Same props as before so App doesn't change. */
-export default function JamModal({ isOpen, onClose, jamState, googleUser, currentTrack, initialJoinCode = '', initialFriendCode = '', initialSection = '', onPlayTrack, onNotify }) {
+/** Friends & Jam hub. */
+export default function JamModal({
+  isOpen,
+  onClose,
+  jamState,
+  jamReactions = [],
+  onResync,
+  onSendReaction,
+  googleUser,
+  currentTrack,
+  initialJoinCode = '',
+  initialFriendCode = '',
+  initialSection = '',
+  onPlayTrack,
+  onNotify
+}) {
   const [tab, setTab] = useState('jam')
   const [joinCode, setJoinCode] = useState(initialJoinCode || '')
   const [friendCode, setFriendCode] = useState(initialFriendCode || '')
@@ -43,6 +56,7 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
   const [busy, setBusy] = useState('')
   const [copied, setCopied] = useState('')
   const [invited, setInvited] = useState({})
+  const [resynced, setResynced] = useState(false)
 
   useEffect(() => {
     if (initialJoinCode) {
@@ -156,6 +170,24 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
     }
   }
 
+  const handleResync = () => {
+    const ok = onResync ? onResync() : jamManager.resyncNow()
+    setResynced(true)
+    setTimeout(() => setResynced(false), 1800)
+    if (ok !== false) {
+      onNotify?.('Syncing Jam clock…', 'info')
+    }
+  }
+
+  const handleReact = (emoji) => {
+    if (onSendReaction) onSendReaction(emoji)
+    else jamManager.sendReaction(emoji)
+  }
+
+  const rttMs = typeof jamState?.rttMs === 'number' && isFinite(jamState.rttMs) ? Math.round(jamState.rttMs) : null
+  const driftMs = typeof jamState?.syncDeltaMs === 'number' && isFinite(jamState.syncDeltaMs) ? Math.round(Math.abs(jamState.syncDeltaMs)) : null
+  const syncTierLabel = jamState?.syncTier || 'LOCKED'
+
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center select-none" role="dialog" aria-modal="true" aria-labelledby="jam-title">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/60 cursor-default" onClick={onClose} />
@@ -234,8 +266,60 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                   </div>
                   {qrFor === 'room' && roomUrl && (
                     <div className="mt-4 flex flex-col items-center gap-2">
-                      <img src={qrUrl(roomUrl)} alt={`QR code to join room ${jamState.roomCode}`} className="w-44 h-44 rounded-xl bg-white p-1" />
+                      <img src={renderQrDataUri(roomUrl, { size: 200 })} alt={`QR code to join room ${jamState.roomCode}`} className="w-44 h-44 rounded-xl bg-white p-1" />
                       <span className="text-xs text-t2">Scan with a phone camera to join</span>
+                    </div>
+                  )}
+
+                  {/* Sync Health & Resync Now */}
+                  <div className="mt-3.5 pt-3 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-t2">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold ${inSync ? 'bg-live/15 text-live' : 'bg-amber-500/15 text-amber-300'}`}>
+                        {syncTierLabel}
+                      </span>
+                      {rttMs !== null && <span className="tabular-nums">Latency {rttMs} ms</span>}
+                      {driftMs !== null && <span className="tabular-nums">· Drift {driftMs} ms</span>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResync}
+                      className="h-8 px-3 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-t1 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      {resynced ? <Check className="w-3.5 h-3.5 text-live" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      <span>{resynced ? 'Synced' : 'Resync now'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Emoji Reactions */}
+                <div className="rounded-2xl bg-s2 p-3.5 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-t2 uppercase tracking-[0.06em]">Reactions</span>
+                    <div className="flex items-center gap-1.5">
+                      {JAM_REACTION_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleReact(emoji)}
+                          aria-label={`React ${emoji}`}
+                          className="h-8 px-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.15] active:scale-90 transition-all text-base cursor-pointer"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {jamReactions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/[0.06]" aria-live="polite">
+                      {jamReactions.slice(-8).map((r) => (
+                        <span
+                          key={r.id}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-s3 text-xs font-semibold text-t1"
+                        >
+                          <span>{r.emoji}</span>
+                          {r.senderName && <span className="text-t2">{r.senderName}</span>}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -476,7 +560,7 @@ export default function JamModal({ isOpen, onClose, jamState, googleUser, curren
                 </div>
                 {qrFor === 'friend' && friendUrl && (
                   <div className="mt-4 flex flex-col items-center gap-2">
-                    <img src={qrUrl(friendUrl)} alt="QR code to add you as a friend" className="w-44 h-44 rounded-xl bg-white p-1" />
+                    <img src={renderQrDataUri(friendUrl, { size: 200 })} alt="QR code to add you as a friend" className="w-44 h-44 rounded-xl bg-white p-1" />
                     <span className="text-xs text-t2">Friends scan this to add you</span>
                   </div>
                 )}

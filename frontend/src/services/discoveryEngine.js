@@ -247,6 +247,507 @@ const STARTER_ROTATION_CYCLES = [
   ]
 ]
 
+const GENRE_MIX_CATALOG = {
+  rock: {
+    id: 'block_mix_rock',
+    label: 'Rock & Alt',
+    title: 'Rock & Alt Anthems',
+    subtitle: 'Driving guitars, iconic riffs & alt-rock staples',
+    badge: 'ROCK MIX',
+    query: 'Arctic Monkeys Coldplay Linkin Park Queen Foo Fighters alt rock anthems songs playlist -podcast',
+    color: 'from-red-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg', 'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg']
+  },
+  indie: {
+    id: 'block_mix_indie',
+    label: 'Indie & Acoustic',
+    title: 'Indie & Acoustic Drift',
+    subtitle: 'Dreamy indie textures, warm guitars & late-night hooks',
+    badge: 'INDIE MIX',
+    query: 'Tame Impala The 1975 Cigarettes After Sex Lana Del Rey indie acoustic songs playlist -podcast',
+    color: 'from-teal-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg', 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg']
+  },
+  electronic: {
+    id: 'block_mix_electronic',
+    label: 'Electronic & Dance',
+    title: 'Electronic & Synth Pulse',
+    subtitle: 'Euphoric drops, analog synths & dancefloor energy',
+    badge: 'ELECTRONIC',
+    query: 'Daft Punk Fred again Calvin Harris Avicii Martin Garrix electronic dance songs playlist -podcast',
+    color: 'from-cyan-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg', 'https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg']
+  },
+  hiphop: {
+    id: 'block_mix_hiphop',
+    label: 'Hip-Hop & Rap',
+    title: 'Hip-Hop & Rap Rotation',
+    subtitle: 'Hard-hitting beats, razor-sharp flows & modern classics',
+    badge: 'HIP-HOP MIX',
+    query: 'Kendrick Lamar Travis Scott J Cole Drake Tyler The Creator hip hop rap songs playlist -podcast',
+    color: 'from-amber-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/UNZqm3dxd2w/maxresdefault.jpg', 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg']
+  },
+  pop: {
+    id: 'block_mix_pop',
+    label: 'Pop',
+    title: 'Modern Pop & Chart Mix',
+    subtitle: 'Hooks, synth-pop polish & global chart favorites',
+    badge: 'POP MIX',
+    query: 'The Weeknd Dua Lipa Taylor Swift Billie Eilish Post Malone pop hits songs playlist -podcast',
+    color: 'from-purple-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg', 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg']
+  },
+  rnb: {
+    id: 'block_mix_rnb',
+    label: 'R&B & Soul',
+    title: 'R&B & Neo-Soul Grooves',
+    subtitle: 'Velvet vocals, lush chords & midnight R&B',
+    badge: 'R&B SOUL',
+    query: 'SZA Frank Ocean Daniel Caesar Giveon Bruno Mars modern r&b soul songs playlist -podcast',
+    color: 'from-rose-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg', 'https://i.ytimg.com/vi/T6eK-2OQtew/maxresdefault.jpg']
+  },
+  jazz: {
+    id: 'block_mix_jazz',
+    label: 'Jazz',
+    title: 'Jazz & Nu-Jazz Sessions',
+    subtitle: 'Smoky brass, improvised grooves & timeless standards',
+    badge: 'JAZZ MIX',
+    query: 'Kamasi Washington Robert Glasper Miles Davis Laufey modern jazz fusion songs playlist -podcast',
+    color: 'from-yellow-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/H5v3kku4y6Q/maxresdefault.jpg', 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg']
+  },
+  classical: {
+    id: 'block_mix_classical',
+    label: 'Classical & Film Score',
+    title: 'Orchestral & Score Epics',
+    subtitle: 'Sweeping strings, piano minimalism & film scores',
+    badge: 'CLASSICAL SCORE',
+    query: 'Hans Zimmer Ludovico Einaudi Max Richter Joe Hisaishi orchestral classical soundtrack songs playlist -podcast',
+    color: 'from-sky-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/kPa7bsKwL-c/maxresdefault.jpg', 'https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg']
+  },
+  metal: {
+    id: 'block_mix_metal',
+    label: 'Metal & Heavy',
+    title: 'Heavy Riffs & Metalcore',
+    subtitle: 'Crushing guitars, double-kick precision & raw energy',
+    badge: 'METAL MIX',
+    query: 'Metallica Bring Me The Horizon Slipknot Avenged Sevenfold metal rock songs playlist -podcast',
+    color: 'from-zinc-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/4NRXx6U8ABQ/maxresdefault.jpg', 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg']
+  },
+  country: {
+    id: 'block_mix_country',
+    label: 'Country & Folk',
+    title: 'Country, Roots & Folk',
+    subtitle: 'Storytelling acoustics, heartland anthems & Americana',
+    badge: 'COUNTRY FOLK',
+    query: 'Zach Bryan Chris Stapleton Morgan Wallen Luke Combs country folk songs playlist -podcast',
+    color: 'from-orange-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg', 'https://i.ytimg.com/vi/JGwWNGJdvx8/maxresdefault.jpg']
+  },
+  chill: {
+    id: 'block_chill_late_night',
+    label: 'Chill & Downtempo',
+    title: 'Chill & Late Night Vibes',
+    subtitle: 'Atmospheric, melodic & nocturnal chill tailored for you',
+    badge: 'CHILL MIX',
+    query: 'Joji The Weeknd Keshi Cigarettes After Sex Billie Eilish chill late night vibes songs playlist -comedy -podcast',
+    color: 'from-teal-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg', 'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg']
+  },
+  bollywood: {
+    id: 'block_hindi_indie_bollywood',
+    label: 'Hindi & Bollywood',
+    title: 'Hindi Indie & Bollywood Vibe',
+    subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
+    badge: 'HINDI MIX',
+    query: 'Arijit Singh Prateek Kuhad Anuv Jain The Local Train Mitraz Aditya Rikhari soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy',
+    color: 'from-amber-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg', 'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg']
+  },
+  punjabi: {
+    id: 'block_mix_punjabi',
+    label: 'Punjabi & Desi',
+    title: 'Punjabi & Desi Heat',
+    subtitle: 'Bhangra basslines, modern Punjabi pop & drive hits',
+    badge: 'PUNJABI MIX',
+    query: 'Diljit Dosanjh Karan Aujla AP Dhillon Sidhu Moose Wala punjabi songs playlist -podcast',
+    color: 'from-emerald-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/RLzC55ai0eo/maxresdefault.jpg', 'https://i.ytimg.com/vi/VuG7ge_8I2Y/maxresdefault.jpg']
+  },
+  jpop: {
+    id: 'block_jpop_anime',
+    label: 'J-Pop & Anime',
+    title: 'J-Pop & Anime Essentials',
+    subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
+    badge: 'J-POP & ANIME',
+    query: 'YOASOBI Kenshi Yonezu Ado Eve King Gnu LiSA Fujii Kaze official anime jpop songs playlist -shorts',
+    color: 'from-rose-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg', 'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg']
+  },
+  kpop: {
+    id: 'block_mix_kpop',
+    label: 'K-Pop',
+    title: 'K-Pop & Seoul Spotlight',
+    subtitle: 'Chart-topping K-Pop hooks, choreography & B-sides',
+    badge: 'K-POP MIX',
+    query: 'NewJeans BTS BLACKPINK Stray Kids TWICE kpop hits songs playlist -podcast',
+    color: 'from-fuchsia-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/js1CtxSY38I/maxresdefault.jpg', 'https://i.ytimg.com/vi/gdZLi9oWNZg/maxresdefault.jpg']
+  },
+  latin: {
+    id: 'block_mix_latin',
+    label: 'Latin & Reggaeton',
+    title: 'Latin & Reggaeton Fuego',
+    subtitle: 'Dembow rhythms, Latin pop & sun-soaked grooves',
+    badge: 'LATIN MIX',
+    query: 'Bad Bunny Karol G Shakira J Balvin Peso Pluma latin reggaeton songs playlist -podcast',
+    color: 'from-orange-600/40 to-black',
+    thumbs: ['https://i.ytimg.com/vi/kJQP7kiw5Fk/maxresdefault.jpg', 'https://i.ytimg.com/vi/CocEMWdc7Ck/maxresdefault.jpg']
+  }
+}
+
+const GENRE_ALIAS_PATTERNS = [
+  [/bollywood|hindi|desi\s*pop/i, 'bollywood'],
+  [/punjabi|bhangra/i, 'punjabi'],
+  [/j-?pop|anime|japanese|tokyo/i, 'jpop'],
+  [/k-?pop|korean|seoul/i, 'kpop'],
+  [/latin|reggaeton|salsa|urbano/i, 'latin'],
+  [/hip[\s-]?hop|rap|trap|drill/i, 'hiphop'],
+  [/electronic|edm|dance|house|techno|synthwave|dubstep|drum/i, 'electronic'],
+  [/indie|acoustic|shoegaze|bedroom|dream\s*pop/i, 'indie'],
+  [/alt(ernative)?[\s-]?rock|\brock\b|punk|grunge/i, 'rock'],
+  [/metal|heavy|hardcore/i, 'metal'],
+  [/r&b|rnb|neo[\s-]?soul|\bsoul\b/i, 'rnb'],
+  [/jazz|blues|bossa/i, 'jazz'],
+  [/classical|orchestr|soundtrack|score|film|piano|instrumental/i, 'classical'],
+  [/country|folk|americana/i, 'country'],
+  [/chill|lo-?fi|ambient|downtempo/i, 'chill'],
+  [/\bpop\b|synth-?pop|mainstream/i, 'pop']
+]
+
+const REGION_TO_GENRE = {
+  india: 'bollywood',
+  in: 'bollywood',
+  japan: 'jpop',
+  jp: 'jpop',
+  korea: 'kpop',
+  kr: 'kpop',
+  latin: 'latin',
+  latam: 'latin',
+  us: 'pop',
+  uk: 'rock',
+  europe: 'electronic'
+}
+
+const ARTIST_GENRE_HINTS = [
+  [/yoasobi|kenshi|fujii|higuchi|lisa|radwimps|sawano|ado|eve|king gnu/i, 'jpop'],
+  [/arijit|shreya|pritam|rahman|jubin|anuv|prateek|local train|mitraz/i, 'bollywood'],
+  [/diljit|karan aujla|ap dhillon|sidhu|shubh/i, 'punjabi'],
+  [/bts|blackpink|newjeans|stray|twice|jung kook/i, 'kpop'],
+  [/bad bunny|shakira|karol|balvin|peso pluma/i, 'latin'],
+  [/arctic monkeys|coldplay|linkin park|queen|foo fighters|nirvana|radiohead/i, 'rock'],
+  [/tame impala|the 1975|cigarettes after sex|lana del rey|phoebe bridgers/i, 'indie'],
+  [/daft punk|fred again|calvin harris|avicii|martin garrix|deadmau5|skrillex/i, 'electronic'],
+  [/kendrick|drake|travis scott|eminem|tyler|j\.? cole|kanye/i, 'hiphop'],
+  [/sza|frank ocean|daniel caesar|giveon|bruno mars/i, 'rnb'],
+  [/hans zimmer|ludovico|max richter|hisaishi|mozart|beethoven|chopin/i, 'classical'],
+  [/miles davis|kamasi|glasper|coltrane|laufey|norah jones/i, 'jazz'],
+  [/metallica|bring me the horizon|slipknot|avenged sevenfold/i, 'metal'],
+  [/zach bryan|chris stapleton|morgan wallen|luke combs/i, 'country']
+]
+
+function normalizeGenreKey(raw = '') {
+  const clean = String(raw || '').trim()
+  if (!clean) return ''
+  const lower = clean.toLowerCase()
+  if (GENRE_MIX_CATALOG[lower]) return lower
+  if (REGION_TO_GENRE[lower]) return REGION_TO_GENRE[lower]
+  for (const [re, key] of GENRE_ALIAS_PATTERNS) {
+    if (re.test(clean)) return key
+  }
+  return lower
+}
+
+function readPersonalizationPrefs(tasteDnaOverride = null) {
+  let genres = []
+  let regions = []
+  let artists = []
+  try {
+    const rawTaste = localStorage.getItem('upbeat_taste_prefs_v1')
+    if (rawTaste) {
+      const parsed = JSON.parse(rawTaste)
+      if (Array.isArray(parsed?.genres)) genres = parsed.genres.filter(Boolean).map(String)
+      if (Array.isArray(parsed?.regions)) regions = parsed.regions.filter(Boolean).map(String)
+      if (Array.isArray(parsed?.artists)) artists = parsed.artists.filter(Boolean).map(String)
+    }
+  } catch {}
+
+  let dna = tasteDnaOverride && typeof tasteDnaOverride === 'object' ? tasteDnaOverride : null
+  if (!dna) {
+    try {
+      const rawDna = localStorage.getItem('argon_dna_v2')
+      if (rawDna) dna = JSON.parse(rawDna)
+    } catch {}
+  }
+  const dnaGenres = Array.isArray(dna?.primary_genres) ? dna.primary_genres.filter(Boolean).map(String) : []
+  const dnaArtists = Array.isArray(dna?.key_artists) ? dna.key_artists.filter(Boolean).map(String) : []
+
+  return { genres, regions, artists, dna, dnaGenres, dnaArtists }
+}
+
+function buildDynamicTier2Blocks({
+  prefs,
+  userTracks = [],
+  rediscoverBlock = null,
+  cursor = 0,
+  isSeed = false
+}) {
+  const { genres, regions, artists, dna, dnaGenres, dnaArtists } = prefs
+  const hasOnboardingPrefs =
+    genres.length > 0 ||
+    regions.length > 0 ||
+    artists.length > 0 ||
+    dnaGenres.length > 0 ||
+    dnaArtists.length > 0 ||
+    Boolean(dna?.archetype)
+
+  // Clean artist pool from onboarding picks, Sonic DNA, and user library tracks
+  const artistPool = []
+  const seenArtistKeys = new Set()
+  const addArtist = (name) => {
+    const clean = String(name || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim()
+    if (!clean || clean.length < 2) return
+    if (NON_MUSIC_REGEX.test(clean) || COMEDY_PODCAST_REGEX.test(clean) || DEVOTIONAL_RELIGIOUS_REGEX.test(clean)) return
+    const k = clean.toLowerCase()
+    if (seenArtistKeys.has(k)) return
+    seenArtistKeys.add(k)
+    artistPool.push(clean)
+  }
+
+  for (const a of artists) addArtist(a)
+  for (const a of dnaArtists) addArtist(a)
+  for (const t of userTracks) {
+    const primary = String(t?.artist || '').split(/\s+(?:feat\.?|ft\.?|&|x)\s+|,\s*/i)[0].trim()
+    addArtist(primary)
+  }
+
+  if (!hasOnboardingPrefs && userTracks.length === 0) {
+    const starter = STARTER_ROTATION_CYCLES[cursor % STARTER_ROTATION_CYCLES.length]
+    if (!rediscoverBlock) return starter
+    return starter.map((b) => (b.id === 'block_rediscover_favorites' ? rediscoverBlock : b))
+  }
+
+  // Ordered, deduplicated genre tokens from user's explicit genres, regions, DNA genres, or artist hints
+  const rawGenreEntries = [...genres, ...regions, ...dnaGenres]
+  const genreTokens = []
+  const seenGenres = new Set()
+  for (const raw of rawGenreEntries) {
+    const key = normalizeGenreKey(raw)
+    if (!key || seenGenres.has(key)) continue
+    seenGenres.add(key)
+    genreTokens.push({ key, raw: String(raw).trim() })
+  }
+
+  if (!genreTokens.length && artistPool.length > 0) {
+    for (const a of artistPool) {
+      for (const [re, key] of ARTIST_GENRE_HINTS) {
+        if (re.test(a) && !seenGenres.has(key)) {
+          seenGenres.add(key)
+          genreTokens.push({ key, raw: GENRE_MIX_CATALOG[key]?.label || key })
+        }
+      }
+    }
+  }
+
+  const groupABlocks = []
+  const usedIds = new Set()
+  const defaultThumbs = [
+    'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
+    'https://i.ytimg.com/vi/UNZqm3dxd2w/maxresdefault.jpg'
+  ]
+
+  for (let i = 0; i < genreTokens.length && groupABlocks.length < 4; i++) {
+    const { key, raw } = genreTokens[i]
+    const preset = GENRE_MIX_CATALOG[key]
+    const matchingArtists = artistPool.filter((a) =>
+      ARTIST_GENRE_HINTS.some(([re, k]) => k === key && re.test(a))
+    )
+    const artistHint = (matchingArtists.length ? matchingArtists : artistPool).slice(0, 3).join(' ')
+    if (preset && !usedIds.has(preset.id)) {
+      usedIds.add(preset.id)
+      const thumbPool = preset.thumbs
+      groupABlocks.push({
+        id: preset.id,
+        tier: 2,
+        ...(isSeed ? { isNewUserSeed: true } : {}),
+        title: preset.title,
+        subtitle: matchingArtists.length
+          ? `${matchingArtists.slice(0, 2).join(', ')} & ${preset.label} favorites`
+          : preset.subtitle,
+        badge: preset.badge,
+        query: artistHint ? `${artistHint} ${preset.query}` : preset.query,
+        thumbnail: thumbPool[cursor % thumbPool.length],
+        thumbnailPool: thumbPool,
+        color: preset.color
+      })
+    } else if (!usedIds.has(`block_mix_${key}`)) {
+      const cleanLabel = raw.replace(/[^a-zA-Z0-9\s&-]/g, '').trim() || key
+      const blockId = `block_mix_${key.replace(/[^a-z0-9]+/g, '_')}`
+      usedIds.add(blockId)
+      const thumb = defaultThumbs[(cursor + i) % defaultThumbs.length]
+      groupABlocks.push({
+        id: blockId,
+        tier: 2,
+        ...(isSeed ? { isNewUserSeed: true } : {}),
+        title: `${cleanLabel} Essentials`,
+        subtitle: artistHint ? `Curated ${cleanLabel} & ${artistPool.slice(0, 2).join(', ')}` : `Tailored ${cleanLabel} songs & deep cuts`,
+        badge: `${cleanLabel.slice(0, 12).toUpperCase()} MIX`,
+        query: `${artistHint} ${cleanLabel} official songs playlist -podcast`.trim(),
+        thumbnail: thumb,
+        thumbnailPool: [thumb],
+        color: 'from-indigo-600/40 to-black'
+      })
+    }
+  }
+
+  // Fill remaining slots up to 4 purely from the user's own artists, primary genre mood variants, or neutral mood presets (never unrelated J-Pop/Hindi!)
+  const primaryGenreObj = genreTokens[0]
+  const primaryLabel = GENRE_MIX_CATALOG[primaryGenreObj?.key]?.label || primaryGenreObj?.raw || 'Your Taste'
+  const primaryArtistStr = artistPool.slice(0, 4).join(' ')
+  const fillerCandidates = []
+
+  if (artistPool.length > 0) {
+    fillerCandidates.push({
+      id: 'block_artist_spotlight',
+      title: `${artistPool.slice(0, 2).join(' & ')} Radio`,
+      subtitle: `Built from your favorite artists`,
+      badge: 'ARTIST MIX',
+      query: `${primaryArtistStr} official songs radio playlist -podcast`,
+      thumbnail: 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg',
+      color: 'from-violet-600/40 to-black'
+    })
+  }
+
+  fillerCandidates.push(
+    {
+      id: 'block_late_night_personalized',
+      title: genreTokens.length ? `Late Night ${primaryLabel}` : 'Chill & Late Night Vibes',
+      subtitle: artistPool.length
+        ? `Atmospheric ${primaryLabel} with ${artistPool[0]}`
+        : `Atmospheric ${primaryLabel} & nocturnal grooves`,
+      badge: 'CHILL MIX',
+      query: `${primaryArtistStr} ${primaryLabel} chill atmospheric late night songs playlist -podcast`.trim(),
+      thumbnail: 'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
+      color: 'from-teal-600/40 to-black'
+    },
+    {
+      id: 'block_energy_drive_personalized',
+      title: genreTokens.length ? `High-Energy ${primaryLabel}` : 'High-Energy Drive Mix',
+      subtitle: artistPool.length
+        ? `Up-tempo picks inspired by ${artistPool.slice(0, 2).join(' & ')}`
+        : `Driving rhythms & upbeat ${primaryLabel} anthems`,
+      badge: 'ENERGY MIX',
+      query: `${primaryArtistStr} ${primaryLabel} upbeat high energy hits playlist -podcast`.trim(),
+      thumbnail: 'https://i.ytimg.com/vi/TUVcZfQe-Kw/maxresdefault.jpg',
+      color: 'from-emerald-600/40 to-black'
+    },
+    {
+      id: 'block_deep_cuts_personalized',
+      title: `${primaryLabel} Deep Cuts`,
+      subtitle: 'Hidden gems & B-sides matching your sound',
+      badge: 'DEEP CUTS',
+      query: `${primaryArtistStr} ${primaryLabel} deep cuts essential tracks playlist -podcast`.trim(),
+      thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
+      color: 'from-cyan-600/40 to-black'
+    }
+  )
+
+  for (const filler of fillerCandidates) {
+    if (groupABlocks.length >= 4) break
+    if (usedIds.has(filler.id)) continue
+    usedIds.add(filler.id)
+    groupABlocks.push({
+      ...filler,
+      tier: 2,
+      ...(isSeed ? { isNewUserSeed: true } : {}),
+      thumbnailPool: [filler.thumbnail]
+    })
+  }
+
+  // Group B (3 blocks): Rediscover + On Repeat + Sonic DNA Radar
+  const genreLabelsQuery = genreTokens
+    .slice(0, 3)
+    .map((g) => GENRE_MIX_CATALOG[g.key]?.label || g.raw)
+    .join(' ')
+
+  const slot5Rediscover = rediscoverBlock || {
+    id: 'block_rediscover_favorites',
+    tier: 2,
+    ...(isSeed ? { isNewUserSeed: true } : {}),
+    title: 'Rediscover Favorites Mix',
+    subtitle: artistPool.length
+      ? `Shuffled favorites & ${artistPool.slice(0, 2).join(', ')} radio`
+      : 'Shuffled liked songs + closely related tracks',
+    badge: 'REDISCOVER',
+    query: `${primaryArtistStr} ${genreLabelsQuery} official songs radio playlist -podcast`.trim(),
+    thumbnail: 'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg',
+    thumbnailPool: ['https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg'],
+    color: 'from-pink-600/40 to-black',
+    isHybridRediscover: true
+  }
+
+  const recentTrack = userTracks[0] || null
+  const onRepeatQuery = recentTrack
+    ? `${recentTrack.artist} ${recentTrack.title} radio songs playlist -comedy -podcast -bhajan`
+    : `${primaryArtistStr} ${genreLabelsQuery} heavy rotation hits playlist -podcast`.trim()
+  const onRepeatThumb = (recentTrack?.thumbnail && !recentTrack.thumbnail.includes('default'))
+    ? recentTrack.thumbnail
+    : 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'
+
+  const radarQuery = artistPool.length
+    ? `${artistPool.slice(0, 3).join(' ')} ${genreLabelsQuery} deep cuts rare tracks official songs playlist -comedy -podcast -bhajan`.trim()
+    : `${genreLabelsQuery} deep cuts rare tracks official songs playlist -podcast`.trim()
+
+  return [
+    ...groupABlocks.slice(0, 4),
+    slot5Rediscover,
+    {
+      id: 'block_on_repeat_vibes',
+      tier: 2,
+      ...(isSeed ? { isNewUserSeed: true } : {}),
+      title: 'On Repeat & Similar Vibes',
+      subtitle: artistPool.length
+        ? `Heavy rotation around ${artistPool.slice(0, 2).join(' & ')}`
+        : "Inspired by what you've been playing lately",
+      badge: 'HEAVY ROTATION',
+      query: onRepeatQuery,
+      thumbnail: onRepeatThumb,
+      thumbnailPool: [onRepeatThumb, 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'],
+      color: 'from-indigo-600/40 to-black'
+    },
+    {
+      id: 'block_sonic_dna_radar',
+      tier: 2,
+      ...(isSeed ? { isNewUserSeed: true } : {}),
+      title: 'Sonic DNA Radar',
+      subtitle: dna?.archetype
+        ? `${dna.archetype} • Discoveries matching your taste`
+        : 'Fresh discoveries matching your core artists',
+      badge: 'TASTE RADAR',
+      query: radarQuery,
+      thumbnail: 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg',
+      thumbnailPool: ['https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg', 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'],
+      color: 'from-cyan-600/40 to-black'
+    }
+  ]
+}
+
 /**
  * Fetches related/radio companion tracks for anchor songs using Innertube automix (v1/next)
  * or targeted search fallback, filtered by isValidMusicTrack.
@@ -666,16 +1167,7 @@ export function resolveRankedChartBlocks(cursor = 0) {
     }
   } catch {}
 
-  let genres = []
-  let artists = []
-  try {
-    const rawTaste = localStorage.getItem('upbeat_taste_prefs_v1')
-    if (rawTaste) {
-      const parsed = JSON.parse(rawTaste)
-      genres = parsed.genres || []
-      artists = parsed.artists || []
-    }
-  } catch {}
+  const { genres, regions, artists } = readPersonalizationPrefs()
 
   const scoreMap = new Map()
   AVAILABLE_CHARTS.forEach((chart, idx) => {
@@ -686,16 +1178,17 @@ export function resolveRankedChartBlocks(cursor = 0) {
         score += 500 - prefIdx * 25
       }
     } else {
-      // Inferred preferences from user genres and artists
-      const isDesi = genres.some((g) => ['bollywood', 'punjabi'].includes(g)) ||
+      // Inferred preferences from user genres, regions, and artists
+      const normTokens = [...genres, ...regions].map((g) => String(g || '').toLowerCase())
+      const isDesi = normTokens.some((g) => /bollywood|punjabi|hindi|desi|india/.test(g)) ||
         artists.some((a) => /arijit|atif|diljit|karan|pritam|shreya|jubin|anuv|sidhu|badshah/i.test(a))
-      const isJapanese = genres.includes('jpop') ||
+      const isJapanese = normTokens.some((g) => /j-?pop|anime|japan/.test(g)) ||
         artists.some((a) => /yoasobi|kenshi|fujii|higuchi|lisa|radwimps|sawano/i.test(a))
-      const isKpop = genres.includes('kpop') ||
+      const isKpop = normTokens.some((g) => /k-?pop|korea/.test(g)) ||
         artists.some((a) => /bts|blackpink|newjeans|stray|twice|jungkook/i.test(a))
-      const isLatin = genres.includes('latin') ||
+      const isLatin = normTokens.some((g) => /latin|reggaeton/.test(g)) ||
         artists.some((a) => /bad bunny|shakira|karol|balvin|peso pluma/i.test(a))
-      const isWestern = genres.some((g) => ['pop', 'hiphop', 'rock', 'electronic'].includes(g))
+      const isWestern = normTokens.some((g) => /pop|hip|rap|rock|indie|electronic|jazz|classical|metal|country|r&b|rnb|us|uk/.test(g))
 
       if (isDesi && (chart.id === 'block_india_top_daily' || chart.id === 'block_india_trendy')) {
         score += 300
@@ -733,12 +1226,13 @@ export function resolveRankedChartBlocks(cursor = 0) {
 
 export function getInitialDiscoveryBlocks() {
   const cursor = getRotationCursor()
-  const starterCycle = STARTER_ROTATION_CYCLES[cursor % STARTER_ROTATION_CYCLES.length]
+  const prefs = readPersonalizationPrefs()
   const rankedCharts = resolveRankedChartBlocks(cursor)
+  const tier2Blocks = buildDynamicTier2Blocks({ prefs, cursor, isSeed: true })
 
   return [
     ...rankedCharts,
-    ...starterCycle
+    ...tier2Blocks
   ]
 }
 
@@ -786,121 +1280,19 @@ export async function fetchListenTogetherFeed({
     (t) => t?.title && t?.artist && !DEFAULT_SEED_IDS.has(t?.video_id) && isStrictMusicTrack(t)
   )
 
-  // Map each unique clean artist to their tracks and high-res artwork pool
-  const artistMap = new Map()
-  for (const t of validUserTracks) {
-    const rawArtist = (t.artist || '').replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/i, '').trim()
-    const cleanArt = rawArtist.split(/\s+(?:feat\.?|ft\.?|&|x)\s+|,\s*/i)[0].trim()
-    if (
-      cleanArt &&
-      cleanArt.length >= 2 &&
-      !/^\d+[\d.,]*\s*[kKmMbB]?\s*(?:views?|subscribers?|watching|likes?)?$/i.test(cleanArt) &&
-      !/^(?:\d+\s*(?:views?|subscribers?|ago)|streamed|youtube|unknown)$/i.test(cleanArt) &&
-      !NON_MUSIC_REGEX.test(cleanArt) &&
-      !COMEDY_PODCAST_REGEX.test(cleanArt) &&
-      !DEVOTIONAL_RELIGIOUS_REGEX.test(cleanArt)
-    ) {
-      const key = cleanArt.toLowerCase()
-      const thumb = t.video_id
-        ? `https://i.ytimg.com/vi/${t.video_id}/maxresdefault.jpg`
-        : t.thumbnail || ''
-      if (!artistMap.has(key)) {
-        artistMap.set(key, { name: cleanArt, tracks: [], thumb, thumbs: [] })
-      }
-      const entry = artistMap.get(key)
-      entry.tracks.push(t)
-      if (thumb && !entry.thumbs.includes(thumb)) entry.thumbs.push(thumb)
-      if (!entry.thumb && thumb) entry.thumb = thumb
-    }
-  }
-
-  // Also include user's preferred artists from onboarding/settings if library has few items
-  try {
-    const rawTaste = localStorage.getItem('upbeat_taste_prefs_v1')
-    if (rawTaste) {
-      const parsed = JSON.parse(rawTaste)
-      for (const aName of parsed.artists || []) {
-        const cleanA = aName.trim()
-        const key = cleanA.toLowerCase()
-        if (
-          cleanA &&
-          !artistMap.has(key) &&
-          !NON_MUSIC_REGEX.test(cleanA) &&
-          !COMEDY_PODCAST_REGEX.test(cleanA) &&
-          !DEVOTIONAL_RELIGIOUS_REGEX.test(cleanA)
-        ) {
-          artistMap.set(key, { name: cleanA, tracks: [], thumb: '', thumbs: [] })
-        }
-      }
-    }
-  } catch {}
-
-  const artists = Array.from(artistMap.values())
-  const isNewUser = artists.length < 2
+  const prefs = readPersonalizationPrefs(tasteDna)
+  const uniqueArtistCount = new Set([
+    ...prefs.artists.map((a) => a.toLowerCase()),
+    ...prefs.dnaArtists.map((a) => a.toLowerCase()),
+    ...validUserTracks.map((t) => String(t.artist || '').toLowerCase()).filter(Boolean)
+  ]).size
+  const isNewUser = uniqueArtistCount < 2
 
   // Tier 1 — 7 Ranked Regional & Global Daily Chart Blocks based on User Preferences
   const tier1Blocks = resolveRankedChartBlocks(cursor)
   const usedCoverUrls = new Set(tier1Blocks.map((b) => b.thumbnail))
 
-  // Group A: 4 Personalized Mood & Language Mixes
-  // 1. Chill & Late Night Vibes (Badge: CHILL MIX)
-  const chillArtists = artists
-    .filter((a) => /joji|keshi|cigarettes|billie|finneas|kuhad|the weeknd|charlie|lana|laufey/i.test(a.name))
-    .map((a) => a.name)
-    .slice(0, 3)
-  const chillQuery = chillArtists.length
-    ? `${chillArtists.join(' ')} Joji Keshi Cigarettes After Sex chill late night vibes songs playlist -comedy -podcast`
-    : 'Joji The Weeknd Keshi Cigarettes After Sex Billie Eilish chill late night vibes songs playlist -comedy -podcast'
-  const chillPool = [
-    'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/TdrL3QxjyVw/maxresdefault.jpg'
-  ]
-
-  // 2. J-Pop & Anime Essentials (Badge: J-POP & ANIME)
-  const jpopArtists = artists
-    .filter((a) => /yoasobi|kenshi|ado|eve|sawano|lisa|fujii|king gnu|radwimps|vaundy/i.test(a.name))
-    .map((a) => a.name)
-    .slice(0, 3)
-  const jpopQuery = jpopArtists.length
-    ? `${jpopArtists.join(' ')} YOASOBI Kenshi Yonezu Ado official anime jpop songs playlist -shorts`
-    : 'YOASOBI Kenshi Yonezu Ado Eve King Gnu LiSA Fujii Kaze official anime jpop songs playlist -shorts'
-  const jpopPool = [
-    'https://i.ytimg.com/vi/V1Pl8CzNzCw/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/ZRtdQ81jPUQ/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/dvgZkm1xWPE/maxresdefault.jpg'
-  ]
-
-  // 3. Hindi Indie & Bollywood Vibe (Badge: HINDI MIX)
-  const hindiArtists = artists
-    .filter((a) => /anuv|kuhad|local train|arijit|pritam|vishal|shekhar|mitraz|rikhari|atif|jasleen/i.test(a.name))
-    .map((a) => a.name)
-    .slice(0, 3)
-  const hindiQuery = hindiArtists.length
-    ? `${hindiArtists.join(' ')} Arijit Singh Prateek Kuhad Anuv Jain soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy`
-    : 'Arijit Singh Prateek Kuhad Anuv Jain The Local Train Mitraz Aditya Rikhari soulful hindi indie bollywood songs playlist -bhajan -aarti -devotional -comedy'
-  const hindiPool = [
-    'https://i.ytimg.com/vi/BddP6PYo2gs/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/AX6OrbgS8lI/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'
-  ]
-
-  // 4. English Pop & Alt Anthems (Badge: ENGLISH MIX)
-  const westernArtists = artists
-    .filter((a) => /post malone|the weeknd|maroon 5|arctic monkeys|imagine dragons|dua lipa|travis scott|coldplay|swift|styles/i.test(a.name))
-    .map((a) => a.name)
-    .slice(0, 3)
-  const westernQuery = westernArtists.length
-    ? `${westernArtists.join(' ')} Post Malone The Weeknd Coldplay Imagine Dragons top western pop rock songs playlist -podcast`
-    : 'Post Malone The Weeknd Maroon 5 Coldplay Imagine Dragons Dua Lipa Arctic Monkeys top western pop rock songs playlist -podcast'
-  const westernPool = [
-    'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg',
-    'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg'
-  ]
-
-  // Group B: 3 Personal Library & Similar-to-What-You-Hear Mixes
-  // 5. Rediscover Favorites Mix (Badge: REDISCOVER)
+  // Tier 2 — 7 Dynamically Personalized Made For You Mixes (no hardcoded J-Pop/Hindi for other genres)
   const rediscoverBlock = await buildHybridRediscoverBlock({
     userTracks: validUserTracks,
     usedCoverUrls,
@@ -908,91 +1300,13 @@ export async function fetchListenTogetherFeed({
     forceShuffle: forceRefresh
   })
 
-  // 6. On Repeat & Similar Vibes (Badge: HEAVY ROTATION)
-  const recentTrack = validUserTracks[0] || null
-  const onRepeatQuery = recentTrack
-    ? `${recentTrack.artist} ${recentTrack.title} radio songs playlist -comedy -podcast -bhajan`
-    : 'Dua Lipa Post Malone The Weeknd Harry Styles heavy rotation pop hits playlist'
-  const onRepeatThumb = (recentTrack?.thumbnail && !recentTrack.thumbnail.includes('default'))
-    ? recentTrack.thumbnail
-    : 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'
-
-  // 7. Sonic DNA Radar (Badge: TASTE RADAR)
-  const topCoreArtists = artists.slice(0, 3).map((a) => a.name)
-  const radarQuery = topCoreArtists.length
-    ? `${topCoreArtists.join(' ')} deep cuts rare tracks official songs playlist -comedy -podcast -bhajan`
-    : 'Arctic Monkeys The Neighbourhood Kendrick Lamar deep cuts alternative songs playlist'
-  const radarThumb = 'https://i.ytimg.com/vi/09R8_2nJtjg/maxresdefault.jpg'
-
-  const tier2Blocks = [
-    {
-      id: 'block_chill_late_night',
-      tier: 2,
-      title: 'Chill & Late Night Vibes',
-      subtitle: 'Atmospheric, melodic & lo-fi chill tailored for you',
-      badge: 'CHILL MIX',
-      query: chillQuery,
-      thumbnail: chillPool[cursor % chillPool.length],
-      thumbnailPool: chillPool,
-      color: 'from-teal-600/40 to-black'
-    },
-    {
-      id: 'block_jpop_anime',
-      tier: 2,
-      title: 'J-Pop & Anime Essentials',
-      subtitle: 'High-energy J-Pop, iconic OP/EDs & Tokyo hits',
-      badge: 'J-POP & ANIME',
-      query: jpopQuery,
-      thumbnail: jpopPool[cursor % jpopPool.length],
-      thumbnailPool: jpopPool,
-      color: 'from-rose-600/40 to-black'
-    },
-    {
-      id: 'block_hindi_indie_bollywood',
-      tier: 2,
-      title: 'Hindi Indie & Bollywood Vibe',
-      subtitle: 'Modern Hindi indie, Arijit & soulful melodies',
-      badge: 'HINDI MIX',
-      query: hindiQuery,
-      thumbnail: hindiPool[cursor % hindiPool.length],
-      thumbnailPool: hindiPool,
-      color: 'from-amber-600/40 to-black'
-    },
-    {
-      id: 'block_english_pop_alt',
-      tier: 2,
-      title: 'English Pop & Alt Anthems',
-      subtitle: 'Chart-topping Western pop, alt-rock & synth',
-      badge: 'ENGLISH MIX',
-      query: westernQuery,
-      thumbnail: westernPool[cursor % westernPool.length],
-      thumbnailPool: westernPool,
-      color: 'from-purple-600/40 to-black'
-    },
+  const tier2Blocks = buildDynamicTier2Blocks({
+    prefs,
+    userTracks: validUserTracks,
     rediscoverBlock,
-    {
-      id: 'block_on_repeat_vibes',
-      tier: 2,
-      title: 'On Repeat & Similar Vibes',
-      subtitle: "Inspired by what you've been playing lately",
-      badge: 'HEAVY ROTATION',
-      query: onRepeatQuery,
-      thumbnail: onRepeatThumb,
-      thumbnailPool: [onRepeatThumb, 'https://i.ytimg.com/vi/ic8j13gfnM8/maxresdefault.jpg'],
-      color: 'from-indigo-600/40 to-black'
-    },
-    {
-      id: 'block_sonic_dna_radar',
-      tier: 2,
-      title: 'Sonic DNA Radar',
-      subtitle: 'Fresh discoveries matching your core artists',
-      badge: 'TASTE RADAR',
-      query: radarQuery,
-      thumbnail: radarThumb,
-      thumbnailPool: [radarThumb, 'https://i.ytimg.com/vi/ApXoWvfEYVU/maxresdefault.jpg'],
-      color: 'from-cyan-600/40 to-black'
-    }
-  ]
+    cursor,
+    isSeed: false
+  })
 
   const allBlocks = [...tier1Blocks, ...tier2Blocks]
   _discoveryFeedMemoryCache = { blocks: allBlocks, isNewUser, ts: now }

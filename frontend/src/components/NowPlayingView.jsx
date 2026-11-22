@@ -6,6 +6,7 @@ import {
   Share2, Copy, X, Moon, Users, User, Radio, MessageSquareQuote, ListPlus
 } from 'lucide-react'
 import { fetchTrackExtendedMeta, fetchTrackLyrics, openExternalUrl } from '../standaloneApi'
+import { jamManager } from '../jamEngine'
 import { ActionMenu, artUrl } from '../ui/primitives'
 import { LyricsCard, LyricsFullView } from '../lyrics/Lyrics'
 
@@ -75,6 +76,8 @@ function NowPlayingView({
   onStartRadio,
   onAddToPlaylist,
   jamActive = false,
+  jamReactions = [],
+  onSendReaction,
   onOpenJam
 }) {
   const [extendedMeta, setExtendedMeta] = useState(null)
@@ -83,9 +86,11 @@ function NowPlayingView({
   const setShowLyrics = externalSetShowLyrics || setInternalShowLyrics
 
   const [lyricsSelectStart, setLyricsSelectStart] = useState(false)
+  const [videoStartSec, setVideoStartSec] = useState(0)
   const scrollRootRef = useRef(null)
   const lyricsSectionRef = useRef(null)
   const wasPlayingBeforeVideoRef = useRef(false)
+  const prevShowVideoRef = useRef(Boolean(showVideo))
 
   const vid = track?.video_id || resolvedVid
   const thumbUrl = track?.thumbnail || (vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : '')
@@ -96,7 +101,26 @@ function NowPlayingView({
 
   useEffect(() => {
     wasPlayingBeforeVideoRef.current = false
+    setVideoStartSec(0)
   }, [trackKey])
+
+  useEffect(() => {
+    if (showVideo && !prevShowVideoRef.current) {
+      setVideoStartSec((prev) => {
+        if (prev > 0) return prev
+        const liveSec = Number(
+          window.UpBeatControls?.getCurrentTime?.() ??
+          window.UpBeatControls?.getTime?.() ??
+          displayTime ??
+          0
+        )
+        return Number.isFinite(liveSec) && liveSec > 0 ? Math.floor(liveSec) : 0
+      })
+    } else if (!showVideo && prevShowVideoRef.current) {
+      setVideoStartSec(0)
+    }
+    prevShowVideoRef.current = Boolean(showVideo)
+  }, [showVideo])
 
   useEffect(() => {
     if (!vid) {
@@ -142,8 +166,14 @@ function NowPlayingView({
 
   const handleToggleVideo = () => {
     const nextShow = !showVideo
-    if (setShowVideo) setShowVideo(nextShow)
     if (nextShow) {
+      const liveSec = Number(
+        window.UpBeatControls?.getCurrentTime?.() ??
+        window.UpBeatControls?.getTime?.() ??
+        displayTime ??
+        0
+      )
+      setVideoStartSec(Number.isFinite(liveSec) && liveSec > 0 ? Math.floor(liveSec) : 0)
       if (showLyrics) setShowLyrics(false)
       wasPlayingBeforeVideoRef.current = Boolean(isPlaying)
       // Pause via active-deck controller / isPlaying state so midTrackStall watchdog stays idle
@@ -155,6 +185,7 @@ function NowPlayingView({
         }
       }
     } else {
+      setVideoStartSec(0)
       const shouldResume = wasPlayingBeforeVideoRef.current || isPlaying
       wasPlayingBeforeVideoRef.current = false
       // Resume active deck only when exiting video mode
@@ -166,11 +197,13 @@ function NowPlayingView({
         }
       }
     }
+    if (setShowVideo) setShowVideo(nextShow)
   }
 
   const handleClose = () => {
     if (showVideo && setShowVideo) {
       setShowVideo(false)
+      setVideoStartSec(0)
       const shouldResume = wasPlayingBeforeVideoRef.current || isPlaying
       wasPlayingBeforeVideoRef.current = false
       if (shouldResume) {
@@ -296,7 +329,7 @@ function NowPlayingView({
             {showVideo && vid ? (
               <iframe
                 key={vid}
-                src={`https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1`}
+                src={`https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1${videoStartSec > 0 ? `&start=${Math.floor(videoStartSec)}` : ''}`}
                 title={track.title}
                 className="w-full h-full border-0 select-none rounded-2xl sm:rounded-3xl"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -317,7 +350,40 @@ function NowPlayingView({
                 <Music className="w-16 h-16" />
               </div>
             )}
+            {jamReactions.length > 0 && (
+              <div className="pointer-events-none absolute inset-0 overflow-hidden z-20" aria-live="polite">
+                {jamReactions.map((r) => (
+                  <div
+                    key={r.id}
+                    style={{ left: `${r.xOffset ?? 50}%` }}
+                    className="absolute bottom-4 -translate-x-1/2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md ring-1 ring-white/20 shadow-lg animate-in fade-in slide-in-from-bottom-8 duration-500"
+                  >
+                    <span className="text-lg leading-none">{r.emoji}</span>
+                    {r.senderName && (
+                      <span className="text-[11px] font-bold text-white/90 max-w-[90px] truncate">{r.senderName}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+        </div>
+      )}
+
+      {jamActive && (
+        <div className="px-6 sm:px-10 shrink-0 mb-2 max-w-lg mx-auto w-full z-10 flex items-center justify-center gap-2" role="group" aria-label="Jam emoji reactions">
+          {['🔥', '💜', '🎧', '✨', '🙌'].map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => (onSendReaction ? onSendReaction(emoji) : jamManager.sendReaction(emoji))}
+              aria-label={`React ${emoji}`}
+              title={`React ${emoji}`}
+              className="h-9 px-3 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 transition-all text-base cursor-pointer inline-flex items-center justify-center ring-1 ring-white/10"
+            >
+              {emoji}
+            </button>
+          ))}
         </div>
       )}
 

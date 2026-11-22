@@ -8,6 +8,22 @@ import { apiUrl } from "./platformConfig.js"
 // ---------------------------------------------------------------------------
 
 const _lyricsCache = new Map()
+const MAX_LYRICS_CACHE = 200
+
+function setLyricsCache(key, value) {
+  if (_lyricsCache.has(key)) _lyricsCache.delete(key)
+  _lyricsCache.set(key, value)
+  while (_lyricsCache.size > MAX_LYRICS_CACHE) {
+    const oldest = _lyricsCache.keys().next().value
+    if (oldest === undefined) break
+    _lyricsCache.delete(oldest)
+  }
+}
+
+/** Clears the in-memory lyrics cache (primarily for tests). */
+export function clearLyricsCache() {
+  _lyricsCache.clear()
+}
 
 const RECORD_LABEL_PATTERNS = /^(yrf|t-series|tseries|sony\s*music.*|zee\s*music.*|tips\s*official.*|saregama.*|speed\s*records.*|eros\s*now.*|aditya\s*music.*|think\s*music.*|lahari\s*music.*|desimelodies|hombale\s*films|vyrl\s*originals|jusa\s*music|crunchyroll.*|aniplex.*|unknown\s*artist|upbeat\s*curator)$/i
 
@@ -157,6 +173,43 @@ export function parseLrcLyrics(lrcText = '') {
   return result
 }
 
+async function queryLrclibExact(trackName, artistName, durationSec) {
+  if (!trackName || !artistName || !(durationSec > 15)) return null
+  const dur = Math.round(durationSec)
+  const qs = `track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}&duration=${dur}`
+
+  const isDurationValid = (item) => {
+    if (!item || (!item.syncedLyrics && !item.plainLyrics)) return false
+    const itemDur = Number(item.duration || 0)
+    if (Number.isFinite(itemDur) && itemDur > 0 && Math.abs(itemDur - durationSec) > 12) {
+      return false
+    }
+    return true
+  }
+
+  // 1. Direct LRCLIB /api/get duration-matched lookup
+  try {
+    const res = await fetch(`https://lrclib.net/api/get?${qs}`)
+    if (res.ok) {
+      const data = await res.json()
+      const item = Array.isArray(data) ? data[0] : data
+      if (isDurationValid(item)) return item
+    }
+  } catch {}
+
+  // 2. Backend proxy fallback (/api/lyrics?track_name=...&artist_name=...&duration=...)
+  try {
+    const res = await fetch(apiUrl(`/lyrics?${qs}`))
+    if (res.ok) {
+      const data = await res.json()
+      const item = Array.isArray(data) ? data[0] : data
+      if (isDurationValid(item)) return item
+    }
+  } catch {}
+
+  return null
+}
+
 async function queryLrclib(query) {
   if (!query || !query.trim()) return []
   const q = query.trim()
@@ -180,6 +233,38 @@ async function queryLrclib(query) {
   } catch {}
 
   return []
+}
+
+function buildLyricsResult(best, coreTitle, cleanArtist) {
+  if (!best) return null
+  if (best.syncedLyrics) {
+    const lines = parseLrcLyrics(best.syncedLyrics)
+    if (lines.length > 0) {
+      return {
+        synced: true,
+        lines,
+        plainText: best.plainLyrics || lines.map((l) => l.text).join('\n'),
+        sourceTrack: best.trackName || best.name || coreTitle,
+        sourceArtist: best.artistName || cleanArtist
+      }
+    }
+  }
+
+  if (best.plainLyrics) {
+    const plainLines = String(best.plainLyrics)
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l, idx, arr) => l !== '' || (idx > 0 && arr[idx - 1] !== ''))
+    return {
+      synced: false,
+      lines: plainLines.map((text, idx) => ({ time: idx, text })),
+      plainText: best.plainLyrics,
+      sourceTrack: best.trackName || best.name || coreTitle,
+      sourceArtist: best.artistName || cleanArtist
+    }
+  }
+
+  return null
 }
 
 function scoreLyricsCandidate(item, coreTitle, cleanArtist, targetDuration) {
@@ -231,15 +316,33 @@ export async function fetchTrackLyrics(track, durationSec = 0) {
 
   const cacheKey = track.video_id || `${track.title}|${track.artist || ''}`
   if (_lyricsCache.has(cacheKey)) {
-    return _lyricsCache.get(cacheKey)
+    const hit = _lyricsCache.get(cacheKey)
+    _lyricsCache.delete(cacheKey)
+    _lyricsCache.set(cacheKey, hit)
+    return hit
   }
 
   const { cleanTitle, coreTitle, cleanArtist } = cleanTrackMetadataForLyrics(track.title, track.artist)
+
+  // Try duration-matched exact lookup first when duration > 15s and title + artist exist
+  let exactCandidate = null
+  if (durationSec > 15 && coreTitle && cleanArtist) {
+    exactCandidate = await queryLrclibExact(coreTitle, cleanArtist, durationSec)
+    if (exactCandidate?.syncedLyrics) {
+      const exactResult = buildLyricsResult(exactCandidate, coreTitle, cleanArtist)
+      if (exactResult) {
+        setLyricsCache(cacheKey, exactResult)
+        return exactResult
+      }
+    }
+  }
+
   const primaryQuery = cleanArtist && !cleanTitle.toLowerCase().includes(cleanArtist.toLowerCase())
     ? `${coreTitle} ${cleanArtist}`
     : cleanTitle
 
   let candidates = await queryLrclib(primaryQuery)
+  if (exactCandidate) candidates = [exactCandidate, ...candidates]
   const hasSyncedInPrimary = candidates.some((c) => Boolean(c?.syncedLyrics))
 
   // Fallback search using just coreTitle if primary query returned no synced lyrics
@@ -255,7 +358,7 @@ export async function fetchTrackLyrics(track, durationSec = 0) {
   }
 
   if (!candidates.length) {
-    _lyricsCache.set(cacheKey, null)
+    setLyricsCache(cacheKey, null)
     return null
   }
 
@@ -271,41 +374,11 @@ export async function fetchTrackLyrics(track, durationSec = 0) {
   }
 
   if (!best || bestScore < 0) {
-    _lyricsCache.set(cacheKey, null)
+    setLyricsCache(cacheKey, null)
     return null
   }
 
-  if (best.syncedLyrics) {
-    const lines = parseLrcLyrics(best.syncedLyrics)
-    if (lines.length > 0) {
-      const result = {
-        synced: true,
-        lines,
-        plainText: best.plainLyrics || lines.map((l) => l.text).join('\n'),
-        sourceTrack: best.trackName || best.name || coreTitle,
-        sourceArtist: best.artistName || cleanArtist
-      }
-      _lyricsCache.set(cacheKey, result)
-      return result
-    }
-  }
-
-  if (best.plainLyrics) {
-    const plainLines = String(best.plainLyrics)
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l, idx, arr) => l !== '' || (idx > 0 && arr[idx - 1] !== ''))
-    const result = {
-      synced: false,
-      lines: plainLines.map((text, idx) => ({ time: idx, text })),
-      plainText: best.plainLyrics,
-      sourceTrack: best.trackName || best.name || coreTitle,
-      sourceArtist: best.artistName || cleanArtist
-    }
-    _lyricsCache.set(cacheKey, result)
-    return result
-  }
-
-  _lyricsCache.set(cacheKey, null)
-  return null
+  const result = buildLyricsResult(best, coreTitle, cleanArtist)
+  setLyricsCache(cacheKey, result)
+  return result
 }

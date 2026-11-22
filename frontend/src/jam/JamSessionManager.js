@@ -317,6 +317,7 @@ export class JamSessionManager {
   sendReaction(...args) { return this.roomController.sendReaction(...args) }
   setDjMode(...args) { return this.roomController.setDjMode(...args) }
   reportDriftStatus(...args) { return this.roomController.reportDriftStatus(...args) }
+  resyncNow(...args) { return this.roomController.resyncNow(...args) }
   leaveJam(...args) { return this.roomController.leaveJam(...args) }
 
   scheduleTimer(fn, ms) {

@@ -302,6 +302,14 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void syncDownloads(String downloadsJson) {
+            if (downloadsJson == null) return;
+            try {
+                UpBeatMediaService.updateDownloads(MainActivity.this, downloadsJson);
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
         public void syncRepeatMode(String mode) {
             UpBeatMediaService.setRepeatMode(MainActivity.this, mode);
         }

@@ -9,9 +9,12 @@ import {
   fisherYatesShuffle,
   resolveRankedChartBlocks,
   getInitialDiscoveryBlocks,
+  fetchListenTogetherFeed,
   fetchRelatedCompanionTracks,
-  buildHybridRediscoverBlock
+  buildHybridRediscoverBlock,
+  fetchTrackLyrics
 } from '../src/standaloneApi.js'
+import { clearLyricsCache } from '../src/services/lyricsClient.js'
 
 test('cleanTrackMetadataForLyrics strips noisy YouTube tags and label channels', () => {
   const res1 = cleanTrackMetadataForLyrics(
@@ -185,6 +188,209 @@ test('buildHybridRediscoverBlock reads argon_favs_v2 and argon_seeds_v2 from loc
     assert.equal(block.subtitle, 'Shuffled favorites & related radio')
   } finally {
     globalThis.fetch = prevFetch
+    resetStorage()
+  }
+})
+
+test('getInitialDiscoveryBlocks dynamically personalizes Made For You mixes without hardcoded J-Pop/Hindi for other genres', () => {
+  resetStorage()
+  localStorage.setItem(
+    'upbeat_taste_prefs_v1',
+    JSON.stringify({
+      genres: ['rock', 'indie', 'electronic'],
+      regions: ['uk'],
+      artists: ['Arctic Monkeys', 'Tame Impala', 'Daft Punk']
+    })
+  )
+
+  const blocks = getInitialDiscoveryBlocks()
+  const tier1 = blocks.filter((b) => b.tier === 1)
+  const tier2 = blocks.filter((b) => b.tier === 2)
+  assert.equal(tier1.length, 7)
+  assert.equal(tier2.length, 7)
+
+  const tier2Blob = tier2.map((b) => `${b.id} ${b.title} ${b.badge} ${b.query}`).join(' | ')
+  assert.equal(/j-?pop|anime|yoasobi|hindi|bollywood|arijit/i.test(tier2Blob), false, 'Must not force J-Pop or Hindi mixes for Rock/Indie/Electronic user')
+  assert.match(tier2Blob, /Rock/i)
+  assert.match(tier2Blob, /Indie/i)
+  assert.match(tier2Blob, /Electronic/i)
+  assert.match(tier2Blob, /Arctic Monkeys/i)
+
+  // Classical + Jazz + Sonic DNA archetype
+  resetStorage()
+  localStorage.setItem(
+    'upbeat_taste_prefs_v1',
+    JSON.stringify({
+      genres: ['Classical', 'Jazz'],
+      artists: ['Hans Zimmer', 'Miles Davis']
+    })
+  )
+  localStorage.setItem(
+    'argon_dna_v2',
+    JSON.stringify({
+      archetype: 'Symphonic Jazz Explorer',
+      primary_genres: ['Classical', 'Jazz'],
+      key_artists: ['Hans Zimmer', 'Kamasi Washington']
+    })
+  )
+  const dnaBlocks = getInitialDiscoveryBlocks()
+  const dnaTier2 = dnaBlocks.filter((b) => b.tier === 2)
+  assert.equal(dnaTier2.length, 7)
+  const dnaBlob = dnaTier2.map((b) => `${b.id} ${b.title} ${b.subtitle} ${b.query}`).join(' | ')
+  assert.equal(/j-?pop|anime|hindi|bollywood/i.test(dnaBlob), false)
+  assert.match(dnaBlob, /Classical|Score|Orchestral/i)
+  assert.match(dnaBlob, /Jazz/i)
+  assert.match(dnaBlob, /Symphonic Jazz Explorer/i)
+
+  // Users who actually pick J-Pop / Bollywood do get those mixes
+  resetStorage()
+  localStorage.setItem(
+    'upbeat_taste_prefs_v1',
+    JSON.stringify({
+      genres: ['jpop', 'bollywood'],
+      artists: ['YOASOBI', 'Arijit Singh']
+    })
+  )
+  const jpopHindiBlocks = getInitialDiscoveryBlocks().filter((b) => b.tier === 2)
+  const jhBlob = jpopHindiBlocks.map((b) => `${b.title} ${b.query}`).join(' | ')
+  assert.match(jhBlob, /J-Pop/i)
+  assert.match(jhBlob, /Hindi/i)
+  resetStorage()
+})
+
+test('fetchListenTogetherFeed respects onboarding genres/artists dynamically', async () => {
+  resetStorage()
+  localStorage.setItem(
+    'upbeat_taste_prefs_v1',
+    JSON.stringify({
+      genres: ['hiphop', 'rnb'],
+      artists: ['Kendrick Lamar', 'Frank Ocean']
+    })
+  )
+  const prevFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({}), { status: 200 })
+
+  try {
+    const feed = await fetchListenTogetherFeed({ forceRefresh: true })
+    const tier2 = feed.filter((b) => b.tier === 2)
+    assert.equal(tier2.length, 7)
+    const blob = tier2.map((b) => `${b.title} ${b.query}`).join(' | ')
+    assert.equal(/j-?pop|anime|hindi|bollywood/i.test(blob), false)
+    assert.match(blob, /Hip-Hop/i)
+    assert.match(blob, /R&B/i)
+    assert.match(blob, /Kendrick Lamar/i)
+  } finally {
+    globalThis.fetch = prevFetch
+    resetStorage()
+  }
+})
+
+test('fetchTrackLyrics tries /api/get duration-matched lookup first, verifies <=12s diff, falls back cleanly, and bounds cache at 200', async () => {
+  resetStorage()
+  clearLyricsCache()
+  const prevFetch = globalThis.fetch
+  const requestedUrls = []
+
+  // 1. Direct /api/get hit with duration diff <= 12s skips /api/search completely
+  globalThis.fetch = async (url) => {
+    const s = String(url)
+    requestedUrls.push(s)
+    if (s.startsWith('https://lrclib.net/api/get?')) {
+      return new Response(
+        JSON.stringify({
+          trackName: 'Starboy',
+          artistName: 'The Weeknd',
+          duration: 232,
+          syncedLyrics: '[00:10.00] I am tryna put you in the worst mood'
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    }
+    return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+
+  try {
+    const res1 = await fetchTrackLyrics(
+      { video_id: 'lyrExact001', title: 'Starboy (Official Video)', artist: 'The Weeknd - Topic' },
+      230
+    )
+    assert.equal(res1?.synced, true)
+    assert.equal(res1.lines[1].text, 'I am tryna put you in the worst mood')
+    assert.equal(requestedUrls.length, 1)
+    assert.match(requestedUrls[0], /^https:\/\/lrclib\.net\/api\/get\?track_name=Starboy&artist_name=The%20Weeknd&duration=230/)
+
+    // 2. Duration mismatch > 12s on /api/get rejects exact hit and falls back to backend /api/lyrics proxy
+    requestedUrls.length = 0
+    globalThis.fetch = async (url) => {
+      const s = String(url)
+      requestedUrls.push(s)
+      if (s.startsWith('https://lrclib.net/api/get?')) {
+        return new Response(
+          JSON.stringify({
+            trackName: 'Numb',
+            artistName: 'Linkin Park',
+            duration: 300, // 115s mismatch vs 185s!
+            syncedLyrics: '[00:05.00] Wrong live version'
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      }
+      if (s.includes('/api/lyrics?track_name=')) {
+        return new Response(
+          JSON.stringify([
+            {
+              trackName: 'Numb',
+              artistName: 'Linkin Park',
+              duration: 187,
+              syncedLyrics: '[00:06.00] I am tired of being what you want me to be'
+            }
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      }
+      return new Response(JSON.stringify([]), { status: 200 })
+    }
+
+    const res2 = await fetchTrackLyrics(
+      { video_id: 'lyrProxy002', title: 'Numb', artist: 'Linkin Park' },
+      185
+    )
+    assert.equal(res2?.synced, true)
+    assert.equal(res2.lines[1].text, 'I am tired of being what you want me to be')
+    assert.equal(requestedUrls.some((u) => u.includes('/api/lyrics?track_name=Numb&artist_name=Linkin%20Park&duration=185')), true)
+    assert.equal(requestedUrls.some((u) => u.includes('/api/search')), false)
+
+    // 3. Cache bound at 200 entries: inserting 201 entries evicts entry #0
+    clearLyricsCache()
+    const fetchedTitles = []
+    globalThis.fetch = async (url) => {
+      const s = String(url)
+      const nameMatch = s.match(/track_name=([^&]+)/)
+      if (nameMatch) fetchedTitles.push(decodeURIComponent(nameMatch[1]))
+      return new Response(
+        JSON.stringify({
+          trackName: 'Song',
+          artistName: 'Artist',
+          duration: 180,
+          syncedLyrics: '[00:01.00] Line'
+        }),
+        { status: 200 }
+      )
+    }
+
+    for (let i = 0; i < 201; i++) {
+      await fetchTrackLyrics({ video_id: `cacheVid${i}`, title: `Track ${i}`, artist: 'Artist' }, 180)
+    }
+    fetchedTitles.length = 0
+    // Entry 200 should still be cached (0 fetches)
+    await fetchTrackLyrics({ video_id: 'cacheVid200', title: 'Track 200', artist: 'Artist' }, 180)
+    assert.equal(fetchedTitles.length, 0)
+    // Entry 0 was evicted when 201st entry was inserted (triggers fresh fetch)
+    await fetchTrackLyrics({ video_id: 'cacheVid0', title: 'Track 0', artist: 'Artist' }, 180)
+    assert.equal(fetchedTitles.length, 1)
+  } finally {
+    globalThis.fetch = prevFetch
+    clearLyricsCache()
     resetStorage()
   }
 })

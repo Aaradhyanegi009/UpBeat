@@ -84,13 +84,13 @@ test('getCurrentOtaVersion prioritizes CapacitorUpdater.current() and clears mas
   localStorage.setItem('upbeat_ota_version', 'v9.9.9')
 
   const verAfterRollback = await getCurrentOtaVersion()
-  assert.equal(verAfterRollback, 'v7.6.2')
+  assert.equal(verAfterRollback, 'v7.7.0')
   assert.equal(localStorage.getItem('upbeat_ota_version'), null)
 
-  capState.currentVersion = 'v7.7.0'
+  capState.currentVersion = 'v7.8.0'
   const activeVer = await getCurrentOtaVersion()
-  assert.equal(activeVer, 'v7.7.0')
-  assert.equal(localStorage.getItem('upbeat_ota_version'), 'v7.7.0')
+  assert.equal(activeVer, 'v7.8.0')
+  assert.equal(localStorage.getItem('upbeat_ota_version'), 'v7.8.0')
 })
 
 test('applyOtaBundle fails closed without valid SHA-256 and never retries with empty checksum', async () => {
@@ -172,12 +172,12 @@ test('checkOtaUpdate prefers immutable GitHub Releases assets and fails closed o
       if (u.startsWith('https://api.github.com/repos/')) {
         return new Response(
           JSON.stringify({
-            tag_name: 'v7.7.0',
+            tag_name: 'v7.8.0',
             body: 'Release notes',
             assets: [
               {
                 name: 'dist.zip',
-                browser_download_url: 'https://github.com/AaradhyaNegi009/UpBeat/releases/download/v7.7.0/dist.zip',
+                browser_download_url: 'https://github.com/AaradhyaNegi009/UpBeat/releases/download/v7.8.0/dist.zip',
                 digest: `sha256:${VALID_SHA}`
               }
             ]
@@ -190,15 +190,15 @@ test('checkOtaUpdate prefers immutable GitHub Releases assets and fails closed o
 
     const res = await checkOtaUpdate({ silent: true })
     assert.equal(res.updateAvailable, true)
-    assert.equal(res.latestTag, 'v7.7.0')
+    assert.equal(res.latestTag, 'v7.8.0')
     assert.equal(res.checksum, VALID_SHA)
-    assert.match(res.downloadUrl, /releases\/download\/v7\.7\.0\/dist\.zip/)
+    assert.match(res.downloadUrl, /releases\/download\/v7\.8\.0\/dist\.zip/)
 
     // Rate-limited API with no checksum anywhere must fail closed (never offer update with empty checksum)
     globalThis.fetch = async (target) => {
       const u = String(target)
       if (u.startsWith('https://api.github.com/')) return new Response('rate limit', { status: 403 })
-      if (u.includes('/releases/latest')) return { ok: true, url: 'https://github.com/AaradhyaNegi009/UpBeat/releases/tag/v7.7.0' }
+      if (u.includes('/releases/latest')) return { ok: true, url: 'https://github.com/AaradhyaNegi009/UpBeat/releases/tag/v7.8.0' }
       return new Response('Not found', { status: 404 })
     }
     const failRes = await checkOtaUpdate({ silent: true })

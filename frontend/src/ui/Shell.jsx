@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { House, Search, Music, Sparkles, Library, Plus, ChevronLeft, ChevronRight, Users, Download, Settings, PanelLeftClose, PanelLeftOpen, PanelRightOpen, PanelRightClose, Keyboard, WifiOff, Activity } from 'lucide-react'
 import { Avatar, IconButton, LikedTile, Collage, Chip } from './primitives'
 import { SearchField } from '../views/SearchView'
 import { useMediaQuery } from './router'
@@ -80,7 +80,11 @@ export function SideNav({
   onNewPlaylist,
   libFilter,
   setLibFilter,
-  onCollapseSidebar
+  onCollapseSidebar,
+  onOpenSonicDna,
+  onOpenShortcuts,
+  offlineMode = false,
+  onToggleOfflineMode
 }) {
   const items = saved.filter((c) => libFilter === 'all' || (libFilter === 'mixes' ? ['mix', 'foryou'].includes(c.kind) : !['mix', 'foryou'].includes(c.kind)))
   return (
@@ -121,6 +125,16 @@ export function SideNav({
               </button>
             )
           })}
+          {onOpenSonicDna && (
+            <button
+              type="button"
+              onClick={onOpenSonicDna}
+              className="h-11 px-3 rounded-[10px] flex items-center gap-3.5 text-[15px] font-bold cursor-pointer transition-colors text-t2 hover:text-t1 hover:bg-white/[0.04]"
+            >
+              <Activity className="w-[22px] h-[22px] text-accent" />
+              Your Sonic DNA
+            </button>
+          )}
         </nav>
       </div>
 
@@ -174,6 +188,37 @@ export function SideNav({
             />
           ))}
         </div>
+        {(onOpenShortcuts || offlineMode) && (
+          <div className="px-3 py-2.5 border-t border-white/[0.06] flex flex-col gap-1.5 shrink-0">
+            {offlineMode && (
+              <button
+                type="button"
+                onClick={onToggleOfflineMode}
+                className="w-full h-8 px-2.5 rounded-lg bg-live/15 text-live text-xs font-bold flex items-center justify-between gap-2 cursor-pointer hover:bg-live/20 transition-colors"
+                title="Offline mode is active (click to switch back online)"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <WifiOff className="w-3.5 h-3.5" />
+                  Offline mode active
+                </span>
+                <span className="text-[11px] opacity-85">Turn off</span>
+              </button>
+            )}
+            {onOpenShortcuts && (
+              <button
+                type="button"
+                onClick={onOpenShortcuts}
+                className="w-full h-8 px-2.5 rounded-lg text-xs font-semibold text-t2 hover:text-t1 hover:bg-white/[0.05] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Keyboard className="w-3.5 h-3.5" />
+                  <span>Keyboard shortcuts (?)</span>
+                </span>
+                <kbd className="font-sans text-[11px] font-bold text-t3 bg-s2 rounded px-1.5 py-0.5">?</kbd>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -210,7 +255,11 @@ export function TopBar({
   jamActive = false,
   onOpenFriends,
   sidebarOpen = true,
-  onToggleSidebar
+  onToggleSidebar,
+  rightPanelOpen = true,
+  onToggleRightPanel,
+  offlineMode = false,
+  onToggleOfflineMode
 }) {
   const online = friends.filter((f) => f.online)
   const compact = !useMediaQuery('(min-width: 1280px)')
@@ -267,6 +316,22 @@ export function TopBar({
         </IconButton>
       )}
       <span className="flex-1" />
+      {onToggleOfflineMode && (
+        <button
+          type="button"
+          onClick={onToggleOfflineMode}
+          aria-pressed={offlineMode}
+          title={offlineMode ? 'Offline mode is on (click to disable)' : 'Turn on offline mode'}
+          className={`h-9 px-3 rounded-full text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+            offlineMode
+              ? 'bg-live/15 text-live ring-1 ring-inset ring-live/40 hover:bg-live/25'
+              : 'bg-s2 hover:bg-s3 text-t2 hover:text-t1'
+          }`}
+        >
+          <WifiOff className="w-3.5 h-3.5" />
+          <span>{offlineMode ? 'Offline mode' : 'Offline'}</span>
+        </button>
+      )}
       <button
         type="button"
         onClick={onOpenFriends}
@@ -294,6 +359,17 @@ export function TopBar({
           ? `${online.length} friend${online.length > 1 ? 's' : ''} online`
           : 'Friends'}
       </button>
+      {onToggleRightPanel && (
+        <IconButton
+          label={rightPanelOpen ? 'Hide right panel (⌘\\)' : 'Open right panel (⌘\\)'}
+          variant="filled"
+          size={40}
+          onClick={onToggleRightPanel}
+          active={rightPanelOpen}
+        >
+          {rightPanelOpen ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
+        </IconButton>
+      )}
       <IconButton label="Settings" variant="filled" size={44} onClick={onOpenSettings}>
         <Settings className="w-5 h-5" />
       </IconButton>

@@ -12,6 +12,34 @@ export const VIBES = [
   'Late-night drive, moody synths'
 ]
 
+export const REFINEMENTS = [
+  'More upbeat',
+  '90s acoustic',
+  'Instrumental only',
+  'Late-night chill',
+  'Deep cuts'
+]
+
+function hasRefinement(prompt = '', chip = '') {
+  const escaped = chip.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|,\\s*)${escaped}(?=\\s*(?:,|$))`, 'i').test((prompt || '').trim())
+}
+
+function applyPromptRefinement(currentPrompt = '', chip = '') {
+  const trimmed = (currentPrompt || '').trim()
+  if (!trimmed) return chip
+  const escaped = chip.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const exactRegex = new RegExp(`(?:^|,\\s*)${escaped}(?=\\s*(?:,|$))`, 'i')
+  if (exactRegex.test(trimmed)) {
+    return trimmed
+      .replace(new RegExp(`,\\s*${escaped}(?=\\s*(?:,|$))`, 'i'), '')
+      .replace(new RegExp(`^${escaped}(?:,\\s*)?`, 'i'), '')
+      .trim()
+  }
+  const sep = /[,;.!?]$/.test(trimmed) ? ' ' : ', '
+  return `${trimmed}${sep}${chip}`
+}
+
 export const LENGTHS = [
   { id: 10, label: '10 songs' },
   { id: 20, label: '20 songs' },
@@ -90,6 +118,23 @@ export default function CreateView({
           placeholder="Describe a moment, a mood, a memory…"
           className="w-full bg-transparent resize-none text-xl leading-snug font-semibold tracking-[-0.01em] placeholder:text-t3 placeholder:font-medium focus:outline-none min-h-[84px]"
         />
+        <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2.5 border-t border-white/[0.06]" role="group" aria-label="Prompt refinements">
+          {REFINEMENTS.map((chip) => {
+            const active = hasRefinement(prompt, chip)
+            return (
+              <Chip
+                key={chip}
+                active={active}
+                variant="ghost"
+                aria-pressed={active}
+                onClick={() => setPrompt(applyPromptRefinement(prompt, chip))}
+                className="!h-7 !px-3 !text-xs"
+              >
+                {chip}
+              </Chip>
+            )
+          })}
+        </div>
         <div className="flex items-center justify-end gap-2 mt-2.5">
           <button
             type="submit"

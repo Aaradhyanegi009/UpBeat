@@ -33,15 +33,15 @@ MODEL_429_COOLDOWN_SEC = 60.0
 
 # Model alias mapping for endpoints that require specific backend identifiers
 MODEL_ALIASES: Dict[str, str] = {
-    "gemini-4-argon": "gemini-robotics-er-2-preview",
-    "gemini-er-2-flash": "gemini-robotics-er-2-preview",
+    "gemini-4-argon": "gemini-2.5-flash-lite",
+    "gemini-er-2-flash": "gemini-2.5-flash-lite",
 }
 
 # Models that require thinkingLevel="LOW" instead of "MINIMAL"
 LOW_THINKING_MODELS = {"gemini-3.8-flash", "gemini-3.7-flash"}
 
 # Models that support thinkingBudget=0
-ZERO_BUDGET_MODELS = {"gemini-2.5-flash", "gemini-robotics-er-2-preview"}
+ZERO_BUDGET_MODELS = {"gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-robotics-er-2-preview"}
 
 
 def _resolve_key(module_val: str, env_name: str) -> str:
@@ -229,12 +229,10 @@ def generate_fast_with_fallback(prompt: str, preferred_model: str = "gemini-4-ar
     """
     fallback_pool = [
         "gemini-4-argon",
-        "gemini-3.1-flash-lite",
-        "gemini-3.5-flash-lite",
+        "gemini-2.5-flash-lite",
         "gemini-flash-lite-latest",
-        "gemini-3-flash-preview",
         "gemini-2.5-flash",
-        "gemma-4-26b-a4b-it",
+        "gemini-2.0-flash",
     ]
     if _resolve_key(GROQ_API_KEY, "GROQ_API_KEY"):
         fallback_pool.insert(0, "groq/llama-3.3-70b-versatile")
@@ -426,6 +424,8 @@ def _hydrate_tracks_from_catalog(raw_tracks: List[Dict[str, Any]], yt_catalog: L
         by_title.setdefault(t_key, []).append(item)
 
     for tr in raw_tracks:
+        if not isinstance(tr, dict):
+            continue
         if tr.get("video_id") and len(str(tr["video_id"])) == 11:
             continue
         t_key = canonical_song_title(tr.get("title") or "")

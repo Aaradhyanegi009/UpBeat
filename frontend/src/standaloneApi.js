@@ -31,6 +31,8 @@ export {
 } from './services/musicFilter.js'
 
 export {
+  VERIFIED_MODELS,
+  clearGeminiCooldowns,
   generateWithDirectGemini
 } from './services/geminiClient.js'
 
@@ -49,6 +51,7 @@ export {
   resolveStandaloneAudio,
   prewarmTrack,
   getAudioSource,
+  getCachedAudioSource,
   getTrackDownloadUrl,
   formatDurationSeconds
 } from './services/audioResolver.js'

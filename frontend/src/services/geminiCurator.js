@@ -3,17 +3,64 @@
  */
 import { isConfigured } from "./platformConfig.js"
 import { generateWithDirectGemini } from "./geminiClient.js"
-import { searchYouTubeStandalone, ytmSearchItems } from "./innertubeClient.js"
+import {
+  canonicalArtistName,
+  canonicalSongTitle,
+  searchYouTubeStandalone,
+  ytmSearchItems
+} from "./innertubeClient.js"
+
+function artistsOverlap(rawA = '', rawB = '') {
+  const a = canonicalArtistName(rawA)
+  const b = canonicalArtistName(rawB)
+  if (!a || !b) return false
+  if (a === b || a.includes(b) || b.includes(a)) return true
+  const tokensA = a.split(/\s+/).filter((w) => w.length >= 2)
+  const tokensB = new Set(b.split(/\s+/).filter((w) => w.length >= 2))
+  return tokensA.some((tok) => tokensB.has(tok))
+}
+
+function findCatalogMatch(track, catalog = []) {
+  if (!track || !Array.isArray(catalog) || !catalog.length) return null
+  const tTitle = canonicalSongTitle(track.title)
+  const tArtist = canonicalArtistName(track.artist)
+  if (!tTitle) return null
+
+  const valid = catalog.filter((c) => c && c.video_id)
+  if (tArtist) {
+    const exact = valid.find(
+      (c) => canonicalSongTitle(c.title) === tTitle && canonicalArtistName(c.artist) === tArtist
+    )
+    if (exact) return exact
+  }
+
+  const titleMatches = valid.filter((c) => canonicalSongTitle(c.title) === tTitle)
+  if (titleMatches.length === 1 && artistsOverlap(track.artist, titleMatches[0].artist)) {
+    return titleMatches[0]
+  }
+  const overlapping = titleMatches.filter((c) => artistsOverlap(track.artist, c.artist))
+  if (overlapping.length === 1) return overlapping[0]
+
+  return null
+}
 
 // ---------------------------------------------------------------------------
 // Standalone curation
 // ---------------------------------------------------------------------------
 
-export async function curateStandalone({ mood_prompt, energy_level = 78, count = 8, model_name = 'gemini-4-argon', favorites = [] }) {
+export async function curateStandalone({
+  mood_prompt,
+  energy_level = 78,
+  count = 8,
+  model_name = 'gemini-4-argon',
+  favorites = [],
+  onProgress = null
+}) {
   // Ground the model in real catalog results for the query
+  let catalog = []
   let catalogBlock = ''
   try {
-    const catalog = (await ytmSearchItems(mood_prompt)).slice(0, 12)
+    catalog = (await ytmSearchItems(mood_prompt)).slice(0, 12)
     if (catalog.length) {
       catalogBlock =
         'Verified YouTube Music tracks matching the query (use as ground truth where relevant):\n' +
@@ -60,15 +107,39 @@ Return ONLY a valid JSON object:
   ]
 }`
 
+  if (typeof onProgress === 'function') {
+    try { onProgress('curating') } catch {}
+  }
   const res = await generateWithDirectGemini(prompt, model_name)
   const tracks = Array.isArray(res.tracks) ? res.tracks : []
   const tierOrder = { 'Direct Match': 0, 'Close Fit': 1, Exploratory: 2 }
 
+  if (typeof onProgress === 'function') {
+    try { onProgress('resolving') } catch {}
+  }
+
   const resolved = await Promise.all(
     tracks.map(async (t) => {
       const q = t.search_query || `${t.title} ${t.artist}`
-      const found = await searchYouTubeStandalone(q)
       const tier = tierOrder[t.match_tier] !== undefined ? t.match_tier : 'Direct Match'
+      const catalogHit = findCatalogMatch(t, catalog)
+      if (catalogHit) {
+        const vid = catalogHit.video_id
+        const extraFallbacks = catalog
+          .filter((c) => c?.video_id && c.video_id !== vid && canonicalSongTitle(c.title) === canonicalSongTitle(t.title))
+          .map((c) => c.video_id)
+        const fallbackIds = Array.from(new Set([...(catalogHit.fallback_ids || []), ...extraFallbacks]))
+        return {
+          ...t,
+          match_tier: tier,
+          video_id: vid,
+          fallback_ids: fallbackIds,
+          duration_text: catalogHit.duration_text || '',
+          thumbnail: catalogHit.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+          url: catalogHit.url || `https://www.youtube.com/watch?v=${vid}`
+        }
+      }
+      const found = await searchYouTubeStandalone(q)
       if (found) return { ...t, match_tier: tier, ...found, duration_text: found.duration_text || '' }
       return { ...t, match_tier: tier, video_id: '', fallback_ids: [], duration_text: '', url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` }
     })

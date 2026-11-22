@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { KeyRound, Eye, EyeOff, ExternalLink, RefreshCw, Check, ChevronDown } from 'lucide-react'
+import { KeyRound, Eye, EyeOff, ExternalLink, RefreshCw, Check, ChevronDown, Keyboard, WifiOff } from 'lucide-react'
 import { PageHeader, Chip, Spinner, Avatar } from '../ui/primitives'
 import { getStoredApiKey, setStoredApiKey, getStoredServerUrl, setStoredServerUrl } from '../standaloneApi'
 import { checkOtaUpdate, getCurrentOtaVersion, applyOtaBundle } from '../otaUpdater'
@@ -17,11 +17,14 @@ export default function SettingsView({
   onLogout,
   onOpenProfileEdit,
   offlineStats,
+  offlineMode = false,
+  onToggleOfflineMode,
   onClearDownloads,
   playbackMode,
   setPlaybackMode,
   notify,
-  onRedoSetup
+  onRedoSetup,
+  onOpenShortcuts
 }) {
   const [apiKey, setApiKey] = useState(() => getStoredApiKey())
   const [showKey, setShowKey] = useState(false)
@@ -219,9 +222,12 @@ export default function SettingsView({
                 >
                   {models.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {(m.name || m.id).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').replace(/\s+\)/, ')').trim()}
+                      {m.name || m.label || m.id}
                     </option>
                   ))}
+                  {selectedModel && !models.some((m) => m.id === selectedModel) && (
+                    <option value={selectedModel}>{selectedModel}</option>
+                  )}
                 </select>
               </div>
             )}
@@ -229,6 +235,20 @@ export default function SettingsView({
         </Section>
 
         <Section title="Downloads">
+          {onToggleOfflineMode && (
+            <Row className="border-b border-white/[0.08]">
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-bold flex items-center gap-2">
+                  <WifiOff className={`w-4 h-4 shrink-0 ${offlineMode ? 'text-live' : 'text-t2'}`} />
+                  <span>Offline mode</span>
+                </div>
+                <div className="text-[13px] text-t2 mt-0.5">
+                  {offlineMode ? 'Active — playing downloaded songs without internet.' : 'Stay offline and play only downloaded songs.'}
+                </div>
+              </div>
+              <Toggle checked={Boolean(offlineMode)} onChange={() => onToggleOfflineMode()} label="Offline mode" />
+            </Row>
+          )}
           <Row>
             <div className="flex-1 min-w-0">
               <div className="text-[15px] font-bold">Stored on this device</div>
@@ -297,6 +317,20 @@ export default function SettingsView({
         </Section>
 
         <Section title="About">
+          {onOpenShortcuts && (
+            <Row className="border-b border-white/[0.08]">
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] font-bold flex items-center gap-2">
+                  <Keyboard className="w-4 h-4 text-t2 shrink-0" />
+                  <span>Keyboard shortcuts (?)</span>
+                </div>
+                <div className="text-[13px] text-t2 mt-0.5">Playback, seek, panel, and search keys.</div>
+              </div>
+              <Chip variant="ghost" onClick={onOpenShortcuts}>
+                View
+              </Chip>
+            </Row>
+          )}
           <Row>
             <div className="flex-1 min-w-0">
               <div className="text-[15px] font-bold">UpBeat {version}</div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Camera, Trash2, Check, User, FolderOpen, Link2, Settings } from 'lucide-react'
+import { X, Camera, Trash2, Check, User, FolderOpen, Link2, Settings, Sparkles, ChevronRight } from 'lucide-react'
 import { Avatar, IconButton } from '../ui/primitives'
 import { hasBackend, getApiBase } from '../standaloneApi'
 import { navigate } from '../ui/router'
@@ -372,6 +372,26 @@ export default function ProfileEditModal({ isOpen, onClose, user, onSave, onNoti
           </div>
 
           {/* Action Buttons */}
+          <button
+            type="button"
+            onClick={() => {
+              onClose?.()
+              navigate('/you')
+            }}
+            className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-left transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-white">Your Sonic DNA</div>
+                <div className="text-[11px] text-white/55 truncate">View taste archetype, genres & sources</div>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-white/50 shrink-0" />
+          </button>
+
           <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between text-xs text-white/50">
             <span>Audio & app preferences</span>
             <button

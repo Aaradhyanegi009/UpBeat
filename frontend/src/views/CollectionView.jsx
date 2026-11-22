@@ -1,5 +1,5 @@
 import React from 'react'
-import { Play, Shuffle, Plus, Check, Download, Users, Share2, Sparkles, Pencil, RefreshCw, ListMusic, CircleCheck } from 'lucide-react'
+import { Play, Shuffle, Plus, Check, Download, Users, Share2, Sparkles, Pencil, RefreshCw, ListMusic, CircleCheck, X } from 'lucide-react'
 import { Collage, IconButton, Chip, ChipRow, PageHeader, EmptyState, LikedTile, ActionMenu, Spinner } from '../ui/primitives'
 import { SongRow } from '../ui/AppContext'
 
@@ -42,7 +42,9 @@ export default function CollectionView({
   onToggleSave,
   onPlay,
   onDownloadAll,
+  onCancelDownload,
   downloadState,
+  downloadProgress = {},
   onShare,
   onStartJam,
   onTweak,
@@ -119,21 +121,37 @@ export default function CollectionView({
         </IconButton>
       )}
       {onDownloadAll && (
-        <IconButton
-          label={allDownloaded ? 'All songs downloaded' : downloadState?.busy ? `Downloading ${downloadState.done}/${downloadState.total}` : 'Download all'}
-          onClick={onDownloadAll}
-          disabled={!tracks.length || downloadState?.busy}
-        >
-          {downloadState?.busy ? (
-            <span className="relative inline-flex">
-              <Spinner className="w-5 h-5" />
+        downloadState?.busy ? (
+          <div className="inline-flex items-center gap-2 h-10 pl-3.5 pr-2 rounded-full bg-s2 ring-1 ring-white/10 text-xs font-bold text-t1 shrink-0">
+            <Spinner className="w-4 h-4 shrink-0" />
+            <span className="tabular-nums">
+              {downloadState.done || 0}/{downloadState.total || tracks.length}
             </span>
-          ) : allDownloaded ? (
-            <CircleCheck className="w-6 h-6 text-live" />
-          ) : (
-            <Download className="w-[22px] h-[22px]" />
-          )}
-        </IconButton>
+            {onCancelDownload && (
+              <button
+                type="button"
+                onClick={onCancelDownload}
+                aria-label="Cancel download"
+                className="h-7 px-2.5 rounded-full bg-[#FF8A73]/15 hover:bg-[#FF8A73]/25 text-[#FF8A73] text-xs font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Cancel</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <IconButton
+            label={allDownloaded ? 'All songs downloaded' : 'Download all'}
+            onClick={onDownloadAll}
+            disabled={!tracks.length}
+          >
+            {allDownloaded ? (
+              <CircleCheck className="w-6 h-6 text-live" />
+            ) : (
+              <Download className="w-[22px] h-[22px]" />
+            )}
+          </IconButton>
+        )
       )}
       {onStartJam && (
         <IconButton label="Listen together (start a Jam)" onClick={onStartJam} disabled={!tracks.length}>
@@ -191,17 +209,34 @@ export default function CollectionView({
           />
         ) : (
           <div>
-            {tracks.map((t, i) => (
-              <SongRow
-                key={`${t.video_id || t.title}-${i}`}
-                track={t}
-                list={tracks}
-                index={i}
-                showIndex={isDesktop}
-                artSize={isDesktop ? 44 : 52}
-                extraMenu={trackMenuExtra ? trackMenuExtra(t, i) : []}
-              />
-            ))}
+            {tracks.map((t, i) => {
+              const pct =
+                t?.video_id && downloadProgress && Object.prototype.hasOwnProperty.call(downloadProgress, t.video_id)
+                  ? downloadProgress[t.video_id]
+                  : null
+              return (
+                <SongRow
+                  key={`${t.video_id || t.title}-${i}`}
+                  track={t}
+                  list={tracks}
+                  index={i}
+                  showIndex={isDesktop}
+                  artSize={isDesktop ? 44 : 52}
+                  trailing={
+                    pct !== null ? (
+                      <span
+                        aria-label={`Downloading ${Math.round(pct)}%`}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-live tabular-nums shrink-0 px-2.5 py-1 rounded-full bg-live/10"
+                      >
+                        <Spinner className="w-3.5 h-3.5 !border-live/30 !border-t-live" />
+                        <span>{Math.round(pct)}%</span>
+                      </span>
+                    ) : undefined
+                  }
+                  extraMenu={trackMenuExtra ? trackMenuExtra(t, i) : []}
+                />
+              )
+            })}
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@ import { Play, Users, RefreshCw, Sparkles, Shuffle, Search, Music, Disc, Setting
 import { navigate } from '../ui/router'
 import { Art, Avatar, Chip, ChipRow, IconButton, LikedTile, SectionHeader, Collage, Spinner, artUrl, TrackRow } from '../ui/primitives'
 import { MediaCard, SongRow, useApp } from '../ui/AppContext'
-import { getInitialDiscoveryBlocks, fetchListenTogetherFeed, advanceRotationCursor, directSearchStandalone, isValidMusicTrack, THIRTY_MINUTES_MS } from '../standaloneApi'
+import { getInitialDiscoveryBlocks, fetchListenTogetherFeed, rerollDiscoveryBlock, advanceRotationCursor, directSearchStandalone, isValidMusicTrack, THIRTY_MINUTES_MS } from '../standaloneApi'
 
 export const MOODS = [
   { id: 'chill', label: 'Chill', query: 'Chill relaxing mellow acoustic songs playlist', color: 'from-teal-600/40 to-black' },
@@ -45,6 +45,7 @@ export default function HomeView({
   const [activeMood, setActiveMood] = useState('for_you')
   const [blocks, setBlocks] = useState(() => getInitialDiscoveryBlocks())
   const [refreshing, setRefreshing] = useState(false)
+  const [rerollingIds, setRerollingIds] = useState({})
   const pinnedCoversRef = useRef({})
   const userTracksRef = useRef(userTracks)
   userTracksRef.current = userTracks
@@ -110,6 +111,28 @@ export default function HomeView({
       if (manual) setRefreshing(false)
     }
   }, [userTracks, tasteDna])
+
+  const handleRerollBlock = useCallback(async (block) => {
+    if (!block?.id) return
+    setRerollingIds((prev) => ({ ...prev, [block.id]: true }))
+    delete pinnedCoversRef.current[block.id]
+    try {
+      const fresh = await rerollDiscoveryBlock(block.id, {
+        userTracks: userTracksRef.current,
+        tasteDna: tasteDnaRef.current,
+        timeInfo
+      })
+      if (fresh) {
+        setBlocks((prev) => prev.map((b) => (b.id === block.id ? fresh : b)))
+      }
+    } catch {} finally {
+      setRerollingIds((prev) => {
+        const next = { ...prev }
+        delete next[block.id]
+        return next
+      })
+    }
+  }, [timeInfo])
 
   // Fetch or refresh data for an active mood
   const refreshMood = useCallback(async (moodId, force = false) => {
@@ -254,6 +277,9 @@ export default function HomeView({
         <Chip active={activeMood === 'for_you'} onClick={() => handleSelectMood('for_you')}>
           For you
         </Chip>
+        <Chip variant="ghost" icon={Sparkles} onClick={() => navigate('/you')}>
+          Taste DNA
+        </Chip>
         {MOODS.map((m) => (
           <Chip key={m.id} active={activeMood === m.id} onClick={() => handleSelectMood(m.id)}>
             {m.label}
@@ -274,6 +300,8 @@ export default function HomeView({
               onOpen={() => onOpenBlock(featured)}
               onPlay={() => onPlayBlock(featured, false)}
               onShuffle={() => onPlayBlock(featured, true)}
+              onRefresh={() => handleRerollBlock(featured)}
+              refreshing={Boolean(rerollingIds[featured.id])}
             />
           )}
 
@@ -346,6 +374,8 @@ export default function HomeView({
                   src={blockThumbMap[b.id] || artUrl({ thumbnail: b.thumbnail }, true)}
                   onOpen={() => onOpenBlock(b)}
                   onPlay={() => onPlayBlock(b, false)}
+                  onRefresh={() => handleRerollBlock(b)}
+                  refreshing={Boolean(rerollingIds[b.id])}
                 />
               ))}
             </PlaylistSlider>
@@ -604,7 +634,7 @@ function CardRow({ isDesktop, children }) {
   )
 }
 
-function FeaturedCard({ block, thumbSrc, isDesktop, onOpen, onPlay, onShuffle }) {
+function FeaturedCard({ block, thumbSrc, isDesktop, onOpen, onPlay, onShuffle, onRefresh, refreshing = false }) {
   const img = thumbSrc || artUrl({ thumbnail: block.thumbnail }, true)
   return (
     <div
@@ -650,6 +680,18 @@ function FeaturedCard({ block, thumbSrc, isDesktop, onOpen, onPlay, onShuffle })
           >
             <Shuffle className="w-5 h-5" />
           </IconButton>
+          {onRefresh && (
+            <IconButton
+              label={`Refresh featured ${block.title}`}
+              disabled={refreshing}
+              onClick={(e) => {
+                e.stopPropagation()
+                onRefresh()
+              }}
+            >
+              <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+            </IconButton>
+          )}
         </div>
       </div>
     </div>

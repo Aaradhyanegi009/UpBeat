@@ -44,12 +44,28 @@ const IOS_PLAYER_CLIENT = {
 }
 
 const streamCache = new Map()
+const STREAM_CACHE_TTL_MS = 25 * 60 * 1000
+const prewarmedSet = new Set()
+const prewarmedInFlight = new Map()
+
+/** Returns a non-expired cached audio source entry from memory, or null. */
+export function getCachedAudioSource(videoId) {
+  if (!videoId || typeof videoId !== 'string') return null
+  const cached = streamCache.get(videoId)
+  if (!cached) return null
+  if (Date.now() - cached.ts >= STREAM_CACHE_TTL_MS) {
+    streamCache.delete(videoId)
+    prewarmedSet.delete(videoId)
+    return null
+  }
+  return cached
+}
 
 /** Returns { url, duration, video_id } for a video id (works in the APK without the Mac). */
 export async function resolveStandaloneAudio(videoId, track = null) {
   if (!videoId) return null
-  const cached = streamCache.get(videoId)
-  if (cached && Date.now() - cached.ts < 25 * 60 * 1000) return cached
+  const cached = getCachedAudioSource(videoId)
+  if (cached) return cached
 
   let lastTitle = (track?.title || '').trim()
   let lastArtist = (track?.artist || '').trim()
@@ -151,25 +167,47 @@ export async function resolveStandaloneAudio(videoId, track = null) {
   return null
 }
 
-const streamUrlCache = new Map()
-const prewarmedSet = new Set()
-
 /**
- * Pre-warms the audio stream in the background before the user even finishes clicking.
+ * Pre-warms the full audio source in the background before playback transitions.
+ * Accepts either a videoId string or a track object `{ video_id, title, artist, duration_text }`.
  */
-export function prewarmTrack(videoId) {
-  if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) return
-  if (prewarmedSet.has(videoId)) return
-  prewarmedSet.add(videoId)
-
-  if (prewarmedSet.size > 100) {
-    const first = prewarmedSet.values().next().value
-    prewarmedSet.delete(first)
+export function prewarmTrack(trackOrVideoId) {
+  const isTrackObj = Boolean(trackOrVideoId && typeof trackOrVideoId === 'object')
+  const trackObj = isTrackObj ? trackOrVideoId : null
+  const videoId = isTrackObj ? trackOrVideoId.video_id : trackOrVideoId
+  if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
+    return Promise.resolve(null)
   }
 
-  try {
-    resolveStandaloneAudio(videoId).catch(() => {})
-  } catch {}
+  const cached = getCachedAudioSource(videoId)
+  if (cached) return Promise.resolve(cached)
+
+  if (prewarmedInFlight.has(videoId)) {
+    return prewarmedInFlight.get(videoId)
+  }
+
+  if (prewarmedSet.has(videoId)) {
+    return Promise.resolve(null)
+  }
+
+  const promise = (async () => {
+    try {
+      const entry = await getAudioSource(videoId, trackObj)
+      prewarmedSet.add(videoId)
+      if (prewarmedSet.size > 100) {
+        const first = prewarmedSet.values().next().value
+        prewarmedSet.delete(first)
+      }
+      return entry || null
+    } catch {
+      return null
+    } finally {
+      prewarmedInFlight.delete(videoId)
+    }
+  })()
+
+  prewarmedInFlight.set(videoId, promise)
+  return promise
 }
 
 /** Audio source for the player: Mac backend proxy when available, otherwise direct standalone stream. */
@@ -177,8 +215,8 @@ export async function getAudioSource(videoId, track = null) {
   if (!videoId) return null
 
   // 1. Memory cache hit (< 1ms)
-  const cached = streamCache.get(videoId)
-  if (cached && Date.now() - cached.ts < 25 * 60 * 1000) {
+  const cached = getCachedAudioSource(videoId)
+  if (cached) {
     return cached
   }
 

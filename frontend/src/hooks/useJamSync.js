@@ -252,6 +252,10 @@ export function useJamSync({
     setIsJamModalOpen(true)
   }, [playList])
 
+  const resyncJam = useCallback(() => {
+    return jamManager.resyncNow()
+  }, [])
+
   return {
     jamState,
     isJamModalOpen,
@@ -266,6 +270,7 @@ export function useJamSync({
     handleDeepLinkUrl,
     openFriends,
     listenAlong,
-    startJamWith
+    startJamWith,
+    resyncJam
   }
 }

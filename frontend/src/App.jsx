@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { Sparkles, Loader2, X, Share, Users, Settings, Trash2, Pencil } from 'lucide-react'
 import PlayerBar from './components/PlayerBar'
 import JamFloatingBar from './components/JamFloatingBar'
+import ShortcutModal from './components/ShortcutModal'
 import { jamManager, normalizeRoomCode, normalizeFriendCode } from './jamEngine'
 import { useRoute, navigate, goBack, canGoBack, useMediaQuery } from './ui/router'
 import { AppContext, sameTrack } from './ui/AppContext'
@@ -26,7 +27,8 @@ import {
   fetchRelatedCompanionTracks,
   loadBlockTracks,
   isValidMusicTrack,
-  sanitizeLocalMusicLibrary
+  sanitizeLocalMusicLibrary,
+  VERIFIED_MODELS
 } from './standaloneApi'
 import { useLibraryStorage, slimTrack, saveStorage, loadStorage, hasMacCompanion } from './hooks/useLibraryStorage'
 import { useCompanionSync } from './hooks/useCompanionSync'
@@ -67,17 +69,22 @@ export default function App() {
   const remoteJamGuardRef = useRef(false)
   const initialBootRef = useRef(false)
 
-  const [models] = useState([
-    { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Fastest · 2.5 Flash Lite)' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }
-  ])
+  const [models] = useState(() => {
+    const labels = {
+      'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
+      'gemini-flash-lite-latest': 'Gemini Flash Lite Latest',
+      'gemini-2.5-flash': 'Gemini 2.5 Flash',
+      'gemini-2.0-flash': 'Gemini 2.0 Flash'
+    }
+    return [
+      { id: 'gemini-4-argon', name: 'Gemini 2.5 Flash Lite (⚡ Fastest)' },
+      ...VERIFIED_MODELS.map((id) => ({ id, name: labels[id] || id }))
+    ]
+  })
   const [selectedModel, setSelectedModel] = useState(() => {
-    const validIds = new Set(['gemini-4-argon', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.0-flash'])
     try {
       const saved = localStorage.getItem('argon_selected_model')
-      return saved && validIds.has(saved) ? saved : 'gemini-4-argon'
+      return saved && saved.trim() ? saved.trim() : 'gemini-4-argon'
     } catch {
       return 'gemini-4-argon'
     }
@@ -94,10 +101,12 @@ export default function App() {
   const [trackCount, setTrackCount] = useState(20)
   const [createSeed, setCreateSeed] = useState(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [curationStage, setCurationStage] = useState(null)
   const [isSearching, setIsSearching] = useState(false)
   const [isQueueOpen, setIsQueueOpen] = useState(false)
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false)
   const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
+  const [isShortcutModalOpen, setIsShortcutModalOpen] = useState(false)
   const [otaUpdate, setOtaUpdate] = useState(null)
   const [isApplyingOta, setIsApplyingOta] = useState(false)
   const [showIosInstallPrompt, setShowIosInstallPrompt] = useState(false)
@@ -172,16 +181,16 @@ export default function App() {
     tasteDna, setTasteDna,
     playlist, setPlaylist,
     queue, setQueue,
-    offlineTracks, offlineStats, downloadedIds,
+    offlineTracks, offlineStats, offlineMode, setOfflineMode, toggleOfflineMode, downloadedIds,
     searchQuery, setSearchQuery,
     searchResults, setSearchResults,
     recentSearches, setRecentSearches,
     savedCollections, setSavedCollections,
     recentMixes, playHistory, recents,
-    collectionLoading, setCollectionLoading, playingFrom, setPlayingFrom, downloadJobs, collectionTokenRef,
+    collectionLoading, setCollectionLoading, playingFrom, setPlayingFrom, downloadJobs, downloadProgress, collectionTokenRef,
     recordMix, recordRecent, recordHistoryTrack, showCollection, loadCollection,
-    isSavedId, toggleSave, createPlaylist, addTrackToPlaylist, removeFromPlaylist, deletePlaylist,
-    downloadTrack, downloadAll, deleteDownload, clearDownloads
+    isSavedId, toggleSave, createPlaylist, savePlaylistWithTracks, addTrackToPlaylist, removeFromPlaylist, deletePlaylist,
+    downloadTrack, downloadAll, cancelDownloadJob, deleteDownload, clearDownloads
   } = useLibraryStorage({ showNotify, navigate, goBack, initialSearchQuery: route.params?.q || '' })
 
   const {
@@ -205,9 +214,10 @@ export default function App() {
     currentTrack, setCurrentTrack, currentTrackIdx, setCurrentTrackIdx,
     isPlaying, setIsPlaying, playbackMode, setPlaybackMode, activePlaybackContext,
     isShuffle, setIsShuffle, repeatMode, setRepeatMode, crossfadeSec, setCrossfadeSec,
+    autoplay, toggleAutoplay,
     currentTrackRef, isPlayingRef, queueRef, handleNextRef, handlePrevRef,
     upNext, isTrackFavorite, handleToggleFavorite, handlePlayTrack, handleTogglePlay,
-    handleNext, handlePlayNext, handleAddToQueue, handleRemoveFromQueue, handleClearQueue,
+    handleNext, handlePlayNext, handleAddToQueue, handleRemoveFromQueue, reorderQueue, handleClearQueue,
     handleToggleShuffle, cycleRepeatMode, toggleLoopSong, handlePrev, handleUserSeek, handleTrackResolved, playList
   } = useAudioPlayback({
     playlist,
@@ -230,7 +240,7 @@ export default function App() {
     jamState, isJamModalOpen, setIsJamModalOpen,
     initialJamCode, setInitialJamCode, initialFriendCode, setInitialFriendCode,
     initialJamSection, setInitialJamSection, jamReactions,
-    openFriends, listenAlong, startJamWith
+    openFriends, listenAlong, startJamWith, resyncJam
   } = useJamSync({
     currentTrack,
     isPlaying,
@@ -406,7 +416,7 @@ export default function App() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data?.tracks) {
+        if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
           setPlaylist((prev) => (prev ? { ...prev, tracks: data.tracks } : prev))
           if (currentTrack) {
             const updatedCur = data.tracks.find((t) => t.title === currentTrack.title)
@@ -459,10 +469,12 @@ export default function App() {
         energy_level: energyLevel,
         count: trackCount,
         model_name: selectedModel,
-        favorites
+        favorites,
+        onProgress: (stage) => setCurationStage(stage)
       }
 
       if (hasBackend()) {
+        setCurationStage('companion')
         try {
           const res = await fetch(`${getApiBase()}/curate`, {
             method: 'POST',
@@ -483,6 +495,7 @@ export default function App() {
       }
 
       if (!curateData) {
+        setCurationStage('curating')
         curateData = await curateStandalone(curateArgs)
       }
 
@@ -511,6 +524,7 @@ export default function App() {
       showNotify(`Sync error: ${err.message}`, 'error')
     } finally {
       setIsSyncing(false)
+      setCurationStage(null)
     }
   }
 
@@ -518,6 +532,10 @@ export default function App() {
   const handleGenerate = async (overridePrompt, overrideSeeds, overrideEnergy, opts = {}) => {
     const activePrompt = (overridePrompt || prompt || '').trim()
     if (!activePrompt || isGenerating) return
+    if (offlineMode) {
+      showNotify('Offline mode is on — turn it off to make AI mixes', 'info', { label: 'Go online', onClick: () => setOfflineMode(false) })
+      return
+    }
 
     const hasKey = Boolean(getStoredApiKey())
     const hasCompanion = hasMacCompanion()
@@ -530,6 +548,7 @@ export default function App() {
     const token = ++collectionTokenRef.current
     setIsGenerating(true)
     setCollectionLoading(true)
+    setCurationStage(hasCompanion ? 'companion' : 'curating')
     setPlaylist({ id: `mix_pending_${token}`, kind: 'mix', title: 'Making your mix…', prompt: displayPrompt, tracks: [] })
     if (route.path !== '/collection') navigate('/collection')
 
@@ -540,7 +559,10 @@ export default function App() {
         energy_level: overrideEnergy ?? energyLevel,
         count: trackCount,
         model_name: selectedModel,
-        favorites
+        favorites,
+        onProgress: (stage) => {
+          if (token === collectionTokenRef.current) setCurationStage(stage)
+        }
       }
 
       if (hasCompanion) {
@@ -569,6 +591,7 @@ export default function App() {
           data = await res.json()
         } catch (backendErr) {
           if (hasKey) {
+            if (token === collectionTokenRef.current) setCurationStage('curating')
             data = await curateStandalone(curateArgs)
           } else if (backendErr?.hasBackendDetail) {
             throw backendErr
@@ -612,6 +635,7 @@ export default function App() {
       if (token === collectionTokenRef.current) {
         setIsGenerating(false)
         setCollectionLoading(false)
+        setCurationStage(null)
       } else {
         setIsGenerating(false)
       }
@@ -622,6 +646,10 @@ export default function App() {
   const handleDirectSearch = async (overrideQuery, mode = 'auto', autoPlay = false) => {
     const q = (overrideQuery ?? prompt ?? '').trim()
     if (!q || isSearching || isGenerating) return
+    if (offlineMode) {
+      showNotify('Offline mode is on — turn it off to search online', 'info', { label: 'Go online', onClick: () => setOfflineMode(false) })
+      return
+    }
 
     setIsSearching(true)
 
@@ -824,6 +852,21 @@ export default function App() {
   const runSearch = async (raw) => {
     const q = (raw || '').trim()
     if (!q) return
+    if (offlineMode) {
+      const needle = q.toLowerCase()
+      const localMatches = offlineTracks.filter((t) =>
+        `${t.title || ''} ${t.artist || ''}`.toLowerCase().includes(needle)
+      )
+      setSearchResults({
+        tracks: localMatches,
+        song_results: localMatches,
+        matched_playlists: [],
+        youtube_results: [],
+        search_query: q
+      })
+      showNotify('Offline mode is on — showing downloaded songs', 'info', { label: 'Go online', onClick: () => setOfflineMode(false) })
+      return
+    }
     const seq = ++searchSeqRef.current
     setIsSearching(true)
     try {
@@ -994,6 +1037,10 @@ export default function App() {
       setAddToPlaylistTrack(null)
       return true
     }
+    if (isShortcutModalOpen) {
+      setIsShortcutModalOpen(false)
+      return true
+    }
     if (isJamModalOpen) {
       setIsJamModalOpen(false)
       return true
@@ -1031,11 +1078,15 @@ export default function App() {
     }
   }, [])
 
-  // Desktop keyboard shortcuts (consolidated: Cmd/Ctrl+B toggles left nav only)
+  // Desktop keyboard shortcuts (Cmd/Ctrl+B left sidebar, Cmd/Ctrl+\ right panel, playback & ? sheet)
   const keyHandlerRef = useRef(null)
   keyHandlerRef.current = (e) => {
     const tag = (e.target?.tagName || '').toLowerCase()
-    const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable
+    const typing =
+      tag === 'input' ||
+      tag === 'textarea' ||
+      tag === 'select' ||
+      Boolean(e.target?.isContentEditable || e.target?.closest?.('[contenteditable="true"]'))
     const mod = e.metaKey || e.ctrlKey
     if (mod && e.key.toLowerCase() === 'k') {
       e.preventDefault()
@@ -1044,18 +1095,50 @@ export default function App() {
     } else if (mod && e.key.toLowerCase() === 'n') {
       e.preventDefault()
       navigate('/create')
-    } else if (mod && (e.key.toLowerCase() === 'b' || e.key === '\\')) {
+    } else if (mod && e.key.toLowerCase() === 'b') {
       e.preventDefault()
       setLeftNavOpen((v) => !v)
+    } else if (mod && e.key === '\\') {
+      e.preventDefault()
+      setRightPanelOpen((v) => !v)
     } else if (e.key === 'Escape' && !typing) {
-      if (isNowPlayingOpen) setIsNowPlayingOpen(false)
+      if (isShortcutModalOpen) setIsShortcutModalOpen(false)
+      else if (isNowPlayingOpen) setIsNowPlayingOpen(false)
       else if (isQueueOpen) setIsQueueOpen(false)
+    } else if (!mod && !e.altKey && !typing && e.key === '?') {
+      e.preventDefault()
+      setIsShortcutModalOpen((v) => !v)
+    } else if (!mod && !e.altKey && !typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault()
+      const delta = e.key === 'ArrowRight' ? 10 : -10
+      const controls = window.UpBeatControls
+      if (typeof controls?.seekBy === 'function') {
+        controls.seekBy(delta)
+      } else if (typeof controls?.seekTo === 'function') {
+        const cur = Number(controls.getCurrentTime?.() ?? controls.getTime?.() ?? 0) || 0
+        controls.seekTo(Math.max(0, cur + delta))
+      }
     } else if (e.code === 'Space' && !typing && tag !== 'button' && tag !== 'a' && !mod) {
       e.preventDefault()
       handleTogglePlay()
-    } else if (!mod && !typing && tag !== 'button' && tag !== 'a' && e.key.toLowerCase() === 'l') {
-      e.preventDefault()
-      toggleLoopSong()
+    } else if (!mod && !e.altKey && !typing && tag !== 'button' && tag !== 'a') {
+      const k = e.key.toLowerCase()
+      if (k === 'm') {
+        e.preventDefault()
+        window.UpBeatControls?.toggleMute?.()
+      } else if (k === 'n') {
+        e.preventDefault()
+        handleNext()
+      } else if (k === 'p') {
+        e.preventDefault()
+        handlePrev()
+      } else if (k === 'l') {
+        e.preventDefault()
+        toggleLoopSong()
+      } else if (k === 's') {
+        e.preventDefault()
+        handleToggleShuffle()
+      }
     }
   }
   useEffect(() => {
@@ -1159,6 +1242,29 @@ export default function App() {
     }
   }
 
+  const handleSaveQueue = useCallback(() => {
+    const tracksToSave = upNext.length > 0 ? upNext : (queue.length > 0 ? queue : (currentTrack ? [currentTrack] : []))
+    if (!tracksToSave.length) {
+      showNotify('Queue is empty', 'info')
+      return null
+    }
+    const baseTitle = playingFrom?.title
+      ? `${playingFrom.title} Queue`
+      : currentTrack?.title
+        ? `Up Next · ${currentTrack.title}`
+        : 'Saved Queue'
+    return savePlaylistWithTracks(baseTitle, tracksToSave)
+  }, [currentTrack, playingFrom?.title, queue, savePlaylistWithTracks, showNotify, upNext])
+
+  const mixLoadingLabel =
+    curationStage === 'companion'
+      ? 'Curating with Mac companion…'
+      : curationStage === 'curating'
+        ? 'Curating with AI…'
+        : curationStage === 'resolving'
+          ? 'Resolving tracks…'
+          : 'Picking songs that fit…'
+
   // ---- screens ------------------------------------------------------------
   const renderView = () => {
     switch (route.path) {
@@ -1211,6 +1317,8 @@ export default function App() {
             favorites={favorites}
             offlineTracks={offlineTracks}
             offlineStats={offlineStats}
+            offlineMode={offlineMode}
+            onToggleOfflineMode={toggleOfflineMode}
             saved={savedCollections}
             history={playHistory}
             downloadedIds={downloadedIds}
@@ -1234,14 +1342,16 @@ export default function App() {
           <CollectionView
             collection={c}
             loading={collectionLoading && route.path === '/collection'}
-            loadingLabel={isMix ? 'Picking songs that fit…' : 'Loading songs…'}
+            loadingLabel={isMix ? mixLoadingLabel : 'Loading songs…'}
             isDesktop={isDesktop}
             isSaved={c ? isSavedId(c.id) : false}
             canSave={Boolean(c) && !['liked', 'downloads', 'user'].includes(c.kind)}
             onToggleSave={() => toggleSave(c)}
             onPlay={(shuffle) => playList(c?.tracks, { shuffle, from: c ? { id: c.id, title: c.title } : null })}
             onDownloadAll={c?.kind === 'downloads' ? null : () => downloadAll(c)}
+            onCancelDownload={c?.id ? () => cancelDownloadJob(c.id) : null}
             downloadState={{ busy: job?.busy, done: job?.done, total: job?.total, allDone }}
+            downloadProgress={downloadProgress}
             onShare={() => shareCollection(c)}
             onStartJam={() => startJamWith(c)}
             onTweak={isMix ? tweakMix : null}
@@ -1281,10 +1391,13 @@ export default function App() {
             onLogout={handleGoogleLogout}
             onOpenProfileEdit={() => setIsProfileEditOpen(true)}
             offlineStats={offlineStats}
+            offlineMode={offlineMode}
+            onToggleOfflineMode={toggleOfflineMode}
             onClearDownloads={clearDownloads}
             playbackMode={playbackMode}
             setPlaybackMode={hasBackend() && !isNativeApp() ? setPlaybackMode : null}
             onRedoSetup={() => setShowOnboarding(true)}
+            onOpenShortcuts={() => setIsShortcutModalOpen(true)}
             notify={showNotify}
           />
         )
@@ -1409,6 +1522,10 @@ export default function App() {
                 libFilter={sideLibFilter}
                 setLibFilter={setSideLibFilter}
                 onCollapseSidebar={() => setLeftNavOpen(false)}
+                onOpenSonicDna={() => navigate('/you')}
+                onOpenShortcuts={() => setIsShortcutModalOpen(true)}
+                offlineMode={offlineMode}
+                onToggleOfflineMode={toggleOfflineMode}
               />
             </div>
 
@@ -1463,13 +1580,17 @@ export default function App() {
                   onOpenFriends={openFriends}
                   sidebarOpen={leftNavOpen}
                   onToggleSidebar={() => setLeftNavOpen((v) => !v)}
+                  rightPanelOpen={rightPanelOpen}
+                  onToggleRightPanel={() => setRightPanelOpen((v) => !v)}
+                  offlineMode={offlineMode}
+                  onToggleOfflineMode={toggleOfflineMode}
                 />
               </div>
               <Suspense fallback={<div className="p-8 text-t2 text-sm">Loading…</div>}>
                 {renderView()}
               </Suspense>
             </main>
-            {rightPanelOpen && (currentTrack || friends.length > 0) && (
+            {rightPanelOpen && (
               <RightPanel
                 track={currentTrack}
                 contextTitle={playingFrom?.title}
@@ -1484,12 +1605,26 @@ export default function App() {
                 onOpenLyrics={() => window.dispatchEvent(new Event('upbeat-open-lyrics'))}
                 onListenAlong={listenAlong}
                 onOpenFriends={openFriends}
+                autoplay={autoplay}
+                onToggleAutoplay={toggleAutoplay}
+                onSaveQueue={handleSaveQueue}
+                onReorderQueue={reorderQueue}
+                onRemoveFromQueue={handleRemoveFromQueue}
+                onClearQueue={handleClearQueue}
               />
             )}
           </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: topInset }}>
             <main ref={scrollRef} onScroll={onMainScroll} className="flex-1 min-h-0 ub-ambient-surface overflow-y-auto overflow-x-hidden overscroll-contain">
+              {offlineMode && (
+                <div className="mx-4 mt-2 px-3.5 py-2 rounded-xl bg-live/15 ring-1 ring-inset ring-live/30 text-xs font-bold text-live flex items-center justify-between gap-2">
+                  <span>Offline mode active</span>
+                  <button type="button" onClick={toggleOfflineMode} className="underline cursor-pointer">
+                    Go online
+                  </button>
+                </div>
+              )}
               <Suspense fallback={<div className="p-8 text-t2 text-sm">Loading…</div>}>
                 {renderView()}
               </Suspense>
@@ -1519,6 +1654,7 @@ export default function App() {
               setRightPanelOpen((o) => !o || rightTab !== 'next')
             }}
             jamActive={Boolean(jamState?.active)}
+            jamReactions={jamReactions}
             onOpenJam={() => setIsJamModalOpen(true)}
             onGoToArtist={goToArtist}
             onStartRadio={(t) => {
@@ -1589,6 +1725,8 @@ export default function App() {
             setInitialJamSection('')
           }}
           jamState={jamState}
+          jamReactions={jamReactions}
+          onResync={resyncJam}
           googleUser={googleUser}
           currentTrack={currentTrack}
           isPlaying={isPlaying}
@@ -1625,10 +1763,19 @@ export default function App() {
           onRemoveFromQueue={handleRemoveFromQueue}
           onClearQueue={handleClearQueue}
           onAddToQueue={handleAddToQueue}
+          onReorderQueue={reorderQueue}
+          autoplay={autoplay}
+          onToggleAutoplay={toggleAutoplay}
+          onSaveQueue={handleSaveQueue}
           upcomingTracks={upNext.slice(queue.length)}
             />
           </Suspense>
         )}
+
+        <ShortcutModal
+          isOpen={isShortcutModalOpen}
+          onClose={() => setIsShortcutModalOpen(false)}
+        />
 
         {showGoogleModal && (
           <Suspense fallback={null}>

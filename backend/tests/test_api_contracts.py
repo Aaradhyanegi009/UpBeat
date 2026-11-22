@@ -38,6 +38,19 @@ class TestApiContracts(unittest.TestCase):
         self.assertEqual(body["status"], "online")
         self.assertEqual(body["app"], "UpBeat")
         self.assertTrue(isinstance(body["models"], list) and len(body["models"]) >= 1)
+        by_id = {m["id"]: m for m in body["models"]}
+        self.assertEqual(
+            list(by_id.keys()),
+            [
+                "gemini-4-argon",
+                "gemini-2.5-flash-lite",
+                "gemini-flash-lite-latest",
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+            ],
+        )
+        self.assertEqual(by_id["gemini-4-argon"]["name"], "Gemini 2.5 Flash Lite (Fastest)")
+        self.assertTrue(by_id["gemini-4-argon"]["recommended"])
 
     def test_favorites_toggle_cycle(self):
         track = {"title": "Starboy", "artist": "The Weeknd", "video_id": "34Na4j8AVgA", "duration_text": "3:50"}

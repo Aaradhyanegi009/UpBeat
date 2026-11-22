@@ -1,7 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { resetStorage } from './helpers/test-env.mjs'
-import { generateWithDirectGemini } from '../src/services/geminiClient.js'
+import {
+  VERIFIED_MODELS,
+  clearGeminiCooldowns,
+  generateWithDirectGemini
+} from '../src/services/geminiClient.js'
 import { setStoredApiKey } from '../src/services/platformConfig.js'
 
 test('generateWithDirectGemini aborts stalled endpoint via timeout and falls back cleanly', async () => {
@@ -126,6 +130,89 @@ test('generateWithDirectGemini sends API key via x-goog-api-key header instead o
     assert.equal(captured[0].headers['x-goog-api-key'], testKey)
   } finally {
     globalThis.fetch = prevFetch
+    clearGeminiCooldowns()
+    resetStorage()
+  }
+})
+
+test('VERIFIED_MODELS lists verified endpoints and 429 cooldown skips cooled models unless all cooled down', async () => {
+  resetStorage()
+  clearGeminiCooldowns()
+  assert.deepEqual(VERIFIED_MODELS, [
+    'gemini-2.5-flash-lite',
+    'gemini-flash-lite-latest',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash'
+  ])
+
+  setStoredApiKey('AIzaCooldownTestKey')
+  const prevFetch = globalThis.fetch
+  const hitModels = []
+
+  globalThis.fetch = async (url) => {
+    const m = String(url).match(/models\/([^:]+):generateContent/)?.[1] || ''
+    hitModels.push(m)
+    if (m === 'gemini-2.5-flash-lite') {
+      return new Response(
+        JSON.stringify({ error: { message: 'Quota exceeded' } }),
+        { status: 429, headers: { 'content-type': 'application/json' } }
+      )
+    }
+    return new Response(
+      JSON.stringify({
+        candidates: [{ content: { parts: [{ text: `{"playlist_title":"Ok from ${m}","tracks":[{"title":"Track"}]}` }] } }]
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    )
+  }
+
+  try {
+    // 1st call: gemini-4-argon (alias -> gemini-2.5-flash-lite) gets 429 and falls back to gemini-flash-lite-latest
+    const res1 = await generateWithDirectGemini('night drive', 'gemini-4-argon', { timeoutMs: 1000 })
+    assert.equal(res1.used_model, 'gemini-flash-lite-latest')
+    assert.equal(res1.is_fallback, true)
+    assert.deepEqual(hitModels, ['gemini-2.5-flash-lite', 'gemini-flash-lite-latest'])
+
+    // 2nd call within 60s: gemini-2.5-flash-lite is skipped immediately without a wasted 429 request
+    hitModels.length = 0
+    const res2 = await generateWithDirectGemini('morning run', 'gemini-4-argon', { timeoutMs: 1000 })
+    assert.equal(res2.used_model, 'gemini-flash-lite-latest')
+    assert.equal(res2.is_fallback, true)
+    assert.match(res2.fallback_reason, /429 cooldown/i)
+    assert.deepEqual(hitModels, ['gemini-flash-lite-latest'])
+
+    // If ALL models are cooled down, fallback tries full candidate pool instead of returning empty
+    clearGeminiCooldowns()
+    hitModels.length = 0
+    globalThis.fetch = async (url) => {
+      const m = String(url).match(/models\/([^:]+):generateContent/)?.[1] || ''
+      hitModels.push(m)
+      return new Response(
+        JSON.stringify({ error: { message: 'Rate limited' } }),
+        { status: 429, headers: { 'content-type': 'application/json' } }
+      )
+    }
+    await assert.rejects(() => generateWithDirectGemini('all 429', 'gemini-4-argon', { timeoutMs: 1000 }))
+    assert.equal(hitModels.length, 4)
+
+    // Now all 4 models are cooled down; next call when fetch recovers must still try candidates!
+    hitModels.length = 0
+    globalThis.fetch = async (url) => {
+      const m = String(url).match(/models\/([^:]+):generateContent/)?.[1] || ''
+      hitModels.push(m)
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: '{"playlist_title":"Recovered","tracks":[]}' }] } }]
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    }
+    const res3 = await generateWithDirectGemini('recovered', 'gemini-4-argon', { timeoutMs: 1000 })
+    assert.equal(res3.playlist_title, 'Recovered')
+    assert.deepEqual(hitModels, ['gemini-2.5-flash-lite'])
+  } finally {
+    globalThis.fetch = prevFetch
+    clearGeminiCooldowns()
     resetStorage()
   }
 })

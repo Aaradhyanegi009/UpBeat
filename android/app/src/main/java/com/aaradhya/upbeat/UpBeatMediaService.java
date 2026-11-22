@@ -45,6 +45,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -55,7 +57,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -86,7 +90,17 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     private static final String KEY_QUEUE = "car_queue_json";
     private static final String KEY_FAVS = "car_favs_json";
     private static final String KEY_MIXES = "car_mixes_json";
+    private static final String KEY_DOWNLOADS = "car_downloads_json";
     private static final String KEY_REPEAT_MODE = "car_repeat_mode";
+
+    private static final int MAX_DOWNLOADS_JSON_CHARS = 512 * 1024;
+    private static final int MAX_DOWNLOADS_COUNT = 250;
+    private static final String CAR_AUDIO_CACHE_DIR = "car_audio_cache";
+    private static final String APP_OFFLINE_AUDIO_DIR = "offline_audio";
+    private static final long MIN_CACHED_AUDIO_BYTES = 16 * 1024L;
+    private static final long MAX_SINGLE_CACHED_FILE_BYTES = 25 * 1024L * 1024L;
+    private static final int MAX_CACHED_AUDIO_FILES = 30;
+    private static final long MAX_CACHED_AUDIO_TOTAL_BYTES = 150L * 1024L * 1024L;
 
     public static final String ACTION_TOGGLE_PLAY = "com.aaradhya.upbeat.ACTION_TOGGLE_PLAY";
     public static final String ACTION_PLAY = "com.aaradhya.upbeat.ACTION_PLAY";
@@ -113,6 +127,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     // Library folders
     public static final String MEDIA_ID_LIB_FAVS = "lib_favorites";
     public static final String MEDIA_ID_LIB_QUEUE = "lib_queue";
+    public static final String MEDIA_ID_LIB_DOWNLOADS = "lib_downloads";
 
     // Hot Playlist IDs
     public static final String PL_HINDI_LATEST = "pl_hindi_latest";
@@ -218,6 +233,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
     private final Map<String, HotPlaylistDef> mMoodPlaylists = Collections.synchronizedMap(new LinkedHashMap<>());
     private final List<CarTrack> mUserFavorites = Collections.synchronizedList(new ArrayList<>());
     private final List<CarTrack> mUserQueue = Collections.synchronizedList(new ArrayList<>());
+    private final List<CarTrack> mUserDownloads = Collections.synchronizedList(new ArrayList<>());
     private final List<CarTrack> mActiveCarQueue = Collections.synchronizedList(new ArrayList<>());
     private volatile int mActiveCarQueueIndex = 0;
     private volatile String mRepeatMode = "off";
@@ -239,19 +255,32 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
     private static class StreamCacheEntry {
         final String url;
+        final String audioCacheUrl;
+        final String resolvedVideoId;
         final long durationSec;
         final long timestamp;
+        final boolean isLocal;
 
         StreamCacheEntry(String url, long durationSec) {
+            this(url, url, "", durationSec, false);
+        }
+
+        StreamCacheEntry(String url, String audioCacheUrl, String resolvedVideoId, long durationSec, boolean isLocal) {
             this.url = url;
+            this.audioCacheUrl = audioCacheUrl != null ? audioCacheUrl : "";
+            this.resolvedVideoId = resolvedVideoId != null ? resolvedVideoId : "";
             this.durationSec = durationSec;
             this.timestamp = System.currentTimeMillis();
+            this.isLocal = isLocal;
         }
     }
 
     private final Map<String, StreamCacheEntry> mStreamCache = new ConcurrentHashMap<>();
+    private final Set<String> mActiveAudioDownloads = ConcurrentHashMap.newKeySet();
+    private final Object mAudioCacheLock = new Object();
     private final ExecutorService mNetworkExecutor = Executors.newFixedThreadPool(3);
     private final ExecutorService mImageExecutor = Executors.newFixedThreadPool(2);
+    private final ExecutorService mAudioCacheExecutor = Executors.newSingleThreadExecutor();
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
 
     public static volatile UpBeatMediaService sInstance = null;
@@ -338,6 +367,9 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             } else if (!mUserQueue.isEmpty()) {
                 mActiveCarQueue.addAll(mUserQueue);
                 currentQueueTitle = "Up Next Queue";
+            } else if (!mUserDownloads.isEmpty()) {
+                mActiveCarQueue.addAll(mUserDownloads);
+                currentQueueTitle = "Downloads & Offline";
             } else {
                 HotPlaylistDef hindiLatest = mPlaylists.get(PL_HINDI_LATEST);
                 if (hindiLatest != null) {
@@ -543,6 +575,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             mRepeatMode = normalizeRepeatMode(prefs.getString(KEY_REPEAT_MODE, "off"));
             parseJsonToTrackList(prefs.getString(KEY_FAVS, "[]"), mUserFavorites);
             parseJsonToTrackList(prefs.getString(KEY_QUEUE, "[]"), mUserQueue);
+            parseDownloadsJson(prefs.getString(KEY_DOWNLOADS, "[]"), mUserDownloads);
             parseMixes(prefs.getString(KEY_MIXES, "[]"));
         } catch (Exception ignored) {}
     }
@@ -641,6 +674,82 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             mUserMixes.clear();
             mUserMixes.putAll(nextUser);
         }
+    }
+
+    private List<CarTrack> getSyncedDownloads() {
+        synchronized (mUserDownloads) {
+            return new ArrayList<>(mUserDownloads);
+        }
+    }
+
+    private static boolean parseDownloadsJson(String json, List<CarTrack> target) {
+        if (json == null || json.length() > MAX_DOWNLOADS_JSON_CHARS) {
+            return false;
+        }
+        String trimmed = json.trim();
+        if (trimmed.isEmpty() || !trimmed.startsWith("[")) {
+            return false;
+        }
+        List<CarTrack> parsed = new ArrayList<>();
+        Set<String> seen = new java.util.HashSet<>();
+        try {
+            JSONArray arr = new JSONArray(trimmed);
+            for (int i = 0; i < arr.length() && parsed.size() < MAX_DOWNLOADS_COUNT; i++) {
+                JSONObject obj = arr.optJSONObject(i);
+                if (obj == null) continue;
+                String title = obj.optString("title", "").trim();
+                if (title.isEmpty()) continue;
+                String artist = obj.optString("artist", "UpBeat").trim();
+                if (artist.isEmpty()) artist = "UpBeat";
+                String vid = obj.optString("video_id", "").trim();
+                String thumb = obj.optString("thumbnail", "").trim();
+                String durText = obj.optString("duration_text", "").trim();
+                if (vid.isEmpty()) {
+                    int viIdx = thumb.indexOf("/vi/");
+                    if (viIdx >= 0 && thumb.length() >= viIdx + 15) {
+                        vid = thumb.substring(viIdx + 4, viIdx + 15);
+                    }
+                }
+                if (title.length() > 256) title = title.substring(0, 256);
+                if (artist.length() > 256) artist = artist.substring(0, 256);
+                if (durText.length() > 32) durText = durText.substring(0, 32);
+                if (thumb.length() > 512) thumb = "";
+                String dedupeKey = isValidVideoId(vid)
+                    ? ("v:" + vid)
+                    : ("t:" + title.toLowerCase(Locale.ROOT) + "|" + artist.toLowerCase(Locale.ROOT));
+                if (!seen.add(dedupeKey)) continue;
+                parsed.add(new CarTrack(title, artist, vid, durText, thumb));
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        if (target != null) {
+            synchronized (target) {
+                target.clear();
+                target.addAll(parsed);
+            }
+        }
+        return true;
+    }
+
+    private static String serializeTrackListToJson(List<CarTrack> tracks) {
+        JSONArray arr = new JSONArray();
+        if (tracks != null) {
+            for (int i = 0; i < tracks.size() && i < MAX_DOWNLOADS_COUNT; i++) {
+                CarTrack t = tracks.get(i);
+                if (t == null) continue;
+                try {
+                    JSONObject o = new JSONObject();
+                    o.put("title", t.title);
+                    o.put("artist", t.artist);
+                    o.put("video_id", t.videoId);
+                    o.put("thumbnail", t.coverUrl);
+                    o.put("duration_text", t.durationText);
+                    arr.put(o);
+                } catch (Exception ignored) {}
+            }
+        }
+        return arr.toString();
     }
 
     private void parseJsonToTrackList(String json, List<CarTrack> target) {
@@ -1070,6 +1179,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             if (mActiveCarQueue.isEmpty()) {
                 if (!mUserFavorites.isEmpty()) {
                     mActiveCarQueue.addAll(mUserFavorites);
+                } else if (!mUserDownloads.isEmpty()) {
+                    mActiveCarQueue.addAll(mUserDownloads);
                 } else {
                     HotPlaylistDef def = mPlaylists.get(PL_HINDI_LATEST);
                     if (def != null) mActiveCarQueue.addAll(def.tracks);
@@ -1151,12 +1262,22 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
             mMainHandler.post(() -> {
                 if (gen != mPlaybackGeneration) return;
-                startNativeMediaPlayer(entry.url, entry.durationSec, gen);
+                if ((currentVideoId == null || currentVideoId.isEmpty()) && !entry.resolvedVideoId.isEmpty()) {
+                    currentVideoId = entry.resolvedVideoId;
+                }
+                String targetVid = isValidVideoId(track.videoId) ? track.videoId.trim() : entry.resolvedVideoId;
+                startNativeMediaPlayer(entry, targetVid, gen);
             });
         });
     }
 
-    private void startNativeMediaPlayer(String streamUrl, long durationSec, final int gen) {
+    private void startNativeMediaPlayer(final StreamCacheEntry entry, final String trackVideoId, final int gen) {
+        if (entry == null || entry.url == null || entry.url.isEmpty()) {
+            handleStandalonePlaybackFailure(gen);
+            return;
+        }
+        final String streamUrl = entry.url;
+        final boolean isLocalFile = entry.isLocal || streamUrl.startsWith("file://") || streamUrl.startsWith("/");
         try {
             releaseStandalonePlayer();
             requestAudioFocus();
@@ -1173,12 +1294,21 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             mp.setAudioAttributes(attrs);
             mp.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
 
-            Map<String, String> headers = new HashMap<>();
-            headers.put("User-Agent", YT_ANDROID_UA);
-            mp.setDataSource(getApplicationContext(), Uri.parse(streamUrl), headers);
+            if (isLocalFile) {
+                String localPath = streamUrl.startsWith("file://") ? Uri.parse(streamUrl).getPath() : streamUrl;
+                if (localPath == null || localPath.isEmpty()) {
+                    handleStandalonePlaybackFailure(gen);
+                    return;
+                }
+                mp.setDataSource(localPath);
+            } else {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("User-Agent", YT_ANDROID_UA);
+                mp.setDataSource(getApplicationContext(), Uri.parse(streamUrl), headers);
+            }
 
-            if (durationSec > 0) {
-                currentDurationMs = durationSec * 1000;
+            if (entry.durationSec > 0) {
+                currentDurationMs = entry.durationSec * 1000;
                 applyMediaMetadata();
             }
 
@@ -1207,6 +1337,14 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 notifyNotification();
                 mMainHandler.removeCallbacks(mProgressTicker);
                 mMainHandler.postDelayed(mProgressTicker, 1000);
+
+                if (isValidVideoId(trackVideoId)) {
+                    if (!isLocalFile) {
+                        cacheStreamAudioAsync(trackVideoId, entry);
+                    } else {
+                        touchCachedAudioFile(trackVideoId);
+                    }
+                }
             });
 
             mp.setOnCompletionListener(player -> {
@@ -1233,14 +1371,38 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             });
 
             mp.setOnErrorListener((player, what, extra) -> {
+                if (gen != mPlaybackGeneration) return true;
+                if (!isLocalFile && tryLocalFallbackPlayback(entry.durationSec, trackVideoId, gen)) {
+                    return true;
+                } else if (isLocalFile && isValidVideoId(trackVideoId)) {
+                    deleteServiceCachedAudioFile(trackVideoId);
+                }
                 handleStandalonePlaybackFailure(gen);
                 return true;
             });
 
             mp.prepareAsync();
         } catch (Exception e) {
+            if (!isLocalFile && tryLocalFallbackPlayback(entry.durationSec, trackVideoId, gen)) {
+                return;
+            }
             handleStandalonePlaybackFailure(gen);
         }
+    }
+
+    private boolean tryLocalFallbackPlayback(long durationSec, String trackVideoId, int gen) {
+        if (!isValidVideoId(trackVideoId)) return false;
+        File localFallback = findCachedAudioFile(trackVideoId);
+        if (localFallback == null) return false;
+        StreamCacheEntry fallbackEntry = new StreamCacheEntry(
+            Uri.fromFile(localFallback).toString(),
+            "",
+            trackVideoId,
+            durationSec,
+            true
+        );
+        startNativeMediaPlayer(fallbackEntry, trackVideoId, gen);
+        return true;
     }
 
     private void releaseStandalonePlayer() {
@@ -1378,14 +1540,300 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         return "US";
     }
 
+    private static boolean isValidVideoId(String videoId) {
+        return videoId != null && videoId.matches("^[a-zA-Z0-9_-]{11}$");
+    }
+
+    private static long parseDurationTextSeconds(String durationText) {
+        if (durationText == null || durationText.trim().isEmpty()) return 0;
+        try {
+            String[] parts = durationText.trim().split(":");
+            long total = 0;
+            for (String p : parts) {
+                total = total * 60 + Long.parseLong(p.trim());
+            }
+            return total;
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private static boolean isAllowedStreamUrl(String urlStr) {
+        if (urlStr == null) return false;
+        String trimmed = urlStr.trim();
+        if (trimmed.isEmpty()) return false;
+        try {
+            URL url = new URL(trimmed);
+            if (!"https".equalsIgnoreCase(url.getProtocol())) return false;
+            if (url.getUserInfo() != null) return false;
+            int port = url.getPort();
+            if (port != -1 && port != 443) return false;
+            String host = url.getHost();
+            if (host == null || host.trim().isEmpty()) return false;
+            String lowerHost = host.toLowerCase(Locale.ROOT);
+            return !"localhost".equals(lowerHost) && !"127.0.0.1".equals(lowerHost) && !"::1".equals(lowerHost);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private File getServiceAudioCacheDir() {
+        return new File(getCacheDir(), CAR_AUDIO_CACHE_DIR);
+    }
+
+    @Nullable
+    private File findCachedAudioFile(String videoId) {
+        if (!isValidVideoId(videoId)) return null;
+        String fileName = videoId + ".m4a";
+        File[] candidateDirs = new File[] {
+            new File(getFilesDir(), APP_OFFLINE_AUDIO_DIR),
+            new File(getCacheDir(), APP_OFFLINE_AUDIO_DIR),
+            getServiceAudioCacheDir()
+        };
+        for (File dir : candidateDirs) {
+            File candidate = new File(dir, fileName);
+            if (candidate.exists() && candidate.isFile() && candidate.length() >= MIN_CACHED_AUDIO_BYTES) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private void touchCachedAudioFile(String videoId) {
+        if (!isValidVideoId(videoId)) return;
+        try {
+            File f = new File(getServiceAudioCacheDir(), videoId + ".m4a");
+            if (f.exists() && f.isFile()) {
+                //noinspection ResultOfMethodCallIgnored
+                f.setLastModified(System.currentTimeMillis());
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void deleteServiceCachedAudioFile(String videoId) {
+        if (!isValidVideoId(videoId)) return;
+        synchronized (mAudioCacheLock) {
+            try {
+                File f = new File(getServiceAudioCacheDir(), videoId + ".m4a");
+                if (f.exists() && f.isFile()) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void cacheStreamAudioAsync(final String videoId, final StreamCacheEntry entry) {
+        if (!isValidVideoId(videoId) || entry == null || entry.isLocal) return;
+        if (findCachedAudioFile(videoId) != null) {
+            touchCachedAudioFile(videoId);
+            return;
+        }
+        if (!mActiveAudioDownloads.add(videoId)) return;
+
+        try {
+            mAudioCacheExecutor.submit(() -> {
+                try {
+                    if (findCachedAudioFile(videoId) != null) return;
+                    File cacheDir = getServiceAudioCacheDir();
+                    if (!cacheDir.exists() && !cacheDir.mkdirs()) return;
+
+                    List<String> candidates = new ArrayList<>();
+                    if (isAllowedStreamUrl(entry.audioCacheUrl)) {
+                        candidates.add(entry.audioCacheUrl);
+                    }
+                    if (isAllowedStreamUrl(entry.url) && !entry.url.equals(entry.audioCacheUrl)) {
+                        candidates.add(entry.url);
+                    }
+                    if (candidates.isEmpty()) return;
+
+                    File targetFile = new File(cacheDir, videoId + ".m4a");
+                    File tmpFile = new File(cacheDir, videoId + ".m4a.tmp");
+                    for (String candUrl : candidates) {
+                        if (downloadAudioToFile(candUrl, tmpFile)) {
+                            synchronized (mAudioCacheLock) {
+                                if (!targetFile.exists()) {
+                                    if (!tmpFile.renameTo(targetFile)) {
+                                        //noinspection ResultOfMethodCallIgnored
+                                        tmpFile.delete();
+                                    }
+                                } else {
+                                    //noinspection ResultOfMethodCallIgnored
+                                    tmpFile.delete();
+                                }
+                                pruneAudioCacheIfNeeded(cacheDir);
+                            }
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    mActiveAudioDownloads.remove(videoId);
+                }
+            });
+        } catch (Exception ignored) {
+            mActiveAudioDownloads.remove(videoId);
+        }
+    }
+
+    private boolean downloadAudioToFile(String urlStr, File tmpFile) {
+        HttpURLConnection conn = null;
+        try {
+            String currentUrl = urlStr;
+            for (int hop = 0; hop < 3; hop++) {
+                if (!isAllowedStreamUrl(currentUrl)) return false;
+                URL url = new URL(currentUrl);
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setInstanceFollowRedirects(false);
+                conn.setRequestProperty("User-Agent", YT_ANDROID_UA);
+                conn.setConnectTimeout(6000);
+                conn.setReadTimeout(15000);
+                conn.connect();
+                int code = conn.getResponseCode();
+                if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP
+                        || code == 307 || code == 308 || code == HttpURLConnection.HTTP_SEE_OTHER) {
+                    String location = conn.getHeaderField("Location");
+                    conn.disconnect();
+                    conn = null;
+                    if (location == null || location.trim().isEmpty()) return false;
+                    currentUrl = new URL(url, location.trim()).toString();
+                    continue;
+                }
+                if (code != HttpURLConnection.HTTP_OK) {
+                    return false;
+                }
+                break;
+            }
+            if (conn == null || conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                return false;
+            }
+            String contentType = conn.getContentType();
+            if (contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("text/")) {
+                return false;
+            }
+            long expectedLen = conn.getContentLengthLong();
+            if (expectedLen > MAX_SINGLE_CACHED_FILE_BYTES) {
+                return false;
+            }
+            if (tmpFile.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                tmpFile.delete();
+            }
+            long totalRead = 0;
+            try (InputStream is = conn.getInputStream(); FileOutputStream fos = new FileOutputStream(tmpFile)) {
+                byte[] buf = new byte[16384];
+                int n;
+                while ((n = is.read(buf)) != -1) {
+                    totalRead += n;
+                    if (totalRead > MAX_SINGLE_CACHED_FILE_BYTES) {
+                        return false;
+                    }
+                    fos.write(buf, 0, n);
+                }
+                fos.flush();
+            }
+            if (totalRead < MIN_CACHED_AUDIO_BYTES) {
+                //noinspection ResultOfMethodCallIgnored
+                tmpFile.delete();
+                return false;
+            }
+            if (expectedLen > 0 && totalRead != expectedLen) {
+                //noinspection ResultOfMethodCallIgnored
+                tmpFile.delete();
+                return false;
+            }
+            return true;
+        } catch (Exception ignored) {
+            if (tmpFile.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                tmpFile.delete();
+            }
+            return false;
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private void pruneAudioCacheIfNeeded(File cacheDir) {
+        if (cacheDir == null || !cacheDir.exists() || !cacheDir.isDirectory()) return;
+        try {
+            File[] allFiles = cacheDir.listFiles();
+            if (allFiles == null) return;
+            long now = System.currentTimeMillis();
+            List<File> m4aFiles = new ArrayList<>();
+            long totalBytes = 0;
+            for (File f : allFiles) {
+                if (f == null || !f.isFile()) continue;
+                String name = f.getName();
+                if (name.endsWith(".tmp")) {
+                    if ((now - f.lastModified()) > 5 * 60 * 1000L) {
+                        //noinspection ResultOfMethodCallIgnored
+                        f.delete();
+                    }
+                    continue;
+                }
+                if (name.endsWith(".m4a")) {
+                    if (f.length() < MIN_CACHED_AUDIO_BYTES) {
+                        //noinspection ResultOfMethodCallIgnored
+                        f.delete();
+                    } else {
+                        m4aFiles.add(f);
+                        totalBytes += f.length();
+                    }
+                }
+            }
+            if (m4aFiles.size() <= MAX_CACHED_AUDIO_FILES && totalBytes <= MAX_CACHED_AUDIO_TOTAL_BYTES) {
+                return;
+            }
+            Collections.sort(m4aFiles, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            int remainingCount = m4aFiles.size();
+            for (File f : m4aFiles) {
+                if (remainingCount <= MAX_CACHED_AUDIO_FILES && totalBytes <= MAX_CACHED_AUDIO_TOTAL_BYTES) {
+                    break;
+                }
+                long len = f.length();
+                if (f.delete()) {
+                    remainingCount--;
+                    totalBytes -= len;
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @Nullable
+    private StreamCacheEntry buildLocalCachedEntry(String videoId, String durationText) {
+        if (!isValidVideoId(videoId)) return null;
+        File localCached = findCachedAudioFile(videoId);
+        if (localCached == null) return null;
+        return new StreamCacheEntry(
+            Uri.fromFile(localCached).toString(),
+            "",
+            videoId,
+            parseDurationTextSeconds(durationText),
+            true
+        );
+    }
+
     private StreamCacheEntry resolveStreamEntryNative(CarTrack track) {
         if (track == null) return null;
-        String vid = track.videoId;
+        String vid = track.videoId != null ? track.videoId.trim() : "";
 
-        if (vid == null || vid.length() != 11) {
+        // 1. Offline / local cached .m4a check first for instant dead-zone playback
+        StreamCacheEntry localHit = buildLocalCachedEntry(vid, track.durationText);
+        if (localHit != null) {
+            return localHit;
+        }
+
+        if (!isValidVideoId(vid)) {
             List<CarTrack> found = searchYouTubeMusicTracksNative(track.title + " " + track.artist, 2);
             if (!found.isEmpty()) {
                 vid = found.get(0).videoId;
+                StreamCacheEntry foundLocalHit = buildLocalCachedEntry(vid, track.durationText);
+                if (foundLocalHit != null) {
+                    return foundLocalHit;
+                }
             }
         }
         if (vid == null || vid.isEmpty()) return null;
@@ -1405,6 +1853,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         List<CarTrack> altTracks = searchYouTubeMusicTracksNative(track.title + " " + track.artist + " audio", 3);
         for (CarTrack alt : altTracks) {
             if (!alt.videoId.equals(vid)) {
+                StreamCacheEntry altLocalHit = buildLocalCachedEntry(alt.videoId, alt.durationText);
+                if (altLocalHit != null) {
+                    return altLocalHit;
+                }
                 StreamCacheEntry altResolved = fetchAndroidPlayerStream(alt.videoId);
                 if (altResolved != null) {
                     putStreamCacheEntry(vid, altResolved);
@@ -1468,6 +1920,9 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             JSONObject streamingData = data.optJSONObject("streamingData");
             if (streamingData == null) return null;
 
+            String progressiveUrl = "";
+            String adaptiveAudioUrl = "";
+
             // Prefer progressive formats (itag 18) which play natively with HTTP 200 without poToken/Range issues
             JSONArray formats = streamingData.optJSONArray("formats");
             if (formats != null) {
@@ -1479,7 +1934,8 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                             if (durationSec <= 0) {
                                 durationSec = fmt.optLong("approxDurationMs", 0) / 1000;
                             }
-                            return new StreamCacheEntry(streamUrl, durationSec);
+                            progressiveUrl = streamUrl;
+                            break;
                         }
                     }
                 }
@@ -1492,10 +1948,20 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     if (fmt != null && fmt.optString("mimeType", "").startsWith("audio/mp4")) {
                         String streamUrl = fmt.optString("url", "");
                         if (!streamUrl.isEmpty()) {
-                            return new StreamCacheEntry(streamUrl, durationSec);
+                            if (durationSec <= 0) {
+                                durationSec = fmt.optLong("approxDurationMs", 0) / 1000;
+                            }
+                            adaptiveAudioUrl = streamUrl;
+                            break;
                         }
                     }
                 }
+            }
+
+            String primaryUrl = !progressiveUrl.isEmpty() ? progressiveUrl : adaptiveAudioUrl;
+            if (!primaryUrl.isEmpty()) {
+                String cacheCandidate = !adaptiveAudioUrl.isEmpty() ? adaptiveAudioUrl : progressiveUrl;
+                return new StreamCacheEntry(primaryUrl, cacheCandidate, videoId, durationSec, false);
             }
         } catch (Exception ignored) {
         } finally {
@@ -1806,6 +2272,13 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 } else if (MEDIA_ID_LIB_QUEUE.equals(targetId)) {
                     targetTracks = getEffectiveQueue();
                     qTitle = "Recent Plays";
+                } else if (MEDIA_ID_LIB_DOWNLOADS.equals(targetId)) {
+                    targetTracks = getSyncedDownloads();
+                    qTitle = "Downloads & Offline";
+                    if (targetTracks.isEmpty()) {
+                        reportEmptyDownloadsError();
+                        return;
+                    }
                 } else {
                     final HotPlaylistDef pl = findPlaylist(targetId);
                     if (pl != null) {
@@ -1850,6 +2323,15 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             }
 
             // 3. Direct Playlist ID tapped
+            if (MEDIA_ID_LIB_DOWNLOADS.equals(mediaId)) {
+                List<CarTrack> downloads = getSyncedDownloads();
+                if (downloads.isEmpty()) {
+                    reportEmptyDownloadsError();
+                    return;
+                }
+                playQueueAtIndex(downloads, 0, "Downloads & Offline");
+                return;
+            }
             HotPlaylistDef directPl = findPlaylist(mediaId);
             if (directPl != null) {
                 playQueueAtIndex(directPl.tracks, 0, directPl.title);
@@ -1867,6 +2349,22 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             if (mediaId.startsWith("queue_")) {
                 int idx = parseIntSafe(mediaId.substring("queue_".length()), 0);
                 playQueueAtIndex(getEffectiveQueue(), idx, "Recent Plays");
+                return;
+            }
+
+            // 5b. Offline Downloads item ("dl_0")
+            if ("dl_empty".equals(mediaId)) {
+                reportEmptyDownloadsError();
+                return;
+            }
+            if (mediaId.startsWith("dl_")) {
+                List<CarTrack> downloads = getSyncedDownloads();
+                if (downloads.isEmpty()) {
+                    reportEmptyDownloadsError();
+                    return;
+                }
+                int idx = parseIntSafe(mediaId.substring("dl_".length()), 0);
+                playQueueAtIndex(downloads, idx, "Downloads & Offline");
                 return;
             }
 
@@ -1910,6 +2408,11 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 if (!results.isEmpty()) {
                     mMainHandler.post(() -> playQueueAtIndex(results, 0, "Search: " + q));
                 } else {
+                    List<CarTrack> offlineMatches = searchSyncedDownloads(q);
+                    if (!offlineMatches.isEmpty()) {
+                        mMainHandler.post(() -> playQueueAtIndex(offlineMatches, 0, "Downloads: " + q));
+                        return;
+                    }
                     mMainHandler.post(() -> {
                         isCurrentlyPlaying = false;
                         releaseLocks();
@@ -1954,6 +2457,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         if (MEDIA_ID_TAB_FORYOU.equals(parentMediaId) || "tab_home".equals(parentMediaId)) {
             List<CarTrack> favs = getEffectiveFavorites();
             List<CarTrack> queue = getEffectiveQueue();
+            List<CarTrack> downloads = getSyncedDownloads();
 
             String jumpGroup = "Jump Back In";
             items.add(createBrowsableGridCard(
@@ -1961,6 +2465,13 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                 "Liked Songs",
                 favs.size() + " tracks • Rediscover",
                 UpBeatArtProvider.buildCardUri("card_liked_home", "FAVORITES", "Liked Songs", "#F43F5E", getHeroVidFromList(favs)),
+                jumpGroup
+            ));
+            items.add(createBrowsableGridCard(
+                MEDIA_ID_LIB_DOWNLOADS,
+                "Downloads & Offline",
+                downloads.isEmpty() ? "0 offline tracks" : (downloads.size() + " tracks • Offline"),
+                UpBeatArtProvider.buildCardUri("downloads_home", "OFFLINE", "Downloads", "#10B981", getHeroVidOrEmpty(downloads), getHeroCoverFromList(downloads)),
                 jumpGroup
             ));
             items.add(createBrowsableGridCard(
@@ -2052,10 +2563,18 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
 
         // 5. LIBRARY TAB -> Saved Collections + Direct Liked Songs List
         if (MEDIA_ID_TAB_LIBRARY.equals(parentMediaId)) {
+            List<CarTrack> downloads = getSyncedDownloads();
             List<CarTrack> favs = getEffectiveFavorites();
             List<CarTrack> queue = getEffectiveQueue();
 
             String plGroup = "Your Collection";
+            items.add(createBrowsableGridCard(
+                MEDIA_ID_LIB_DOWNLOADS,
+                "Downloads & Offline",
+                downloads.isEmpty() ? "0 offline tracks" : (downloads.size() + (downloads.size() == 1 ? " offline track" : " offline tracks")),
+                UpBeatArtProvider.buildCardUri("downloads_lib", "OFFLINE", "Downloads", "#10B981", getHeroVidOrEmpty(downloads), getHeroCoverFromList(downloads)),
+                plGroup
+            ));
             items.add(createBrowsableGridCard(
                 MEDIA_ID_LIB_FAVS,
                 "Liked Songs",
@@ -2187,6 +2706,55 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             return;
         }
 
+        // 8b. INSIDE LIBRARY -> DOWNLOADS & OFFLINE FOLDER
+        if (MEDIA_ID_LIB_DOWNLOADS.equals(parentMediaId)) {
+            List<CarTrack> downloads = getSyncedDownloads();
+            if (downloads.isEmpty()) {
+                items.add(createPlayableListItem(
+                    "dl_empty",
+                    "No Offline Downloads Yet",
+                    "Download songs in UpBeat phone app for offline car playback",
+                    buildDrawableUri(R.drawable.ic_aa_downloads),
+                    "Downloads & Offline"
+                ));
+                result.sendResult(items);
+                return;
+            }
+            String heroVid = getHeroVidOrEmpty(downloads);
+            String heroCover = getHeroCoverFromList(downloads);
+            items.add(createPlayableListItem(
+                "playall_" + MEDIA_ID_LIB_DOWNLOADS,
+                "▶ Play All",
+                downloads.size() + (downloads.size() == 1 ? " song • Ready Offline" : " songs • Ready Offline"),
+                UpBeatArtProvider.buildCardUri("playall_downloads", "PLAY ALL", "Offline", "#10B981", heroVid, heroCover),
+                "Controls"
+            ));
+            items.add(createPlayableListItem(
+                "shuffleall_" + MEDIA_ID_LIB_DOWNLOADS,
+                "🔀 Shuffle Play",
+                downloads.size() + (downloads.size() == 1 ? " song • Shuffled" : " songs • Shuffled"),
+                UpBeatArtProvider.buildCardUri("shuf_downloads", "SHUFFLE", "Offline", "#27272A", heroVid, heroCover),
+                "Controls"
+            ));
+            for (int i = 0; i < downloads.size(); i++) {
+                CarTrack t = downloads.get(i);
+                boolean isCachedLocally = isValidVideoId(t.videoId) && findCachedAudioFile(t.videoId) != null;
+                String sub = formatTrackSubtitle(t);
+                if (isCachedLocally) {
+                    sub = "Offline Ready • " + sub;
+                }
+                items.add(createPlayableListItem(
+                    "dl_" + i,
+                    t.title,
+                    sub,
+                    UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl),
+                    "Downloads & Offline"
+                ));
+            }
+            result.sendResult(items);
+            return;
+        }
+
         // Fallback: never return an empty list so Android Auto never shows "Could not load your selection"
         HotPlaylistDef fallbackPl = mPlaylists.get(PL_HINDI_LATEST);
         if (fallbackPl != null) {
@@ -2259,6 +2827,22 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
                     ));
                 }
                 if (items.isEmpty()) {
+                    List<CarTrack> downloads = getSyncedDownloads();
+                    String lowerQ = query != null ? query.trim().toLowerCase(Locale.ROOT) : "";
+                    for (int i = 0; i < downloads.size() && items.size() < 15; i++) {
+                        CarTrack t = downloads.get(i);
+                        if (matchesTrackQuery(t, lowerQ)) {
+                            items.add(createPlayableListItem(
+                                "dl_" + i,
+                                t.title,
+                                "Offline • " + formatTrackSubtitle(t),
+                                UpBeatArtProvider.buildYtThumbUri(t.videoId, t.title, t.coverUrl),
+                                "Downloads & Offline"
+                            ));
+                        }
+                    }
+                }
+                if (items.isEmpty()) {
                     HotPlaylistDef def = mPlaylists.get(PL_HINDI_LATEST);
                     if (def != null) {
                         synchronized (def.tracks) {
@@ -2306,6 +2890,36 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         return getEffectiveFavorites();
     }
 
+    private static boolean matchesTrackQuery(CarTrack t, String lowerQuery) {
+        if (t == null) return false;
+        if (lowerQuery == null || lowerQuery.isEmpty()) return true;
+        return (t.title != null && t.title.toLowerCase(Locale.ROOT).contains(lowerQuery))
+            || (t.artist != null && t.artist.toLowerCase(Locale.ROOT).contains(lowerQuery));
+    }
+
+    private void reportEmptyDownloadsError() {
+        isCurrentlyPlaying = false;
+        releaseLocks();
+        updatePlaybackStateWithError("No offline downloads synced yet.");
+        notifyNotification();
+    }
+
+    private List<CarTrack> searchSyncedDownloads(String query) {
+        List<CarTrack> out = new ArrayList<>();
+        if (query == null) return out;
+        String lowerQ = query.trim().toLowerCase(Locale.ROOT);
+        if (lowerQ.isEmpty()) return out;
+        synchronized (mUserDownloads) {
+            for (CarTrack t : mUserDownloads) {
+                if (matchesTrackQuery(t, lowerQ)) {
+                    out.add(t);
+                    if (out.size() >= 15) break;
+                }
+            }
+        }
+        return out;
+    }
+
     private String getHeroVidFromList(List<CarTrack> list) {
         if (list != null) {
             for (CarTrack t : list) {
@@ -2315,6 +2929,36 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             }
         }
         return "XtZTpxnrHAc";
+    }
+
+    private String getHeroVidOrEmpty(List<CarTrack> list) {
+        if (list != null) {
+            for (CarTrack t : list) {
+                if (isValidVideoId(t.videoId)) {
+                    return t.videoId;
+                }
+            }
+        }
+        return "";
+    }
+
+    private String getHeroCoverFromList(List<CarTrack> list) {
+        if (list != null) {
+            for (CarTrack t : list) {
+                if (t.coverUrl != null && !t.coverUrl.isEmpty()) {
+                    return t.coverUrl;
+                }
+            }
+        }
+        return "";
+    }
+
+    private Uri buildDrawableUri(int drawableResId) {
+        return new Uri.Builder()
+            .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
+            .authority(getPackageName())
+            .appendPath(String.valueOf(drawableResId))
+            .build();
     }
 
     private void addPlaylistCardToGroup(List<MediaBrowserCompat.MediaItem> items, String plId, String groupTitle) {
@@ -2336,16 +2980,10 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         extras.putInt(CONTENT_STYLE_BROWSABLE_HINT, browsableStyle);
         extras.putInt(CONTENT_STYLE_PLAYABLE_HINT, playableStyle);
 
-        Uri iconUri = new Uri.Builder()
-            .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
-            .authority(getPackageName())
-            .appendPath(String.valueOf(drawableResId))
-            .build();
-
         MediaDescriptionCompat desc = new MediaDescriptionCompat.Builder()
             .setMediaId(id)
             .setTitle(title)
-            .setIconUri(iconUri)
+            .setIconUri(buildDrawableUri(drawableResId))
             .setExtras(extras)
             .build();
         return new MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE);
@@ -2558,6 +3196,12 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             synchronized (mUserFavorites) {
                 int fIdx = findTrackIndexInList(mUserFavorites, "", cleanTitle, cleanArtist);
                 if (fIdx >= 0) resolvedVid = mUserFavorites.get(fIdx).videoId;
+            }
+        }
+        if (resolvedVid.isEmpty()) {
+            synchronized (mUserDownloads) {
+                int dIdx = findTrackIndexInList(mUserDownloads, "", cleanTitle, cleanArtist);
+                if (dIdx >= 0) resolvedVid = mUserDownloads.get(dIdx).videoId;
             }
         }
         if (!resolvedVid.isEmpty()) {
@@ -2913,14 +3557,19 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         }
     }
 
-    private void notifyAllBrowserTabs() {
-        notifyChildrenChanged(MEDIA_ID_ROOT);
+    private void refreshCarLibrary() {
         notifyChildrenChanged(MEDIA_ID_TAB_FORYOU);
         notifyChildrenChanged(MEDIA_ID_TAB_PLAYLISTS);
         notifyChildrenChanged(MEDIA_ID_TAB_CHARTS);
         notifyChildrenChanged(MEDIA_ID_TAB_LIBRARY);
         notifyChildrenChanged(MEDIA_ID_LIB_FAVS);
         notifyChildrenChanged(MEDIA_ID_LIB_QUEUE);
+        notifyChildrenChanged(MEDIA_ID_LIB_DOWNLOADS);
+    }
+
+    private void notifyAllBrowserTabs() {
+        notifyChildrenChanged(MEDIA_ID_ROOT);
+        refreshCarLibrary();
     }
 
     public static void setRepeatMode(Context context, String mode) {
@@ -2989,6 +3638,33 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
             sInstance.mMainHandler.post(() -> {
                 if (sInstance != null) {
                     sInstance.notifyAllBrowserTabs();
+                }
+            });
+        }
+    }
+
+    public static void updateDownloads(String downloadsJson) {
+        Context ctx = sInstance != null ? sInstance : MainActivity.sInstance;
+        updateDownloads(ctx, downloadsJson);
+    }
+
+    public static void updateDownloads(Context context, String downloadsJson) {
+        if (context == null || downloadsJson == null) return;
+        List<CarTrack> validated = new ArrayList<>();
+        if (!parseDownloadsJson(downloadsJson, validated)) {
+            return;
+        }
+        String normalizedJson = serializeTrackListToJson(validated);
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_DOWNLOADS, normalizedJson).apply();
+        if (sInstance != null) {
+            synchronized (sInstance.mUserDownloads) {
+                sInstance.mUserDownloads.clear();
+                sInstance.mUserDownloads.addAll(validated);
+            }
+            sInstance.mMainHandler.post(() -> {
+                if (sInstance != null) {
+                    sInstance.refreshCarLibrary();
                 }
             });
         }
@@ -3098,6 +3774,7 @@ public class UpBeatMediaService extends MediaBrowserServiceCompat {
         try {
             mNetworkExecutor.shutdownNow();
             mImageExecutor.shutdownNow();
+            mAudioCacheExecutor.shutdownNow();
         } catch (Exception ignored) {}
         sInstance = null;
     }

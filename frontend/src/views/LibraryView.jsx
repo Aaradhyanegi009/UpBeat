@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, Search, Heart, Download, Sparkles, Users, Pin, Trash2, X, Music, History, CircleCheck, Radio, Settings } from 'lucide-react'
+import { Plus, Search, Heart, Download, Sparkles, Users, Pin, Trash2, X, Music, History, CircleCheck, Radio, Settings, WifiOff, ChevronRight } from 'lucide-react'
 import { Chip, ChipRow, IconButton, LikedTile, Collage, EmptyState, Art, Avatar } from '../ui/primitives'
 import { SongRow, primaryArtist } from '../ui/AppContext'
 import { navigate } from '../ui/router'
@@ -35,6 +35,8 @@ export default function LibraryView({
   favorites = [],
   offlineTracks = [],
   offlineStats,
+  offlineMode = false,
+  onToggleOfflineMode,
   saved = [],
   history = [],
   downloadedIds,
@@ -66,7 +68,23 @@ export default function LibraryView({
     <div className="px-5 lg:px-8 pb-10 w-full max-w-[1100px]">
       <div className="flex items-center justify-between h-14 mt-1">
         <h1 className="text-[30px] font-extrabold tracking-[-0.025em]">Library</h1>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1.5">
+          {onToggleOfflineMode && (
+            <button
+              type="button"
+              onClick={onToggleOfflineMode}
+              aria-pressed={offlineMode}
+              aria-label={offlineMode ? 'Turn off offline mode' : 'Turn on offline mode'}
+              className={`h-9 px-3 rounded-full text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                offlineMode
+                  ? 'bg-live/15 text-live ring-1 ring-inset ring-live/40'
+                  : 'bg-s2 hover:bg-s3 text-t2 hover:text-t1'
+              }`}
+            >
+              <WifiOff className="w-3.5 h-3.5" />
+              <span>{offlineMode ? 'Offline on' : 'Offline'}</span>
+            </button>
+          )}
           <IconButton label={showFind ? 'Close search' : 'Search your library'} variant="filled" onClick={() => { setShowFind((s) => !s); setQ('') }}>
             {showFind ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
           </IconButton>
@@ -80,6 +98,50 @@ export default function LibraryView({
           )}
         </div>
       </div>
+
+      {offlineMode && (
+        <div className="mt-3 flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-live/10 ring-1 ring-inset ring-live/30 text-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <WifiOff className="w-4 h-4 text-live shrink-0" />
+            <span className="font-semibold text-t1 truncate">Offline mode active · {offlineTracks.length} downloaded tracks ready</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onOpenDownloads}
+              className="text-xs font-bold text-live hover:underline cursor-pointer"
+            >
+              View downloads
+            </button>
+            {onToggleOfflineMode && (
+              <button
+                type="button"
+                onClick={onToggleOfflineMode}
+                className="text-xs font-bold text-t2 hover:text-t1 cursor-pointer"
+              >
+                Go online
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => navigate('/you')}
+        className="w-full mt-3.5 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-s1 hover:bg-s2 ring-1 ring-white/[0.06] text-left cursor-pointer transition-colors"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[15px] font-bold text-t1 truncate">Your Sonic DNA</div>
+            <div className="text-[13px] text-t2 truncate">Listener archetype, genre affinity & taste sources</div>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-t2 shrink-0" />
+      </button>
 
       {showFind && (
         <input

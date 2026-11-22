@@ -1,4 +1,4 @@
-# 🎵 UpBeat (v7.6.2)
+# 🎵 UpBeat (v7.7.0)
 
 A minimalist, high-fidelity AI music studio that understands what you actually like.
 
@@ -9,6 +9,11 @@ Built as a clean cross-platform project for **Windows**, **macOS**, **Android**,
 ---
 
 ## ⚡ Features & Highlights
+
+### ✨ Smarter AI Curation, Gapless Queue, Dynamic Discovery, Live Jam Reactions & Offline Downloads (v7.7.0)
+- **Smarter, Faster AI Curation**: Hydrates matched `ytmSearchItems` / `yt_catalog` results (`video_id`, `duration_text`) directly without redundant YouTube searches, applies 60s per-model `429` cooldowns, aligns Settings labels to verified Gemini endpoints, streams multi-stage curation progress (`"Curating with AI…"` -> `"Resolving tracks…"`), and adds one-tap refinement chips (`More upbeat`, `90s acoustic`, `Instrumental only`, etc.) in `CreateView`.
+- **Gapless Preload, Autoplay Radio & Queue Tools**: Pre-resolves and preloads `upNextTrack` onto the standby deck, adds persisted **Autoplay / Endless Radio** (`RDAMVM`) when `repeatMode === 'off'`, adds drag-and-drop / button queue reordering (`reorderQueue`) + **Save queue as playlist** across `QueueDrawer` and `RightPanel`, and preserves playback timestamps (`&start=`) when switching into `Watch video`.
+- **Dynamic Discovery, Live Jam & Offline Polish**: Surfacing `/you` (`SonicDnaView`) + per-card `rerollDiscoveryBlock` + onboarding-personalized `Made For You` mixes; floating Jam emoji reactions, `Resync now`, offline ISO-18004 SVG QR codes (`qrSvg.js`), and optional Upstash/Vercel KV + `UPBEAT_SOCIAL_SECRET`; streaming download `%` progress + `Cancel` controls, active `Offline Mode` switch, Android Auto **Downloads & Offline** browse folder + local `.m4a` fallback; `/api/get` duration-matched lyrics + TTL caching; and `?` `ShortcutModal` + `ArrowLeft`/`ArrowRight`/`M`/`N`/`P` keyboard shortcuts.
 
 ### 🛡️ Security Hardening, Playback Stability & Cross-Platform Reliability (v7.6.2)
 - **Security & Signing Hardening**: Replaced wildcard CORS on FastAPI and Electron microservers with strict localhost/LAN/Capacitor origins; sanitized Safari AppleScript URL/action inputs; enforced strict 11-char YouTube ID path containment on `/api/audio` & `/api/download`; allowlisted `/api/innertube` endpoints; migrated Gemini API keys from URL query params to `x-goog-api-key` headers; removed tracked Android keystore credentials from git; disabled `allowBackup` and `showWhenLocked`; and enforced fail-closed SHA-256 verification in OTA updates (`otaUpdater.js`).

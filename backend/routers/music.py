@@ -1,11 +1,16 @@
 """Music discovery, search, AI curation, lyrics proxy, and stream metadata routes."""
 
 import asyncio
+from collections import OrderedDict
+import copy
 import json
+import math
 import os
 import sys
+import threading
+import time
 import urllib.parse
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple, Union
 import requests as ext_requests
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
@@ -55,7 +60,7 @@ def _get_app_version() -> str:
                 return str(ver)
     except Exception:
         pass
-    return "7.6.2"
+    return "7.7.0"
 
 
 _APP_VERSION = _get_app_version()
@@ -251,23 +256,119 @@ def audio_info_endpoint(video_id: str, title: str = "", artist: str = "", expect
     }
 
 
+LYRICS_CACHE_HIT_TTL_SEC = 6 * 3600
+LYRICS_CACHE_MISS_TTL_SEC = 5 * 60
+LYRICS_CACHE_MAX_ENTRIES = 500
+_LYRICS_CACHE_LOCK = threading.Lock()
+_LYRICS_CACHE: "OrderedDict[Tuple[str, str, str, int], Tuple[float, List[Dict[str, Any]]]]" = OrderedDict()
+
+
+def clear_lyrics_cache() -> None:
+    """Clears the in-memory LRCLIB lyrics TTL cache."""
+    with _LYRICS_CACHE_LOCK:
+        _LYRICS_CACHE.clear()
+
+
+def _parse_duration_sec(duration: Any) -> int:
+    if duration in (None, ""):
+        return 0
+    try:
+        val = float(duration)
+    except (TypeError, ValueError):
+        return 0
+    if not math.isfinite(val) or val <= 15:
+        return 0
+    return int(round(val))
+
+
+def _get_cached_lyrics(cache_key: Tuple[str, str, str, int]) -> Optional[List[Dict[str, Any]]]:
+    now = time.time()
+    with _LYRICS_CACHE_LOCK:
+        entry = _LYRICS_CACHE.get(cache_key)
+        if entry is None:
+            return None
+        expires_at, payload = entry
+        if expires_at <= now:
+            _LYRICS_CACHE.pop(cache_key, None)
+            return None
+        _LYRICS_CACHE.move_to_end(cache_key)
+        return copy.deepcopy(payload)
+
+
+def _set_cached_lyrics(cache_key: Tuple[str, str, str, int], payload: List[Dict[str, Any]], ttl_sec: float) -> None:
+    now = time.time()
+    expires_at = now + ttl_sec
+    stored = copy.deepcopy(payload)
+    with _LYRICS_CACHE_LOCK:
+        if len(_LYRICS_CACHE) >= LYRICS_CACHE_MAX_ENTRIES:
+            expired_keys = [k for k, (exp, _) in _LYRICS_CACHE.items() if exp <= now]
+            for k in expired_keys:
+                _LYRICS_CACHE.pop(k, None)
+        _LYRICS_CACHE[cache_key] = (expires_at, stored)
+        _LYRICS_CACHE.move_to_end(cache_key)
+        while len(_LYRICS_CACHE) > LYRICS_CACHE_MAX_ENTRIES:
+            _LYRICS_CACHE.popitem(last=False)
+
+
 @router.get("/api/lyrics")
-def search_lyrics_endpoint(q: str = "", track_name: str = "", artist_name: str = ""):
-    """Server-side proxy for LRCLIB time-synced lyrics search."""
-    headers = {"User-Agent": f"UpBeat/{_APP_VERSION} (https://upbeat.app)"}
-    params: Dict[str, str] = {}
-    if q:
-        params["q"] = q
-    if track_name:
-        params["track_name"] = track_name
-    if artist_name:
-        params["artist_name"] = artist_name
-    if not params:
+def search_lyrics_endpoint(
+    q: str = "",
+    track_name: str = "",
+    artist_name: str = "",
+    duration: Union[float, int, str, None] = None,
+):
+    """Server-side proxy for LRCLIB /api/get duration-matched lookup and /api/search with bounded TTL caching."""
+    clean_q = (q or "").strip()
+    clean_track = (track_name or "").strip()
+    clean_artist = (artist_name or "").strip()
+    dur_int = _parse_duration_sec(duration)
+
+    if not (clean_q or clean_track or clean_artist):
         return []
+
+    cache_key = (clean_q.lower(), clean_track.lower(), clean_artist.lower(), dur_int)
+    cached = _get_cached_lyrics(cache_key)
+    if cached is not None:
+        return cached
+
+    headers = {"User-Agent": f"UpBeat/{_APP_VERSION} (https://upbeat.app)"}
+
+    if clean_track and clean_artist:
+        get_params: Dict[str, Any] = {
+            "track_name": clean_track,
+            "artist_name": clean_artist,
+        }
+        if dur_int > 15:
+            get_params["duration"] = dur_int
+        try:
+            r_get = ext_requests.get("https://lrclib.net/api/get", params=get_params, headers=headers, timeout=8)
+            if r_get.status_code == 200:
+                get_data = r_get.json()
+                if isinstance(get_data, dict) and (get_data.get("syncedLyrics") or get_data.get("plainLyrics")):
+                    wrapped = [get_data]
+                    _set_cached_lyrics(cache_key, wrapped, LYRICS_CACHE_HIT_TTL_SEC)
+                    return wrapped
+        except Exception as e:
+            print(f"Lyrics /api/get proxy error: {e}")
+
+    params: Dict[str, str] = {}
+    if clean_q:
+        params["q"] = clean_q
+    if clean_track:
+        params["track_name"] = clean_track
+    if clean_artist:
+        params["artist_name"] = clean_artist
+
     try:
         r = ext_requests.get("https://lrclib.net/api/search", params=params, headers=headers, timeout=8)
         if r.status_code == 200:
-            return r.json()
+            data = r.json()
+            normalized = data if isinstance(data, list) else []
+            ttl = LYRICS_CACHE_HIT_TTL_SEC if normalized else LYRICS_CACHE_MISS_TTL_SEC
+            _set_cached_lyrics(cache_key, normalized, ttl)
+            return normalized
+        if r.status_code == 404:
+            _set_cached_lyrics(cache_key, [], LYRICS_CACHE_MISS_TTL_SEC)
     except Exception as e:
         print(f"Lyrics proxy error: {e}")
     return []

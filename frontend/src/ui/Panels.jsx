@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { X, Heart, Plus, ListMusic, MessageSquareQuote, Users } from 'lucide-react'
+import { X, Heart, Plus, ListMusic, MessageSquareQuote, Users, ArrowUp, ArrowDown, GripVertical, Radio, BookmarkPlus, Trash2 } from 'lucide-react'
 import { Art, Avatar, IconButton, Collage, Chip, EmptyState } from './primitives'
 import { SongRow, sameTrack } from './AppContext'
 import { LyricsCard, usePlaybackClock } from '../lyrics/Lyrics'
@@ -8,10 +8,33 @@ import { LyricsCard, usePlaybackClock } from '../lyrics/Lyrics'
 /* Desktop right panel                                                 */
 /* ------------------------------------------------------------------ */
 
-export function RightPanel({ track, contextTitle, upNext = [], queueCount = 0, friends = [], tab, setTab, isFav, onToggleFav, onClose, onOpenLyrics, onListenAlong, onOpenFriends }) {
+export function RightPanel({
+  track,
+  contextTitle,
+  upNext = [],
+  queueCount = 0,
+  friends = [],
+  tab,
+  setTab,
+  isFav,
+  onToggleFav,
+  onClose,
+  onOpenLyrics,
+  onListenAlong,
+  onOpenFriends,
+  autoplay = false,
+  onToggleAutoplay,
+  onSaveQueue,
+  onReorderQueue,
+  onRemoveFromQueue,
+  onClearQueue
+}) {
   const online = friends.filter((f) => f.online)
   const lyricsTab = tab === 'lyrics'
   const clock = usePlaybackClock(lyricsTab && Boolean(track))
+  const [dragIdx, setDragIdx] = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
+
   return (
     <aside aria-label="Now playing" className="relative rounded-[14px] bg-bg overflow-hidden w-[344px] flex flex-col min-h-0">
       {track && (
@@ -93,20 +116,158 @@ export function RightPanel({ track, contextTitle, upNext = [], queueCount = 0, f
         )}
 
         <div className={`flex-1 min-h-0 overflow-y-auto px-5 pb-4 ${lyricsTab && track ? 'hidden' : ''}`}>
-          {tab === 'next' &&
-            (upNext.length === 0 ? (
-              <p className="text-sm text-t2 py-4">Nothing queued. Songs from the current list play next.</p>
-            ) : (
-              <>
-                {queueCount > 0 && <div className="text-xs font-bold uppercase tracking-[0.08em] text-white/60 mt-2 mb-1">In queue</div>}
-                {upNext.map((t, i) => (
-                  <React.Fragment key={`${t.video_id || t.title}-${i}`}>
-                    {queueCount > 0 && i === queueCount && <div className="text-xs font-bold uppercase tracking-[0.08em] text-white/60 mt-4 mb-1">Then</div>}
-                    <SongRow track={t} list={upNext.slice(i)} index={i} artSize={44} showFav={false} />
-                  </React.Fragment>
-                ))}
-              </>
-            ))}
+          {tab === 'next' && (
+            <>
+              {(onToggleAutoplay || onSaveQueue) && (
+                <div className="flex flex-col gap-2 mt-1.5 mb-3">
+                  {onToggleAutoplay && (
+                    <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl bg-white/[0.05]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Radio className={`w-4 h-4 shrink-0 ${autoplay ? 'text-accent' : 'text-t2'}`} />
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-bold truncate">Autoplay radio</div>
+                          <div className="text-[11px] text-t2 truncate">Play similar songs after queue</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(autoplay)}
+                        aria-label="Autoplay radio"
+                        onClick={onToggleAutoplay}
+                        className={`relative w-10 h-6 rounded-full shrink-0 transition-colors cursor-pointer ${autoplay ? 'bg-accent' : 'bg-s3'}`}
+                      >
+                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${autoplay ? 'left-[18px]' : 'left-0.5'}`} />
+                      </button>
+                    </div>
+                  )}
+                  {onSaveQueue && (
+                    <button
+                      type="button"
+                      onClick={onSaveQueue}
+                      disabled={upNext.length === 0}
+                      className="w-full h-9 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-bold text-t1 inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-default transition-colors"
+                    >
+                      <BookmarkPlus className="w-3.5 h-3.5 text-accent" />
+                      <span>Save queue as playlist</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {upNext.length === 0 ? (
+                <p className="text-sm text-t2 py-4">Nothing queued. Songs from the current list play next.</p>
+              ) : (
+                <>
+                  {queueCount > 0 && (
+                    <div className="flex items-center justify-between mt-2 mb-1">
+                      <span className="text-xs font-bold uppercase tracking-[0.08em] text-white/60">In queue · {queueCount}</span>
+                      {onClearQueue && (
+                        <button type="button" onClick={onClearQueue} className="text-xs font-semibold text-t2 hover:text-t1 cursor-pointer">
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {upNext.map((t, i) => {
+                    const isQueuedItem = i < queueCount
+                    return (
+                      <React.Fragment key={`${t.video_id || t.title}-${i}`}>
+                        {queueCount > 0 && i === queueCount && <div className="text-xs font-bold uppercase tracking-[0.08em] text-white/60 mt-4 mb-1">Then</div>}
+                        {isQueuedItem ? (
+                          <div
+                            draggable={Boolean(onReorderQueue)}
+                            onDragStart={(e) => {
+                              setDragIdx(i)
+                              try {
+                                e.dataTransfer?.setData('text/plain', String(i))
+                                if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+                              } catch {}
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              if (dragOverIdx !== i) setDragOverIdx(i)
+                            }}
+                            onDragLeave={() => {
+                              if (dragOverIdx === i) setDragOverIdx(null)
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              const raw = e.dataTransfer?.getData('text/plain')
+                              const from = dragIdx !== null ? dragIdx : (raw !== '' && raw !== undefined ? Number(raw) : NaN)
+                              setDragIdx(null)
+                              setDragOverIdx(null)
+                              if (Number.isInteger(from) && from >= 0 && from < queueCount && from !== i) {
+                                onReorderQueue?.(from, i)
+                              }
+                            }}
+                            onDragEnd={() => {
+                              setDragIdx(null)
+                              setDragOverIdx(null)
+                            }}
+                            className={`rounded-xl transition-colors ${dragOverIdx === i ? 'ring-1 ring-accent bg-white/[0.08]' : ''}`}
+                          >
+                            <SongRow
+                              track={t}
+                              list={upNext.slice(i)}
+                              index={i}
+                              artSize={44}
+                              showFav={false}
+                              trailing={
+                                <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  {onReorderQueue && queueCount > 1 && (
+                                    <>
+                                      <GripVertical className="w-3.5 h-3.5 text-t3 mr-0.5 cursor-grab shrink-0 hidden sm:block" aria-hidden="true" />
+                                      <IconButton
+                                        label={`Move ${t.title} up`}
+                                        size={28}
+                                        disabled={i === 0}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          onReorderQueue(i, i - 1)
+                                        }}
+                                      >
+                                        <ArrowUp className="w-3.5 h-3.5" />
+                                      </IconButton>
+                                      <IconButton
+                                        label={`Move ${t.title} down`}
+                                        size={28}
+                                        disabled={i >= queueCount - 1}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          onReorderQueue(i, i + 1)
+                                        }}
+                                      >
+                                        <ArrowDown className="w-3.5 h-3.5" />
+                                      </IconButton>
+                                    </>
+                                  )}
+                                  {onRemoveFromQueue && (
+                                    <IconButton
+                                      label={`Remove ${t.title} from queue`}
+                                      size={28}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        onRemoveFromQueue(i)
+                                      }}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </IconButton>
+                                  )}
+                                </div>
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <SongRow track={t} list={upNext.slice(i)} index={i} artSize={44} showFav={false} />
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </>
+              )}
+            </>
+          )}
           {tab === 'friends' &&
             (friends.length === 0 ? (
               <div className="py-4">

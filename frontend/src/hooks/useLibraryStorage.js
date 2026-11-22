@@ -8,7 +8,9 @@ import {
   subscribeOfflineChanges,
   saveTrackOffline,
   deleteOfflineTrack,
-  clearAllOfflineTracks
+  clearAllOfflineTracks,
+  isOfflineModeActive,
+  setOfflineModeActive
 } from '../offlineStorage'
 import { sameTrack } from '../ui/AppContext'
 import {
@@ -33,11 +35,15 @@ const LEGACY_ANIME_SEED_IDS = new Set([
 
 export function slimTrack(t) {
   if (!t) return null
+  const rawThumb = typeof t.thumbnail === 'string' ? t.thumbnail : ''
+  const thumb = rawThumb && !rawThumb.startsWith('data:')
+    ? rawThumb
+    : (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : '')
   return {
     video_id: t.video_id || '',
     title: t.title || '',
     artist: t.artist || '',
-    thumbnail: t.thumbnail || (t.video_id ? `https://i.ytimg.com/vi/${t.video_id}/hqdefault.jpg` : ''),
+    thumbnail: thumb,
     duration_text: t.duration_text || ''
   }
 }
@@ -91,6 +97,8 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
   const [queue, setQueue] = useState(() => loadStorage('upbeat_playback_queue', []))
   const [offlineTracks, setOfflineTracks] = useState([])
   const [offlineStats, setOfflineStats] = useState({ count: 0, totalBytes: 0, formattedSize: '0 B' })
+  const [offlineLoaded, setOfflineLoaded] = useState(false)
+  const [offlineMode, setOfflineModeState] = useState(() => Boolean(isOfflineModeActive()))
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
   const [searchResults, setSearchResults] = useState(null)
   const [recentSearches, setRecentSearches] = useState(() => loadStorage('upbeat_recent_searches_v1', []))
@@ -101,7 +109,11 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
   const [collectionLoading, setCollectionLoading] = useState(false)
   const [playingFrom, setPlayingFrom] = useState(null)
   const [downloadJobs, setDownloadJobs] = useState({})
+  const [downloadProgress, setDownloadProgress] = useState({})
   const collectionTokenRef = useRef(0)
+  const downloadControllersRef = useRef(new Map())
+  const offlineModeRef = useRef(offlineMode)
+  offlineModeRef.current = offlineMode
 
   // Boot sanitizer: purge non-music tracks & legacy seeds from persisted storage
   useEffect(() => {
@@ -301,6 +313,10 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
         if (mounted) {
           setOfflineTracks(tracks || [])
           setOfflineStats(stats || { count: 0, totalBytes: 0, formattedSize: '0 B' })
+          setOfflineLoaded(true)
+          const activeOffline = Boolean(isOfflineModeActive())
+          offlineModeRef.current = activeOffline
+          setOfflineModeState(activeOffline)
         }
       } catch (err) {
         console.error('Error loading offline tracks:', err)
@@ -324,6 +340,39 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
       window.removeEventListener('offline', handleOffline)
     }
   }, [navigate, showNotify])
+
+  // Sync offline tracks to Android Auto native bridge
+  useEffect(() => {
+    if (!offlineLoaded) return
+    try {
+      window.UpBeatNative?.syncDownloads?.(JSON.stringify(offlineTracks.map(slimTrack)))
+    } catch {}
+  }, [offlineTracks, offlineLoaded])
+
+  // Abort active download jobs on unmount
+  useEffect(() => {
+    return () => {
+      for (const ctrl of downloadControllersRef.current.values()) {
+        try { ctrl.abort() } catch {}
+      }
+      downloadControllersRef.current.clear()
+    }
+  }, [])
+
+  const setOfflineMode = useCallback((valOrFn) => {
+    const prev = offlineModeRef.current
+    const raw = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn
+    const next = Boolean(raw)
+    offlineModeRef.current = next
+    setOfflineModeState(next)
+    setOfflineModeActive(next)
+  }, [])
+
+  const toggleOfflineMode = useCallback(() => {
+    const next = !offlineModeRef.current
+    setOfflineMode(next)
+    showNotify?.(next ? 'Offline mode enabled' : 'Offline mode disabled', 'info')
+  }, [setOfflineMode, showNotify])
 
   const downloadedIds = useMemo(
     () => new Set(offlineTracks.map((t) => t.video_id).filter(Boolean)),
@@ -411,6 +460,32 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
     else showCollection(item, { record: false })
   }, [showCollection, showNotify])
 
+  const savePlaylistWithTracks = useCallback((title, tracks = []) => {
+    const cleanTitle = String(title || '').trim() || 'Untitled Playlist'
+    const cleanTracks = (Array.isArray(tracks) ? tracks : [])
+      .filter((t) => t && (t.video_id || t.title))
+      .slice(0, 200)
+      .map(slimTrack)
+      .filter(Boolean)
+    const item = {
+      id: `user_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'user',
+      title: cleanTitle,
+      subtitle: `${cleanTracks.length} song${cleanTracks.length === 1 ? '' : 's'}`,
+      cover: cleanTracks[0]?.thumbnail || '',
+      tracks: cleanTracks,
+      createdAt: Date.now(),
+      savedAt: Date.now()
+    }
+    setSavedCollections((list) => {
+      const next = [item, ...list]
+      saveStorage('upbeat_library_v1', next)
+      return next
+    })
+    showNotify?.(`Saved "${cleanTitle}" (${cleanTracks.length} songs)`, 'success')
+    return item
+  }, [showNotify])
+
   const addTrackToPlaylist = useCallback((pl, track) => {
     if (!pl || !track) return
     setSavedCollections((list) =>
@@ -437,33 +512,104 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
     if (downloadedIds.has(track.video_id)) return showNotify('Already downloaded', 'info')
     showNotify(`Downloading "${track.title}"…`, 'info')
     try {
-      await saveTrackOffline(track)
+      await saveTrackOffline(track, {
+        onProgress: ({ pct }) => {
+          setDownloadProgress((p) => ({ ...p, [track.video_id]: pct }))
+        }
+      })
       showNotify(`"${track.title}" is ready offline`, 'success')
     } catch (e) {
-      showNotify(`Download failed: ${e?.message || 'try again'}`, 'error')
+      if (e?.name === 'AbortError') {
+        showNotify('Download cancelled', 'info')
+      } else {
+        showNotify(`Download failed: ${e?.message || 'try again'}`, 'error')
+      }
+    } finally {
+      setDownloadProgress((p) => {
+        if (!(track.video_id in p)) return p
+        const next = { ...p }
+        delete next[track.video_id]
+        return next
+      })
     }
   }, [downloadedIds, showNotify])
 
+  const cancelDownloadJob = useCallback((collectionId) => {
+    if (!collectionId) return false
+    const ctrl = downloadControllersRef.current.get(collectionId)
+    if (ctrl) {
+      try { ctrl.abort() } catch {}
+      downloadControllersRef.current.delete(collectionId)
+      setDownloadJobs((j) => {
+        const cur = j[collectionId]
+        return cur ? { ...j, [collectionId]: { ...cur, busy: false, cancelled: true } } : j
+      })
+      return true
+    }
+    return false
+  }, [])
+
   const downloadAll = useCallback(async (c) => {
     const todo = (c?.tracks || []).filter((t) => t.video_id && !downloadedIds.has(t.video_id))
-    if (!todo.length) return
-    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done: 0, total: todo.length } }))
+    if (!todo.length || !c?.id) return
+    const prevCtrl = downloadControllersRef.current.get(c.id)
+    if (prevCtrl) {
+      try { prevCtrl.abort() } catch {}
+    }
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+    if (controller) downloadControllersRef.current.set(c.id, controller)
+
+    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done: 0, total: todo.length, cancelled: false } }))
     let done = 0
     let failed = 0
-    for (const t of todo) {
-      try {
-        await saveTrackOffline(t)
-      } catch {
-        failed++
-      }
-      done++
-      setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done, total: todo.length } }))
+    let cancelled = false
+    const clearTrackProgress = (vid) => {
+      setDownloadProgress((p) => {
+        if (!(vid in p)) return p
+        const next = { ...p }
+        delete next[vid]
+        return next
+      })
     }
-    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: false, done, total: todo.length } }))
-    showNotify(
-      failed ? `Downloaded ${done - failed} of ${todo.length} songs` : `"${c.title}" is ready offline`,
-      failed ? 'error' : 'success'
-    )
+    for (const t of todo) {
+      if (controller?.signal?.aborted) {
+        cancelled = true
+        break
+      }
+      let trackAborted = false
+      try {
+        await saveTrackOffline(t, {
+          signal: controller?.signal,
+          onProgress: ({ pct }) => {
+            setDownloadProgress((p) => ({ ...p, [t.video_id]: pct }))
+          }
+        })
+      } catch (e) {
+        if (e?.name === 'AbortError' || controller?.signal?.aborted) {
+          cancelled = true
+          trackAborted = true
+        } else {
+          failed++
+        }
+      } finally {
+        clearTrackProgress(t.video_id)
+      }
+      if (trackAborted) break
+      done++
+      setDownloadJobs((j) => ({ ...j, [c.id]: { busy: true, done, total: todo.length, cancelled: false } }))
+    }
+    if (downloadControllersRef.current.get(c.id) === controller) {
+      downloadControllersRef.current.delete(c.id)
+    }
+    setDownloadJobs((j) => ({ ...j, [c.id]: { busy: false, done, total: todo.length, cancelled } }))
+    if (cancelled) {
+      showNotify(`Cancelled download for "${c.title}"`, 'info')
+    } else {
+      showNotify(
+        failed ? `Downloaded ${done - failed} of ${todo.length} songs` : `"${c.title}" is ready offline`,
+        failed ? 'error' : 'success'
+      )
+    }
   }, [downloadedIds, showNotify])
 
   const deleteDownload = useCallback(async (track) => {
@@ -493,6 +639,9 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
     setQueue,
     offlineTracks,
     offlineStats,
+    offlineMode,
+    setOfflineMode,
+    toggleOfflineMode,
     downloadedIds,
     searchQuery,
     setSearchQuery,
@@ -513,6 +662,7 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
     playingFrom,
     setPlayingFrom,
     downloadJobs,
+    downloadProgress,
     collectionTokenRef,
     recordMix,
     recordRecent,
@@ -522,11 +672,13 @@ export function useLibraryStorage({ showNotify, navigate, goBack, initialSearchQ
     isSavedId,
     toggleSave,
     createPlaylist,
+    savePlaylistWithTracks,
     addTrackToPlaylist,
     removeFromPlaylist,
     deletePlaylist,
     downloadTrack,
     downloadAll,
+    cancelDownloadJob,
     deleteDownload,
     clearDownloads
   }

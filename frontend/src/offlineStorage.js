@@ -158,15 +158,35 @@ export async function getDownloadedVideoIds() {
   }
 }
 
+function createAbortError(message = 'Download aborted') {
+  const err = new Error(message)
+  err.name = 'AbortError'
+  return err
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error && signal.reason.name === 'AbortError'
+      ? signal.reason
+      : createAbortError()
+  }
+}
+
 /**
  * Helper to convert an image URL into a base64 Data URL for offline display
  */
-async function cacheImageAsDataUrl(imgUrl) {
+async function cacheImageAsDataUrl(imgUrl, externalSignal) {
   if (!imgUrl) return ''
+  throwIfAborted(externalSignal)
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const onAbort = () => controller?.abort()
+  if (externalSignal && controller) {
+    externalSignal.addEventListener('abort', onAbort, { once: true })
+  }
   const timer = controller ? setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS) : null
   try {
     const res = await fetch(imgUrl, { mode: 'cors', signal: controller ? controller.signal : undefined })
+    throwIfAborted(externalSignal)
     if (!res.ok) return imgUrl
     const blob = await res.blob()
     return new Promise((resolve) => {
@@ -176,9 +196,13 @@ async function cacheImageAsDataUrl(imgUrl) {
       reader.readAsDataURL(blob)
     })
   } catch {
+    throwIfAborted(externalSignal)
     return imgUrl
   } finally {
     if (timer) clearTimeout(timer)
+    if (externalSignal && controller) {
+      externalSignal.removeEventListener('abort', onAbort)
+    }
   }
 }
 
@@ -186,7 +210,19 @@ async function cacheImageAsDataUrl(imgUrl) {
  * Saves a track to IndexedDB offline storage
  * Downloads the audio stream data and stores the Blob locally.
  */
-export async function saveTrackOffline(track, onProgress = null) {
+export async function saveTrackOffline(track, optionsOrCallback = {}) {
+  const isLegacyFn = typeof optionsOrCallback === 'function'
+  const { signal = undefined, onProgress = isLegacyFn ? optionsOrCallback : null } =
+    !optionsOrCallback || isLegacyFn ? {} : optionsOrCallback
+
+  const emitProgress = (loaded, total, pct) => {
+    if (typeof onProgress !== 'function') return
+    if (isLegacyFn) onProgress(pct)
+    else onProgress({ loaded, total, pct })
+  }
+
+  throwIfAborted(signal)
+
   if (!track || (!track.video_id && !track.url)) {
     throw new Error('Invalid track: missing video_id')
   }
@@ -222,6 +258,7 @@ export async function saveTrackOffline(track, onProgress = null) {
       candidateUrls.push(directUrl)
     }
   } catch {}
+  throwIfAborted(signal)
 
   // Fallback video IDs if present on track
   if (Array.isArray(track.fallback_ids)) {
@@ -234,20 +271,62 @@ export async function saveTrackOffline(track, onProgress = null) {
     }
   }
 
-  // 2. Fetch the audio as Blob with multi-tier fallback + AbortController timeout
-  if (onProgress) onProgress(10)
+  // 2. Fetch the audio as Blob with streaming progress + AbortSignal cancellation
+  emitProgress(0, 0, 0)
   let audioBlob = null
   let lastErr = null
 
   for (let i = 0; i < candidateUrls.length; i++) {
+    throwIfAborted(signal)
     const url = candidateUrls[i]
-    if (onProgress) onProgress(10 + Math.round((i / candidateUrls.length) * 35))
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+    const onExternalAbort = () => controller?.abort()
+    if (signal && controller) {
+      signal.addEventListener('abort', onExternalAbort, { once: true })
+    }
     const timer = controller ? setTimeout(() => controller.abort(), AUDIO_FETCH_TIMEOUT_MS) : null
     try {
       const res = await fetch(url, controller ? { signal: controller.signal } : undefined)
+      throwIfAborted(signal)
       if (res.ok) {
-        const blob = await res.blob()
+        const rawLen = Number(res.headers?.get?.('content-length') || 0)
+        const total = Number.isFinite(rawLen) && rawLen > 0 ? rawLen : 0
+        let blob = null
+
+        if (res.body && typeof res.body.getReader === 'function') {
+          const reader = res.body.getReader()
+          const chunks = []
+          let loaded = 0
+          try {
+            while (true) {
+              throwIfAborted(signal)
+              const { done, value } = await reader.read()
+              if (done) break
+              if (value && value.byteLength) {
+                chunks.push(value)
+                loaded += value.byteLength
+                const pct = total > 0
+                  ? Math.min(99, Math.max(1, Math.round((loaded / total) * 99)))
+                  : Math.min(95, Math.max(1, Math.round((loaded / (loaded + 65536)) * 95)))
+                emitProgress(loaded, total, pct)
+              }
+            }
+          } catch (readErr) {
+            try { await reader.cancel() } catch {}
+            throw readErr
+          }
+          throwIfAborted(signal)
+          const contentType = res.headers?.get?.('content-type') || 'audio/mp4'
+          blob = new Blob(chunks, { type: contentType.startsWith('audio/') ? contentType : 'audio/mp4' })
+        } else {
+          blob = await res.blob()
+          throwIfAborted(signal)
+          if (blob) {
+            const sz = blob.size || total
+            emitProgress(sz, total || sz, 95)
+          }
+        }
+
         if (blob && blob.size > 20000) {
           audioBlob = blob
           break
@@ -256,25 +335,33 @@ export async function saveTrackOffline(track, onProgress = null) {
         lastErr = new Error(`Download failed with status ${res.status}`)
       }
     } catch (e) {
+      if (signal?.aborted) {
+        throw createAbortError()
+      }
       lastErr = e
     } finally {
       if (timer) clearTimeout(timer)
+      if (signal && controller) {
+        signal.removeEventListener('abort', onExternalAbort)
+      }
     }
   }
 
+  throwIfAborted(signal)
   if (!audioBlob || audioBlob.size <= 20000) {
     throw lastErr || new Error('Unable to resolve audio stream for offline download')
   }
-
-  if (onProgress) onProgress(65)
 
   // 3. Cache thumbnail for offline view
   let offlineThumb = track.thumbnail || ''
   if (offlineThumb && offlineThumb.startsWith('http')) {
     try {
-      offlineThumb = await cacheImageAsDataUrl(offlineThumb)
-    } catch {}
+      offlineThumb = await cacheImageAsDataUrl(offlineThumb, signal)
+    } catch (e) {
+      if (e?.name === 'AbortError' || signal?.aborted) throw createAbortError()
+    }
   }
+  throwIfAborted(signal)
 
   // 4. Save record into IndexedDB
   const record = {
@@ -294,6 +381,7 @@ export async function saveTrackOffline(track, onProgress = null) {
   }
 
   const db = await openOfflineDb()
+  throwIfAborted(signal)
   await new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
@@ -302,7 +390,7 @@ export async function saveTrackOffline(track, onProgress = null) {
     req.onerror = () => reject(req.error)
   })
 
-  if (onProgress) onProgress(100)
+  emitProgress(audioBlob.size, audioBlob.size, 100)
   notifyOfflineChange()
   return record
 }
@@ -405,6 +493,23 @@ export function revokeCachedAudioUrl(videoId) {
     } catch {}
     _blobUrlCache.delete(videoId)
   }
+}
+
+/**
+ * Revokes all cached blob URLs except the explicitly retained video IDs.
+ */
+export function pruneIdleAudioUrls(keepVideoIds = []) {
+  const keep = new Set(
+    Array.isArray(keepVideoIds) ? keepVideoIds.filter(Boolean) : [...(keepVideoIds || [])]
+  )
+  const pruned = []
+  for (const vid of Array.from(_blobUrlCache.keys())) {
+    if (!keep.has(vid)) {
+      revokeCachedAudioUrl(vid)
+      pruned.push(vid)
+    }
+  }
+  return pruned
 }
 
 /**
